@@ -10,7 +10,8 @@ import {
   Save,
   Layers,
   Braces,
-  Check
+  Check,
+  Video
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -22,6 +23,7 @@ import ScenesTab from "@/components/topic-studio/ScenesTab";
 import AudioTab from "@/components/topic-studio/AudioTab";
 import ImagesTab from "@/components/topic-studio/ImagesTab";
 import SceneFramesTab from "@/components/topic-studio/SceneFramesTab";
+import CompletedVideoTab from "@/components/topic-studio/CompletedVideoTab";
 import DeleteConfirmModal from "@/components/topic-studio/DeleteConfirmModal";
 
 export default function TopicStudioPage() {
@@ -428,6 +430,59 @@ Understanding this story isn't just about ancient history—it reveals how the l
     setSceneVideos(newVideos);
   }
 
+  // 7. Completed Master Video State
+  const [completedMasterVideo, setCompletedMasterVideo] = useState({
+    url: "generated",
+    name: `${topicSlug}-master-4k.mp4`,
+  });
+  const [isRenderingMaster, setIsRenderingMaster] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
+
+  function handleUploadMasterVideo(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setCompletedMasterVideo({
+      url,
+      name: file.name,
+    });
+  }
+
+  function handleDeleteMasterVideo() {
+    requestDelete({
+      title: "Delete Completed Master Video",
+      description: "Are you sure you want to delete the assembled master video cut? You can re-render it from scene frames at any time.",
+      confirmLabel: "Delete Master",
+      onConfirm: () => {
+        setCompletedMasterVideo(null);
+      },
+    });
+  }
+
+  function handleRenderMasterVideo() {
+    setIsRenderingMaster(true);
+    setRenderProgress(15);
+    const interval = setInterval(() => {
+      setRenderProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(interval);
+          return 95;
+        }
+        return prev + 25;
+      });
+    }, 350);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      setRenderProgress(100);
+      setIsRenderingMaster(false);
+      setCompletedMasterVideo({
+        url: "generated",
+        name: `${topicSlug}-master-4k.mp4`,
+      });
+    }, 1800);
+  }
+
   // Global Delete Modal State
   const [mounted, setMounted] = useState(false);
   const [deleteModal, setDeleteModal] = useState({
@@ -482,6 +537,7 @@ Understanding this story isn't just about ancient history—it reveals how the l
     { id: "audio", label: "Audio", icon: Mic },
     { id: "images", label: "Images", icon: Film },
     { id: "sceneframes", label: "SceneFrames", icon: Layers },
+    { id: "completedvideo", label: "Completed Video", icon: Video },
   ];
 
   return (
@@ -630,6 +686,25 @@ Understanding this story isn't just about ancient history—it reveals how the l
           handleDeleteSceneVideo={handleDeleteSceneVideo}
           handleGenerateSceneVideo={handleGenerateSceneVideo}
           handleGenerateAllVideos={handleGenerateAllVideos}
+        />
+      )}
+
+      {/* TAB 7: COMPLETED VIDEO */}
+      {activeTab === "completedvideo" && (
+        <CompletedVideoTab
+          topicTitle={topicTitle}
+          scenesJson={scenesJson}
+          sceneVideos={sceneVideos}
+          sceneImages={sceneImages}
+          sceneAudios={sceneAudios}
+          thumbnailImage={thumbnailImage}
+          completedMasterVideo={completedMasterVideo}
+          setCompletedMasterVideo={setCompletedMasterVideo}
+          handleUploadMasterVideo={handleUploadMasterVideo}
+          handleDeleteMasterVideo={handleDeleteMasterVideo}
+          handleRenderMasterVideo={handleRenderMasterVideo}
+          isRenderingMaster={isRenderingMaster}
+          renderProgress={renderProgress}
         />
       )}
 

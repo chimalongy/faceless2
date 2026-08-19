@@ -103,9 +103,9 @@ export default function SceneFramesTab({
                 className="p-5 border border-line bg-paper-card space-y-4 hover:border-signal/40 transition-all"
               >
                 {/* Header with Scene Number & Action Buttons */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-line/60 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-7 h-7 bg-ink text-white font-mono text-xs font-bold flex items-center justify-center">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-line/60 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 sm:w-7 sm:h-7 bg-ink text-white font-mono text-[11px] sm:text-xs font-bold flex items-center justify-center shrink-0">
                       {sceneNum}
                     </span>
                     <span className="font-mono text-xs font-semibold text-ink">
@@ -114,11 +114,11 @@ export default function SceneFramesTab({
                   </div>
 
                   {/* Actions: Upload Video, Generate, Delete */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     {/* Upload Video File */}
-                    <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer">
+                    <label className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-[11px] sm:text-xs font-semibold text-ink transition-all cursor-pointer shrink-0">
                       <Upload size={12} />
-                      <span>{hasVideo ? "Replace Video" : "Upload Video"}</span>
+                      <span>{hasVideo ? "Replace" : "Upload"}</span>
                       <input
                         type="file"
                         accept="video/*"
@@ -136,7 +136,7 @@ export default function SceneFramesTab({
                     <button
                       type="button"
                       onClick={() => handleGenerateSceneVideo(sceneNum)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-xs font-semibold transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[11px] sm:text-xs font-semibold transition-all cursor-pointer shrink-0"
                       title="Render video from image and audio"
                     >
                       <Sparkles size={12} />
@@ -148,7 +148,7 @@ export default function SceneFramesTab({
                       <button
                         type="button"
                         onClick={() => handleDeleteSceneVideo(sceneNum)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-line bg-white hover:bg-rose-50 hover:border-rose-300 text-ink-muted hover:text-rose-600 text-xs font-semibold transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-line bg-white hover:bg-rose-50 hover:border-rose-300 text-ink-muted hover:text-rose-600 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer shrink-0"
                         title="Delete video for this scene"
                       >
                         <Trash2 size={12} />

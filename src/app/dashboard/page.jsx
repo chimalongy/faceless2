@@ -1,10 +1,10 @@
 "use client";
 
-import { Plus, X, Video, Sparkles, ArrowUpRight } from "lucide-react";
+import { Plus, X, Video, Sparkles, ArrowUpRight, Trash2, AlertTriangle, Layers } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
-// Dummy data — replace with real channel records once the backend exists.
+// Initial fallback channels
 const dummyChannels = [
   { name: "The Quiet Ledger", slug: "the-quiet-ledger", niche: "Personal finance", videos: 24, status: "Active" },
   { name: "Stoic Signal", slug: "stoic-signal", niche: "Applied philosophy", videos: 41, status: "Active" },
@@ -13,6 +13,8 @@ const dummyChannels = [
   { name: "Cold Open", slug: "cold-open", niche: "True crime", videos: 33, status: "Paused" },
   { name: "Low Light", slug: "low-light", niche: "Sleep & ambience", videos: 19, status: "Active" },
 ];
+
+const STORAGE_KEY = "faceless_channels";
 
 function initials(name) {
   return name
@@ -37,37 +39,76 @@ function getStatusBadge(status) {
 export default function OverviewPage() {
   const [openComposer, setOpenComposer] = useState(false);
   const [channels, setChannels] = useState(dummyChannels);
+  const [channelToDelete, setChannelToDelete] = useState(null);
   const [name, setName] = useState("");
   const [niche, setNiche] = useState("");
+  const [mounted, setMounted] = useState(false);
 
-  // Dismiss composer on Escape key
+  // Load channels from localStorage on mount
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setChannels(parsed);
+        }
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dummyChannels));
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  // Save to localStorage
+  function persistChannels(newList) {
+    setChannels(newList);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
+
+  // Dismiss modals on Escape key
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === "Escape") setOpenComposer(false);
+      if (e.key === "Escape") {
+        setOpenComposer(false);
+        setChannelToDelete(null);
+      }
     }
-    if (openComposer) {
+    if (openComposer || channelToDelete) {
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
-  }, [openComposer]);
+  }, [openComposer, channelToDelete]);
 
   function submitChannel(event) {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    setChannels((prev) => [
-      ...prev,
-      {
-        name: trimmed,
-        slug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-        niche: niche.trim() || "Unassigned",
-        videos: 0,
-        status: "Draft",
-      },
-    ]);
+    const newChannel = {
+      name: trimmed,
+      slug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+      niche: niche.trim() || "Unassigned",
+      videos: 0,
+      status: "Draft",
+    };
+    const updated = [...channels, newChannel];
+    persistChannels(updated);
     setName("");
     setNiche("");
     setOpenComposer(false);
+  }
+
+  function handleConfirmDelete() {
+    if (!channelToDelete) return;
+    const updated = channels.filter((c) => c.slug !== channelToDelete.slug);
+    persistChannels(updated);
+    setChannelToDelete(null);
   }
 
   return (
@@ -92,44 +133,140 @@ export default function OverviewPage() {
       </section>
 
       {/* Grid of Channels */}
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {channels.map((channel) => (
-          <Link
-            key={channel.slug}
-            href={`/dashboard/channels/${channel.slug}`}
-            className="group block p-5  border border-line bg-paper-card hover:border-signal/40 hover:shadow-md hover:shadow-signal/5 hover:-translate-y-0.5 transition-all relative"
+      {channels.length === 0 ? (
+        <section className="p-12 border border-line bg-paper-card text-center space-y-4 rounded-xl">
+          <div className="w-12 h-12 rounded-full bg-signal/10 text-signal flex items-center justify-center mx-auto">
+            <Layers size={24} />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-ink">No channels found</h3>
+            <p className="text-xs text-ink-muted max-w-sm mx-auto">
+              Get started by creating your first automated production channel and story system.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenComposer(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer"
           >
-            <div className="flex items-start justify-between mb-4">
-              <span className="w-10 h-10 bg-signal/10 text-signal font-bold text-xs font-mono flex items-center justify-center group-hover:bg-signal group-hover:text-white transition-colors">
-                {initials(channel.name)}
-              </span>
-              <span className="text-ink-muted/50 group-hover:text-signal transition-colors">
-                <ArrowUpRight size={18} />
-              </span>
+            <Plus size={15} /> Create a channel
+          </button>
+        </section>
+      ) : (
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {channels.map((channel) => (
+            <div
+              key={channel.slug}
+              className="group block p-5 border border-line bg-paper-card hover:border-signal/40 hover:shadow-md hover:shadow-signal/5 hover:-translate-y-0.5 transition-all relative"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <Link
+                  href={`/dashboard/channels/${channel.slug}`}
+                  className="w-10 h-10 bg-signal/10 text-signal font-bold text-xs font-mono flex items-center justify-center group-hover:bg-signal group-hover:text-white transition-colors cursor-pointer"
+                >
+                  {initials(channel.name)}
+                </Link>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setChannelToDelete(channel);
+                    }}
+                    className="p-1.5 rounded-md text-ink-muted/60 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                    title={`Delete channel "${channel.name}"`}
+                    aria-label={`Delete channel ${channel.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <Link
+                    href={`/dashboard/channels/${channel.slug}`}
+                    className="p-1.5 text-ink-muted/50 group-hover:text-signal transition-colors cursor-pointer"
+                    title="Open channel workspace"
+                  >
+                    <ArrowUpRight size={18} />
+                  </Link>
+                </div>
+              </div>
+
+              <Link href={`/dashboard/channels/${channel.slug}`} className="block">
+                <h3 className="text-base font-semibold text-ink group-hover:text-signal transition-colors">
+                  {channel.name}
+                </h3>
+                <p className="text-xs text-ink-muted mt-0.5 mb-5 font-medium">
+                  {channel.niche}
+                </p>
+
+                <div className="flex items-center justify-between pt-3 border-t border-line/60 text-xs">
+                  <span className="inline-flex items-center gap-1.5 text-ink-muted">
+                    <Video size={13} /> {channel.videos} videos
+                  </span>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wider border ${getStatusBadge(
+                      channel.status
+                    )}`}
+                  >
+                    {channel.status}
+                  </span>
+                </div>
+              </Link>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Delete Channel Confirmation Modal */}
+      {channelToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-xs flex items-center justify-center p-4 animate-card-rise"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setChannelToDelete(null);
+          }}
+        >
+          <div className="w-full max-w-md bg-paper-card p-6 sm:p-8 rounded-2xl border border-line shadow-2xl relative animate-modal-pop">
+            <button
+              type="button"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
+              aria-label="Close"
+              onClick={() => setChannelToDelete(null)}
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-11 h-11 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4 border border-rose-200">
+              <Trash2 size={20} />
             </div>
 
-            <h3 className="text-base font-semibold text-ink group-hover:text-signal transition-colors">
-              {channel.name}
-            </h3>
-            <p className="text-xs text-ink-muted mt-0.5 mb-5 font-medium">
-              {channel.niche}
+            <h2 id="delete-dialog-title" className="text-xl font-display font-semibold text-ink tracking-tight">
+              Delete channel?
+            </h2>
+            <p className="text-xs sm:text-sm text-ink-muted mt-1.5 leading-relaxed">
+              Are you sure you want to delete <strong className="text-ink font-semibold">{channelToDelete.name}</strong>? This will remove the channel, its content pillars, and active video pipelines.
             </p>
 
-            <div className="flex items-center justify-between pt-3 border-t border-line/60 text-xs">
-              <span className="inline-flex items-center gap-1.5 text-ink-muted">
-                <Video size={13} /> {channel.videos} videos
-              </span>
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wider border ${getStatusBadge(
-                  channel.status
-                )}`}
+            <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-line">
+              <button
+                type="button"
+                className="px-4 py-2.5 rounded-lg border border-line text-xs font-semibold text-ink/70 hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
+                onClick={() => setChannelToDelete(null)}
               >
-                {channel.status}
-              </span>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-semibold shadow-xs shadow-rose-600/20 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                onClick={handleConfirmDelete}
+              >
+                <Trash2 size={14} /> Delete Channel
+              </button>
             </div>
-          </Link>
-        ))}
-      </section>
+          </div>
+        </div>
+      )}
 
       {/* Channel Composer Modal */}
       {openComposer && (
@@ -148,7 +285,7 @@ export default function OverviewPage() {
           >
             <button
               type="button"
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
               aria-label="Close"
               onClick={() => setOpenComposer(false)}
             >

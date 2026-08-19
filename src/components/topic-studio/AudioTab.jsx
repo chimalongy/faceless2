@@ -66,8 +66,8 @@ export default function AudioTab({
   return (
     <div className="space-y-6 animate-slide-in">
       {/* Top Ambience & Voice Settings */}
-      <div className="p-6 border border-line bg-paper-card space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
+      <div className="p-4 sm:p-6 border border-line bg-paper-card space-y-5 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-line pb-4">
           <div>
             <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
               <Mic size={16} className="text-signal" /> Scene Audio & Narration Studio
@@ -80,7 +80,7 @@ export default function AudioTab({
           <button
             type="button"
             onClick={handleGenerateAllAudios}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer self-start sm:self-auto shrink-0"
           >
             <Sparkles size={13} />
             <span>Generate All</span>
@@ -88,7 +88,7 @@ export default function AudioTab({
         </div>
 
         {/* Voice & Soundtrack Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <label
               className="block text-xs font-semibold text-ink/80 mb-1.5"
@@ -140,7 +140,7 @@ export default function AudioTab({
         </div>
 
         {parsedScenes.length === 0 ? (
-          <div className="p-8 border border-line bg-paper-card text-center space-y-2 text-ink-muted">
+          <div className="p-6 sm:p-8 border border-line bg-paper-card text-center space-y-2 text-ink-muted">
             <AlertCircle size={32} className="mx-auto opacity-40 text-ink" />
             <p className="text-sm font-semibold text-ink">No scenes defined</p>
             <p className="text-xs text-ink-muted">
@@ -157,12 +157,12 @@ export default function AudioTab({
             return (
               <div
                 key={sceneNum}
-                className="p-5 border border-line bg-paper-card space-y-4 hover:border-signal/40 transition-all"
+                className="p-3.5 sm:p-5 border border-line bg-paper-card space-y-3.5 sm:space-y-4 hover:border-signal/40 transition-all overflow-hidden"
               >
                 {/* Scene Header & Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-line/60 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-7 h-7 bg-ink text-white font-mono text-xs font-bold flex items-center justify-center">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-line/60 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 sm:w-7 sm:h-7 bg-ink text-white font-mono text-[11px] sm:text-xs font-bold flex items-center justify-center shrink-0">
                       {sceneNum}
                     </span>
                     <span className="font-mono text-xs font-semibold text-ink">
@@ -171,11 +171,11 @@ export default function AudioTab({
                   </div>
 
                   {/* Scene Actions: Upload Audio, Generate, Delete Audio */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     {/* Upload Audio File */}
-                    <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer">
+                    <label className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-[11px] sm:text-xs font-semibold text-ink transition-all cursor-pointer shrink-0">
                       <Upload size={12} />
-                      <span>{hasAudio ? "Replace Audio" : "Upload Audio"}</span>
+                      <span>{hasAudio ? "Replace" : "Upload"}</span>
                       <input
                         type="file"
                         accept="audio/*"
@@ -193,7 +193,7 @@ export default function AudioTab({
                     <button
                       type="button"
                       onClick={() => handleGenerateSceneAudio(sceneNum)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-xs font-semibold transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[11px] sm:text-xs font-semibold transition-all cursor-pointer shrink-0"
                       title="Generate audio for this scene"
                     >
                       <Sparkles size={12} />
@@ -204,7 +204,7 @@ export default function AudioTab({
                     <button
                       type="button"
                       onClick={() => togglePrompt(sceneNum)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-[11px] sm:text-xs font-semibold text-ink transition-all cursor-pointer shrink-0"
                     >
                       {expandedPrompts[sceneNum] ? <EyeOff size={12} /> : <Eye size={12} />}
                       <span>{expandedPrompts[sceneNum] ? "Hide Prompt" : "See Prompt"}</span>
@@ -215,7 +215,7 @@ export default function AudioTab({
                       <button
                         type="button"
                         onClick={() => handleDeleteSceneAudio(sceneNum)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-line bg-white hover:bg-rose-50 hover:border-rose-300 text-ink-muted hover:text-rose-600 text-xs font-semibold transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full border border-line bg-white hover:bg-rose-50 hover:border-rose-300 text-ink-muted hover:text-rose-600 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer shrink-0"
                         title="Delete audio for this scene"
                       >
                         <Trash2 size={12} />
@@ -231,14 +231,14 @@ export default function AudioTab({
                     <span className="text-[11px] font-semibold text-ink-muted uppercase font-mono">
                       Audio Text (Narration):
                     </span>
-                    <p className="p-3 bg-paper-dark/60 border border-line font-mono text-xs text-ink leading-relaxed italic">
+                    <p className="p-3 bg-paper-dark/60 border border-line font-mono text-xs text-ink leading-relaxed italic break-words">
                       "{scene.audio_text || "No narration text provided for this scene."}"
                     </p>
                   </div>
                 )}
 
                 {/* Media Player for Scene Audio */}
-                <div className="p-3.5 bg-white border border-line flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-3 sm:p-3.5 bg-white border border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   {/* HTML5 audio element for playback */}
                   {hasAudio && (
                     <audio
@@ -251,13 +251,13 @@ export default function AudioTab({
                     />
                   )}
 
-                  <div className="flex items-center gap-3 flex-1">
+                  <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
                     {/* Play/Pause Button */}
                     <button
                       type="button"
                       disabled={!hasAudio}
                       onClick={() => togglePlay(sceneNum, audioData)}
-                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer ${
                         hasAudio
                           ? isPlaying
                             ? "bg-signal text-white ring-2 ring-signal/30"
@@ -266,16 +266,16 @@ export default function AudioTab({
                       }`}
                       title={hasAudio ? (isPlaying ? "Pause" : "Play Scene Audio") : "Upload or generate audio first"}
                     >
-                      {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                      {isPlaying ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
                     </button>
 
                     {/* Waveform Track */}
-                    <div className="flex-1 space-y-1">
+                    <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-mono text-ink-muted">
-                        <span>{hasAudio ? (isPlaying ? "Playing..." : "Audio Track Ready") : "No audio uploaded yet"}</span>
-                        <span>{hasAudio ? (isPlaying ? "00:18" : "--:--") : "--:--"}</span>
+                        <span className="truncate">{hasAudio ? (isPlaying ? "Playing..." : "Audio Ready") : "No audio"}</span>
+                        <span className="shrink-0">{hasAudio ? (isPlaying ? "00:18" : "--:--") : "--:--"}</span>
                       </div>
-                      <div className="h-6 flex items-center gap-0.5 bg-paper-dark p-1 border border-line/60">
+                      <div className="h-6 flex items-center gap-0.5 bg-paper-dark p-1 border border-line/60 overflow-hidden">
                         {Array.from({ length: 32 }).map((_, i) => (
                           <div
                             key={i}

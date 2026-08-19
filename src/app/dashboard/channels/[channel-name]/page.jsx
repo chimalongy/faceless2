@@ -24,7 +24,7 @@ import {
   Check
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
@@ -209,6 +209,7 @@ const initialCompletedVideos = [
 
 export default function ChannelWorkspace() {
   const params = useParams();
+  const router = useRouter();
   const rawSlug = params?.["channel-name"] || "field-notes";
   const channelSlug = Array.isArray(rawSlug) ? rawSlug[0] : rawSlug;
 
@@ -243,6 +244,7 @@ export default function ChannelWorkspace() {
 
   // Modals / forms state
   const [pillarModalOpen, setPillarModalOpen] = useState(false);
+  const [deleteChannelModalOpen, setDeleteChannelModalOpen] = useState(false);
   const [editingPillar, setEditingPillar] = useState(null);
   const [pillarForm, setPillarForm] = useState({
     name: "",
@@ -255,6 +257,22 @@ export default function ChannelWorkspace() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  function handleDeleteChannel() {
+    try {
+      const stored = localStorage.getItem("faceless_channels");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((c) => c.slug !== channelSlug);
+          localStorage.setItem("faceless_channels", JSON.stringify(filtered));
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+    router.push("/dashboard");
+  }
 
   useEffect(() => {
     if (pillarModalOpen) {
@@ -388,6 +406,14 @@ export default function ChannelWorkspace() {
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
+              onClick={() => setDeleteChannelModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink-muted hover:text-rose-600 hover:border-rose-300 text-xs font-semibold transition-all cursor-pointer"
+              title="Delete this channel"
+            >
+              <Trash2 size={14} /> Delete Channel
+            </button>
+            <button
+              type="button"
               onClick={handleOpenCreatePillar}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
             >
@@ -424,7 +450,7 @@ export default function ChannelWorkspace() {
                     <span className="px-2 py-0.5 font-mono text-[10px] uppercase font-semibold tracking-wider bg-ink/5 text-ink-muted border border-line">
                       {pillar.tag || "Pillar"}
                     </span>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -432,10 +458,11 @@ export default function ChannelWorkspace() {
                           e.preventDefault();
                           handleOpenEditPillar(pillar);
                         }}
-                        className="p-1 text-ink-muted hover:text-ink transition-colors cursor-pointer"
+                        className="p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
                         title="Edit pillar"
+                        aria-label="Edit pillar"
                       >
-                        <Edit3 size={13} />
+                        <Edit3 size={14} />
                       </button>
                       <button
                         type="button"
@@ -444,10 +471,11 @@ export default function ChannelWorkspace() {
                           e.preventDefault();
                           handleDeletePillar(pillar.id, pillar.name);
                         }}
-                        className="p-1 text-ink-muted hover:text-rose-600 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-md text-ink-muted hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                         title="Delete pillar"
+                        aria-label="Delete pillar"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
@@ -643,6 +671,61 @@ export default function ChannelWorkspace() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* DELETE CHANNEL CONFIRMATION MODAL */}
+      {mounted &&
+        deleteChannelModalOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
+            style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", zIndex: 99999 }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setDeleteChannelModalOpen(false);
+            }}
+          >
+            <div className="relative w-full max-w-md bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-5 animate-scale-in text-ink my-auto">
+              <button
+                type="button"
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
+                aria-label="Close"
+                onClick={() => setDeleteChannelModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+
+              <div className="w-11 h-11 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-2 border border-rose-200">
+                <Trash2 size={20} />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-display font-semibold text-ink tracking-tight">
+                  Delete {channelTitle}?
+                </h3>
+                <p className="text-xs sm:text-sm text-ink-muted mt-1.5 leading-relaxed">
+                  Are you sure you want to delete this channel? All associated content pillars, story topics, and settings will be permanently removed from your workspace.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setDeleteChannelModalOpen(false)}
+                  className="px-4 py-2 border border-line bg-paper-card text-xs font-medium text-ink hover:bg-ink/5 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteChannel}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white text-xs font-semibold shadow-xs shadow-rose-600/20 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Trash2 size={14} /> Delete Channel
+                </button>
+              </div>
             </div>
           </div>,
           document.body
