@@ -331,22 +331,22 @@ export default function ChannelWorkspace() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0 w-full sm:w-auto">
             <button
               type="button"
               onClick={handleCopyJson}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer flex-1 sm:flex-initial"
               title="Copy full nested JSON schema of channel brand architecture"
             >
               {copiedJson ? (
                 <>
                   <Check size={14} className="text-emerald-600" />
-                  <span className="text-emerald-700">Copied JSON!</span>
+                  <span className="text-emerald-700">Copied!</span>
                 </>
               ) : (
                 <>
                   <Copy size={14} />
-                  <span>Copy JSON</span>
+                  <span>Copy</span>
                 </>
               )}
             </button>
@@ -355,7 +355,7 @@ export default function ChannelWorkspace() {
                 href={channelProfile.channelUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink-muted hover:text-ink text-xs font-semibold transition-all"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-line bg-paper-card text-ink-muted hover:text-ink text-xs font-semibold transition-all flex-1 sm:flex-initial"
                 title="View Channel URL"
               >
                 <Globe size={14} /> URL
@@ -363,25 +363,25 @@ export default function ChannelWorkspace() {
             )}
             <Link
               href={`/dashboard/channels/${channelSlug}/edit`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
-              title="Edit channel settings & 16 brand fields"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer flex-1 sm:flex-initial"
+              title="Edit channel settings & brand fields"
             >
-              <Edit3 size={14} /> Edit Channel
+              <Edit3 size={14} /> Edit
             </Link>
             <button
               type="button"
               onClick={() => setDeleteChannelModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink-muted hover:text-rose-600 hover:border-rose-300 text-xs font-semibold transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-line bg-paper-card text-ink-muted hover:text-rose-600 hover:border-rose-300 text-xs font-semibold transition-all cursor-pointer flex-1 sm:flex-initial"
               title="Delete this channel"
             >
-              <Trash2 size={14} /> Delete Channel
+              <Trash2 size={14} /> Delete
             </button>
             <button
               type="button"
               onClick={handleOpenCreatePillar}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer w-full sm:w-auto"
             >
-              <Plus size={15} /> Add Pillar
+              <Plus size={14} /> Add Pillar
             </button>
           </div>
         </div>
@@ -485,32 +485,32 @@ export default function ChannelWorkspace() {
 
           {/* SECTION 2: PRODUCTION TOPICS */}
           <section className="space-y-4 pt-6 border-t border-line">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-2">
-                <Film size={18} className="text-signal" />
+                <Film size={18} className="text-signal shrink-0" />
                 <h2 className="text-lg font-display font-semibold text-ink">
                   Story Topics & Studio Episodes
                 </h2>
-                <span className="text-xs font-mono text-ink-muted ml-2">
-                  ({filteredTopics.length} items)
+                <span className="text-xs font-mono text-ink-muted ml-1 sm:ml-2 shrink-0">
+                  ({filteredTopics.length})
                 </span>
               </div>
 
-              <div className="flex items-center gap-2.5">
-                <div className="relative">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                <div className="relative w-full sm:w-48">
                   <Search size={14} className="absolute left-3 top-2.5 text-ink-muted" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search topics or hooks..."
-                    className="h-8 pl-8 pr-3 text-xs border border-line bg-paper-card text-ink outline-none focus:border-signal"
+                    placeholder="Search topics..."
+                    className="h-9 sm:h-8 w-full pl-8 pr-3 text-xs border border-line bg-paper-card text-ink outline-none focus:border-signal"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={handleOpenCreateTopic}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs transition-all cursor-pointer shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 bg-signal hover:bg-signal-hover active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer w-full sm:w-auto shrink-0"
                 >
                   <Plus size={14} /> New Content Topic
                 </button>
@@ -522,11 +522,10 @@ export default function ChannelWorkspace() {
               <button
                 type="button"
                 onClick={() => setSelectedPillarFilter("All")}
-                className={`px-3 py-1 text-xs font-medium border transition-colors cursor-pointer ${
-                  selectedPillarFilter === "All"
+                className={`px-3 py-1 text-xs font-medium border transition-colors cursor-pointer ${selectedPillarFilter === "All"
                     ? "bg-signal text-white border-signal"
                     : "bg-paper-card text-ink-muted border-line hover:text-ink"
-                }`}
+                  }`}
               >
                 All Pillars ({topics.length})
               </button>
@@ -535,11 +534,10 @@ export default function ChannelWorkspace() {
                   key={pillar.slug}
                   type="button"
                   onClick={() => setSelectedPillarFilter(pillar.slug)}
-                  className={`px-3 py-1 text-xs font-medium border transition-colors cursor-pointer ${
-                    selectedPillarFilter === pillar.slug
+                  className={`px-3 py-1 text-xs font-medium border transition-colors cursor-pointer ${selectedPillarFilter === pillar.slug
                       ? "bg-signal text-white border-signal"
                       : "bg-paper-card text-ink-muted border-line hover:text-ink"
-                  }`}
+                    }`}
                 >
                   {pillar.name}
                 </button>
@@ -563,27 +561,27 @@ export default function ChannelWorkspace() {
                 {filteredTopics.map((topic) => (
                   <div
                     key={topic.slug}
-                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-ink/[0.015] transition-colors"
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 hover:bg-ink/[0.015] transition-colors"
                   >
-                    <div className="space-y-1.5 flex-1">
+                    <div className="space-y-1.5 flex-1 min-w-0">
                       {topic.pillarName && (
-                        <span className="text-[11px] font-mono text-signal/80 bg-signal/5 px-2 py-0.5 border border-signal/10">
+                        <span className="inline-block text-[11px] font-mono text-signal/80 bg-signal/5 px-2 py-0.5 border border-signal/10">
                           {topic.pillarName}
                         </span>
                       )}
 
                       <Link
                         href={`/dashboard/channels/${channelSlug}/topic/${topic.slug}`}
-                        className="text-sm sm:text-base font-semibold text-ink hover:text-signal transition-colors block"
+                        className="text-sm sm:text-base font-semibold text-ink hover:text-signal transition-colors block break-words"
                       >
                         {topic.title}
                       </Link>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-line/40">
                       <Link
                         href={`/dashboard/channels/${channelSlug}/topic/${topic.slug}`}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer"
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto"
                       >
                         Open Studio <ChevronRight size={13} />
                       </Link>
@@ -821,8 +819,8 @@ export default function ChannelWorkspace() {
                     {creatingTopics
                       ? "Creating Topics..."
                       : topicTitles.trim().split(/\r?\n/).filter(Boolean).length > 1
-                      ? `Create ${topicTitles.trim().split(/\r?\n/).filter(Boolean).length} Topics`
-                      : "Create Topic"}
+                        ? `Create ${topicTitles.trim().split(/\r?\n/).filter(Boolean).length} Topics`
+                        : "Create Topic"}
                   </span>
                 </button>
               </div>
