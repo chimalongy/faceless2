@@ -8,7 +8,8 @@ import {
   Copy,
   Check,
   Upload,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from "lucide-react";
 
 export default function ThumbnailTab({
@@ -23,6 +24,7 @@ export default function ThumbnailTab({
   triggerThumbPromptNotice,
   thumbnailImage,
   isGeneratingThumbnail,
+  isUploadingThumbnail,
   handleThumbnailUpload,
   handleClearThumbnail,
   handleGenerateThumbnail,
@@ -137,12 +139,19 @@ export default function ThumbnailTab({
           {/* Actions: Upload Image, Clear Image, Generate with AI */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Upload Image */}
-            <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-paper-card hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer">
-              <Upload size={13} />
-              <span>Upload Image</span>
+            <label className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-paper-card hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer ${
+              isUploadingThumbnail ? "opacity-60 pointer-events-none" : ""
+            }`}>
+              {isUploadingThumbnail ? (
+                <RefreshCw size={13} className="animate-spin text-signal" />
+              ) : (
+                <Upload size={13} />
+              )}
+              <span>{isUploadingThumbnail ? "Uploading..." : "Upload Image"}</span>
               <input
                 type="file"
                 accept="image/*"
+                disabled={isUploadingThumbnail}
                 onChange={handleThumbnailUpload}
                 className="hidden"
               />

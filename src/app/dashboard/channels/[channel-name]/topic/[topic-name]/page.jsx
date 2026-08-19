@@ -11,7 +11,9 @@ import {
   Layers,
   Braces,
   Check,
-  Video
+  Video,
+  RefreshCw,
+  Clock
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -28,9 +30,9 @@ import DeleteConfirmModal from "@/components/topic-studio/DeleteConfirmModal";
 
 export default function TopicStudioPage() {
   const params = useParams();
-  const rawChannelSlug = params?.["channel-name"] || "field-notes";
+  const rawChannelSlug = params?.["channel-name"] || "";
   const rawPillarSlug = params?.["content-pillar-name"];
-  const rawTopicSlug = params?.["topic-name"] || "how-ancient-mycelium-shaped-earths-first-soil";
+  const rawTopicSlug = params?.["topic-name"] || "";
 
   const channelSlug = Array.isArray(rawChannelSlug) ? rawChannelSlug[0] : rawChannelSlug;
   const topicSlug = Array.isArray(rawTopicSlug) ? rawTopicSlug[0] : rawTopicSlug;
@@ -51,17 +53,170 @@ export default function TopicStudioPage() {
 
   // Studio Active Tab
   const [activeTab, setActiveTab] = useState("thumbnail");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   // 1. Thumbnail State
-  const [thumbnailPrompt, setThumbnailPrompt] = useState(
-    `Cinematic macro shot of bioluminescent mycelium filament network pulsating in dark primordial volcanic soil, volumetric fog, rim lighting, 8k documentary style, Unreal Engine 5 render`
-  );
+  const [thumbnailPrompt, setThumbnailPrompt] = useState("");
   const [isEditingThumbPrompt, setIsEditingThumbPrompt] = useState(false);
   const [thumbPromptNotice, setThumbPromptNotice] = useState("");
-  const [thumbnailImage, setThumbnailImage] = useState("generated");
+  const [thumbnailImage, setThumbnailImage] = useState(null);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
 
+  // 2. Script State
+  const [scriptContent, setScriptContent] = useState("");
+  const [isEditingScript, setIsEditingScript] = useState(false);
+  const [scriptNotice, setScriptNotice] = useState("");
+
+  // 3. Scenes State
+  const [scenesJson, setScenesJson] = useState("[]");
+  const [isEditingScenes, setIsEditingScenes] = useState(false);
+  const [scenesNotice, setScenesNotice] = useState("");
+  const [jsonError, setJsonError] = useState("");
+
+  // 4. Audio State
+  const [selectedVoice, setSelectedVoice] = useState("Marcus - Deep Narrator (Naturalist)");
+  const [bgMusic, setBgMusic] = useState("Ethereal Sub-bass & Ambient Wind");
+  const [sceneAudios, setSceneAudios] = useState({});
+
+  // 5. Images State
+  const [sceneImages, setSceneImages] = useState({});
+
+  // 6. SceneFrames (Video) State
+  const [sceneVideos, setSceneVideos] = useState({});
+
+  // 7. Completed Master Video State
+  const [completedMasterVideo, setCompletedMasterVideo] = useState(null);
+  const [isRenderingMaster, setIsRenderingMaster] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
+
+  // Generic Delete Confirmation Modal State
+  const [deleteModalState, setDeleteModalState] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    confirmLabel: "Delete",
+    onConfirm: () => {},
+  });
+
+  function requestDelete({ title, description, confirmLabel, onConfirm }) {
+    setDeleteModalState({
+      isOpen: true,
+      title,
+      description,
+      confirmLabel: confirmLabel || "Delete",
+      onConfirm: () => {
+        onConfirm();
+        setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  }
+
+  function cancelDelete() {
+    setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+  }
+
+  // Helper: Upload file to Cloudflare R2 via storage API
+  async function uploadFileToR2(file, assetType, sceneIndex = null) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("channelSlug", channelSlug);
+    formData.append("topicSlug", topicSlug);
+    formData.append("assetType", assetType);
+    if (sceneIndex !== null) formData.append("sceneIndex", sceneIndex.toString());
+
+    const res = await fetch("/api/storage/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to upload file to Cloudflare R2");
+    }
+
+    return await res.json();
+  }
+
+  // Load topic from Neon API
+  useEffect(() => {
+    async function loadTopicData() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.topic) {
+            const t = data.topic;
+            if (t.thumbnailPrompt) setThumbnailPrompt(t.thumbnailPrompt);
+            if (t.thumbnailUrl) {
+              setThumbnailImage(t.thumbnailUrl);
+            }
+            if (t.scriptContent) setScriptContent(t.scriptContent);
+            if (t.scenesJson) {
+              setScenesJson(
+                typeof t.scenesJson === "string"
+                  ? t.scenesJson
+                  : JSON.stringify(t.scenesJson, null, 2)
+              );
+            }
+            if (t.masterVideoUrl) {
+              setCompletedMasterVideo({
+                url: t.masterVideoUrl,
+                name: `${topicSlug}-master.mp4`,
+              });
+            }
+
+            // Populate assets from database
+            if (Array.isArray(t.assets)) {
+              const audios = {};
+              const images = {};
+              const videos = {};
+              t.assets.forEach((asset) => {
+                if (asset.assetType === "thumbnail" && !t.thumbnailUrl) {
+                  setThumbnailImage(asset.fileUrl);
+                } else if (asset.assetType === "completedvideo" && !t.masterVideoUrl) {
+                  setCompletedMasterVideo({
+                    url: asset.fileUrl,
+                    name: asset.fileName || `${topicSlug}-master.mp4`,
+                  });
+                } else if (asset.assetType === "audio" && asset.sceneIndex) {
+                  audios[asset.sceneIndex] = {
+                    url: asset.fileUrl,
+                    name: asset.fileName || `Scene ${asset.sceneIndex} Audio`,
+                    duration: "00:20",
+                  };
+                } else if (asset.assetType === "image" && asset.sceneIndex) {
+                  images[asset.sceneIndex] = {
+                    url: asset.fileUrl,
+                    name: asset.fileName || `Scene ${asset.sceneIndex} Image`,
+                  };
+                } else if (asset.assetType === "video" && asset.sceneIndex) {
+                  videos[asset.sceneIndex] = {
+                    url: asset.fileUrl,
+                    name: asset.fileName || `Scene ${asset.sceneIndex} Video`,
+                  };
+                }
+              });
+              if (Object.keys(audios).length > 0) setSceneAudios(audios);
+              if (Object.keys(images).length > 0) setSceneImages(images);
+              if (Object.keys(videos).length > 0) setSceneVideos(videos);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load topic data from API:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadTopicData();
+  }, [channelSlug, topicSlug]);
+
+  // Thumbnail Handlers
   function triggerThumbPromptNotice(msg) {
     setThumbPromptNotice(msg);
     setTimeout(() => setThumbPromptNotice(""), 3000);
@@ -72,26 +227,53 @@ export default function TopicStudioPage() {
       title: "Delete Thumbnail Prompt",
       description: "Are you sure you want to delete the entire thumbnail prompt text?",
       confirmLabel: "Delete Prompt",
-      onConfirm: () => {
+      onConfirm: async () => {
         setThumbnailPrompt("");
+        try {
+          await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ thumbnailPrompt: "" }),
+          });
+        } catch {}
         triggerThumbPromptNotice("Thumbnail prompt cleared.");
       },
     });
   }
 
-  function handleUpdateThumbPrompt() {
+  async function handleUpdateThumbPrompt() {
     setIsEditingThumbPrompt(false);
+    try {
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thumbnailPrompt }),
+      });
+    } catch {}
     triggerThumbPromptNotice("Thumbnail prompt updated.");
   }
 
-  function handleThumbnailUpload(e) {
+  async function handleThumbnailUpload(e) {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        setThumbnailImage(uploadEvent.target?.result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    setIsUploadingThumbnail(true);
+    try {
+      const result = await uploadFileToR2(file, "thumbnail");
+      setThumbnailImage(result.publicUrl);
+
+      // Instantly persist to Neon DB so it survives full page reloads
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thumbnailUrl: result.publicUrl }),
+      });
+      triggerThumbPromptNotice("Thumbnail uploaded & saved.");
+    } catch (err) {
+      console.error("Failed to upload thumbnail:", err);
+      triggerThumbPromptNotice("Upload failed: " + err.message);
+    } finally {
+      setIsUploadingThumbnail(false);
     }
   }
 
@@ -100,8 +282,16 @@ export default function TopicStudioPage() {
       title: "Clear Thumbnail Image",
       description: "Are you sure you want to clear the current thumbnail preview image?",
       confirmLabel: "Clear Image",
-      onConfirm: () => {
+      onConfirm: async () => {
         setThumbnailImage(null);
+        try {
+          await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ thumbnailUrl: "" }),
+          });
+        } catch {}
+        triggerThumbPromptNotice("Thumbnail cleared.");
       },
     });
   }
@@ -114,23 +304,7 @@ export default function TopicStudioPage() {
     }, 600);
   }
 
-  // 2. Script State
-  const defaultScript = `400 million years ago, planet Earth had no dirt.
-
-If you stood on the supercontinent of Gondwana, the ground beneath your feet was not dark fertile soil. It was razor-sharp volcanic granite baking under an unfiltered sun. There was no moss, no trees, and no topsoil. Just hundreds of millions of square miles of dead stone.
-
-Then came the subterranean revolution.
-
-Long before the first plant conquered dry land, ancient fungal hyphae began penetrating microscopic fractures in the stone. Secreting specialized carbonic and oxalic acids, these invisible organisms chemically dissolved granite to harvest elemental potassium, phosphorus, and calcium.
-
-When they formed partnerships with primitive photosynthetic algae, Earth's first biological trading network was born: sugar in exchange for mined minerals.
-
-Over hundreds of millions of years, the accumulation of broken stone, dead fungal biomass, and organic carbon formed the first real soil on our planet. That silent network laid the foundation for the massive Devonian forests and the air we breathe today.`;
-
-  const [scriptContent, setScriptContent] = useState(defaultScript);
-  const [isEditingScript, setIsEditingScript] = useState(false);
-  const [scriptNotice, setScriptNotice] = useState("");
-
+  // Script Handlers
   function triggerScriptNotice(msg) {
     setScriptNotice(msg);
     setTimeout(() => setScriptNotice(""), 3000);
@@ -138,12 +312,12 @@ Over hundreds of millions of years, the accumulation of broken stone, dead funga
 
   function handleClearScript() {
     requestDelete({
-      title: "Delete Full Script",
-      description: "Are you sure you want to delete the entire narration script? All teleprompter speech cues and text will be cleared.",
+      title: "Delete Entire Script",
+      description: "Are you sure you want to delete the entire voiceover script text?",
       confirmLabel: "Delete Script",
       onConfirm: () => {
         setScriptContent("");
-        triggerScriptNotice("Script cleared.");
+        triggerScriptNotice("Script content cleared.");
       },
     });
   }
@@ -167,39 +341,7 @@ Understanding this story isn't just about ancient history—it reveals how the l
     triggerScriptNotice("Script generated by AI.");
   }
 
-  // 3. Scenes State (JSON structured: scene_number, audio_text, image_prompt)
-  const defaultScenesJson = JSON.stringify(
-    [
-      {
-        scene_number: 1,
-        audio_text: "400 million years ago, planet Earth had no dirt. If you stood on the supercontinent of Gondwana, the ground was razor-sharp volcanic granite baking under an unfiltered sun.",
-        image_prompt: "Cinematic wide establishing shot of jagged primordial black volcanic crags, barren rocky terrain without vegetation, drifting volcanic fog, 8k documentary style",
-      },
-      {
-        scene_number: 2,
-        audio_text: "Then came the subterranean revolution. Long before the first plant conquered dry land, ancient fungal hyphae began penetrating microscopic fractures in the stone.",
-        image_prompt: "Extreme macro zoom on bioluminescent fungal filaments penetrating rock fissures and chemically dissolving dark volcanic granite with glowing secretions",
-      },
-      {
-        scene_number: 3,
-        audio_text: "When they formed partnerships with primitive photosynthetic algae, Earth's first biological trading network emerged: sugar in exchange for mined minerals.",
-        image_prompt: "Underground glowing root-like mycelial network exchanging luminescent nutrient ions with primitive green algae cells, Unreal Engine 5 cinematic render",
-      },
-      {
-        scene_number: 4,
-        audio_text: "Over hundreds of millions of years, this silent network built the living soil that laid the foundation for towering Devonian forests and the air we breathe today.",
-        image_prompt: "Time-lapse of rich dark fertile loam forming over ancient rocky terrain as towering Devonian primeval trees sprout into a lush vibrant forest canopy",
-      },
-    ],
-    null,
-    2
-  );
-
-  const [scenesJson, setScenesJson] = useState(defaultScenesJson);
-  const [isEditingScenes, setIsEditingScenes] = useState(false);
-  const [scenesNotice, setScenesNotice] = useState("");
-  const [jsonError, setJsonError] = useState("");
-
+  // Scenes Handlers
   function triggerScenesNotice(msg) {
     setScenesNotice(msg);
     setTimeout(() => setScenesNotice(""), 3000);
@@ -251,22 +393,30 @@ Understanding this story isn't just about ancient history—it reveals how the l
     triggerScenesNotice("Scenes JSON generated by AI.");
   }
 
-  // 4. Audio State (Scene-by-scene breakdown)
-  const [selectedVoice, setSelectedVoice] = useState("Marcus - Deep Narrator (Naturalist)");
-  const [bgMusic, setBgMusic] = useState("Ethereal Sub-bass & Ambient Wind");
-  const [sceneAudios, setSceneAudios] = useState({});
-
-  function handleUploadSceneAudio(sceneNum, file) {
+  // Audio Handlers
+  async function handleUploadSceneAudio(sceneNum, file) {
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setSceneAudios((prev) => ({
-      ...prev,
-      [sceneNum]: {
-        url,
-        name: file.name,
-        duration: "00:20",
-      },
-    }));
+    try {
+      const result = await uploadFileToR2(file, "audio", sceneNum);
+      setSceneAudios((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url: result.publicUrl,
+          name: file.name,
+          duration: "00:20",
+        },
+      }));
+    } catch {
+      const url = URL.createObjectURL(file);
+      setSceneAudios((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url,
+          name: file.name,
+          duration: "00:20",
+        },
+      }));
+    }
   }
 
   function handleDeleteSceneAudio(sceneNum) {
@@ -313,22 +463,31 @@ Understanding this story isn't just about ancient history—it reveals how the l
     setSceneAudios(newAudios);
   }
 
-  // 5. Images State (Scene-by-scene breakdown)
-  const [sceneImages, setSceneImages] = useState({});
-
-  function handleUploadSceneImage(sceneNum, file) {
+  // Images Handlers
+  async function handleUploadSceneImage(sceneNum, file) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    try {
+      const result = await uploadFileToR2(file, "image", sceneNum);
       setSceneImages((prev) => ({
         ...prev,
         [sceneNum]: {
-          url: e.target?.result,
+          url: result.publicUrl,
           name: file.name,
         },
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setSceneImages((prev) => ({
+          ...prev,
+          [sceneNum]: {
+            url: e.target?.result,
+            name: file.name,
+          },
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
   }
 
   function handleDeleteSceneImage(sceneNum) {
@@ -373,19 +532,28 @@ Understanding this story isn't just about ancient history—it reveals how the l
     setSceneImages(newImages);
   }
 
-  // 6. SceneFrames (Video) State
-  const [sceneVideos, setSceneVideos] = useState({});
-
-  function handleUploadSceneVideo(sceneNum, file) {
+  // SceneFrames (Video) Handlers
+  async function handleUploadSceneVideo(sceneNum, file) {
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setSceneVideos((prev) => ({
-      ...prev,
-      [sceneNum]: {
-        url,
-        name: file.name,
-      },
-    }));
+    try {
+      const result = await uploadFileToR2(file, "video", sceneNum);
+      setSceneVideos((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url: result.publicUrl,
+          name: file.name,
+        },
+      }));
+    } catch {
+      const url = URL.createObjectURL(file);
+      setSceneVideos((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url,
+          name: file.name,
+        },
+      }));
+    }
   }
 
   function handleDeleteSceneVideo(sceneNum) {
@@ -430,29 +598,31 @@ Understanding this story isn't just about ancient history—it reveals how the l
     setSceneVideos(newVideos);
   }
 
-  // 7. Completed Master Video State
-  const [completedMasterVideo, setCompletedMasterVideo] = useState({
-    url: "generated",
-    name: `${topicSlug}-master-4k.mp4`,
-  });
-  const [isRenderingMaster, setIsRenderingMaster] = useState(false);
-  const [renderProgress, setRenderProgress] = useState(0);
-
-  function handleUploadMasterVideo(e) {
+  // Master Video Handlers
+  async function handleUploadMasterVideo(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setCompletedMasterVideo({
-      url,
-      name: file.name,
-    });
+
+    try {
+      const result = await uploadFileToR2(file, "completedvideo");
+      setCompletedMasterVideo({
+        url: result.publicUrl,
+        name: file.name,
+      });
+    } catch {
+      const url = URL.createObjectURL(file);
+      setCompletedMasterVideo({
+        url,
+        name: file.name,
+      });
+    }
   }
 
   function handleDeleteMasterVideo() {
     requestDelete({
-      title: "Delete Completed Master Video",
-      description: "Are you sure you want to delete the assembled master video cut? You can re-render it from scene frames at any time.",
-      confirmLabel: "Delete Master",
+      title: "Delete Master Video Cut",
+      description: "Are you sure you want to delete the rendered master video file from this project?",
+      confirmLabel: "Delete Master Cut",
       onConfirm: () => {
         setCompletedMasterVideo(null);
       },
@@ -461,258 +631,251 @@ Understanding this story isn't just about ancient history—it reveals how the l
 
   function handleRenderMasterVideo() {
     setIsRenderingMaster(true);
-    setRenderProgress(15);
+    setRenderProgress(10);
     const interval = setInterval(() => {
       setRenderProgress((prev) => {
-        if (prev >= 90) {
+        if (prev >= 100) {
           clearInterval(interval);
-          return 95;
+          setIsRenderingMaster(false);
+          setCompletedMasterVideo({
+            url: "generated",
+            name: `${topicSlug}-master-4k.mp4`,
+          });
+          return 100;
         }
-        return prev + 25;
+        return prev + 15;
       });
-    }, 350);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setRenderProgress(100);
-      setIsRenderingMaster(false);
-      setCompletedMasterVideo({
-        url: "generated",
-        name: `${topicSlug}-master-4k.mp4`,
-      });
-    }, 1800);
+    }, 400);
   }
 
-  // Global Delete Modal State
-  const [mounted, setMounted] = useState(false);
-  const [deleteModal, setDeleteModal] = useState({
-    isOpen: false,
-    title: "",
-    description: "",
-    confirmLabel: "Delete",
-    onConfirm: null,
-  });
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (deleteModal.isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
+  // Save full topic studio state to Neon Database
+  async function handleSaveStudioState() {
+    setSaving(true);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = null;
     }
-    return () => {
-      document.body.style.overflow = "unset";
+
+    const payload = {
+      scriptContent,
+      scenesJson: parsed,
+      thumbnailUrl: thumbnailImage,
+      thumbnailPrompt,
+      masterVideoUrl: completedMasterVideo?.url || null,
+      stage: completedMasterVideo ? "Completed" : "In Progress",
     };
-  }, [deleteModal.isOpen]);
 
-  function requestDelete({ title, description, confirmLabel = "Delete", onConfirm }) {
-    setDeleteModal({
-      isOpen: true,
-      title: title || "Confirm Deletion",
-      description: description || "Are you sure you want to delete this item? This action cannot be undone.",
-      confirmLabel,
-      onConfirm: () => {
-        if (onConfirm) onConfirm();
-        setDeleteModal((prev) => ({ ...prev, isOpen: false }));
-      },
-    });
-  }
+    try {
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.warn("Could not save to API:", err);
+    }
 
-  function closeDeleteModal() {
-    setDeleteModal((prev) => ({ ...prev, isOpen: false }));
-  }
-
-  function handleSaveAll() {
+    setSaving(false);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setTimeout(() => setSaved(false), 2000);
   }
 
   const tabs = [
     { id: "thumbnail", label: "Thumbnail", icon: ImageIcon },
     { id: "script", label: "Script", icon: FileText },
-    { id: "scenes", label: "Scenes", icon: Braces },
+    { id: "scenes", label: "Scenes (JSON)", icon: Braces },
     { id: "audio", label: "Audio", icon: Mic },
     { id: "images", label: "Images", icon: Film },
-    { id: "sceneframes", label: "SceneFrames", icon: Layers },
-    { id: "completedvideo", label: "Completed Video", icon: Video },
+    { id: "scene_frames", label: "Scene Frames", icon: Layers },
+    { id: "completed_video", label: "Completed Video", icon: Video },
   ];
 
   return (
-    <div className="space-y-8 animate-card-rise">
-      {/* Top Navigation & Breadcrumb */}
+    <div className="space-y-8 animate-card-rise pb-20">
+      {/* Top Header & Save Bar */}
       <div>
         <Link
           href={backUrl}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors mb-3"
         >
-          <ArrowLeft size={14} /> Back to {rawPillarSlug ? "Content Pillar" : channelTitle}
+          <ArrowLeft size={14} /> Back to {channelTitle}
         </Link>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-signal/10 text-signal border border-signal/20">
-                Content Topic
+                Topic Production Studio
               </span>
+              <span className="text-xs font-mono text-ink-muted">/{topicSlug}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-semibold text-ink tracking-tight">
               {topicTitle}
             </h1>
+            <p className="text-xs sm:text-sm text-ink-muted mt-1">
+              End-to-end documentary generation desk: Thumbnail, Script, Structured Scenes, Voiceover Audio, Scene Frames, and Master Video.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
-              onClick={handleSaveAll}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+              disabled={saving}
+              onClick={handleSaveStudioState}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
             >
-              {saved ? <Check size={15} /> : <Save size={15} />}
-              <span>{saved ? "All Assets Saved" : "Save All Work"}</span>
+              {saving ? <RefreshCw size={15} className="animate-spin" /> : saved ? <Check size={15} /> : <Save size={15} />}
+              <span>{saving ? "Saving..." : saved ? "State Saved" : "Save Studio State"}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Horizontal Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-line overflow-x-auto pb-px">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer shrink-0 ${isActive
-                  ? "border-signal text-signal bg-signal/5"
-                  : "border-transparent text-ink-muted hover:text-ink hover:bg-ink/5"
-                }`}
-            >
-              <Icon size={15} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {loading ? (
+        <section className="p-12 border border-line bg-paper-card text-center space-y-3 rounded-xl">
+          <RefreshCw size={24} className="animate-spin text-signal mx-auto" />
+          <p className="text-xs text-ink-muted">Loading topic production desk from database...</p>
+        </section>
+      ) : (
+        <>
+          {/* Main Studio Navigation Tabs */}
+          <div className="flex items-center gap-1 border-b border-line overflow-x-auto no-scrollbar">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? "border-signal text-signal bg-signal/5"
+                      : "border-transparent text-ink-muted hover:text-ink hover:bg-ink/[0.02]"
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
-      {/* TAB 1: THUMBNAIL */}
-      {activeTab === "thumbnail" && (
-        <ThumbnailTab
-          topicTitle={topicTitle}
-          thumbnailPrompt={thumbnailPrompt}
-          setThumbnailPrompt={setThumbnailPrompt}
-          isEditingThumbPrompt={isEditingThumbPrompt}
-          setIsEditingThumbPrompt={setIsEditingThumbPrompt}
-          thumbPromptNotice={thumbPromptNotice}
-          handleClearThumbPrompt={handleClearThumbPrompt}
-          handleUpdateThumbPrompt={handleUpdateThumbPrompt}
-          triggerThumbPromptNotice={triggerThumbPromptNotice}
-          thumbnailImage={thumbnailImage}
-          isGeneratingThumbnail={isGeneratingThumbnail}
-          handleThumbnailUpload={handleThumbnailUpload}
-          handleClearThumbnail={handleClearThumbnail}
-          handleGenerateThumbnail={handleGenerateThumbnail}
-        />
+          {/* TAB 1: THUMBNAIL */}
+          {activeTab === "thumbnail" && (
+            <ThumbnailTab
+              topicTitle={topicTitle}
+              thumbnailPrompt={thumbnailPrompt}
+              setThumbnailPrompt={setThumbnailPrompt}
+              isEditingThumbPrompt={isEditingThumbPrompt}
+              setIsEditingThumbPrompt={setIsEditingThumbPrompt}
+              thumbPromptNotice={thumbPromptNotice}
+              thumbnailImage={thumbnailImage}
+              isGeneratingThumbnail={isGeneratingThumbnail}
+              isUploadingThumbnail={isUploadingThumbnail}
+              handleClearThumbPrompt={handleClearThumbPrompt}
+              handleUpdateThumbPrompt={handleUpdateThumbPrompt}
+              handleThumbnailUpload={handleThumbnailUpload}
+              handleClearThumbnail={handleClearThumbnail}
+              handleGenerateThumbnail={handleGenerateThumbnail}
+            />
+          )}
+
+          {/* TAB 2: SCRIPT */}
+          {activeTab === "script" && (
+            <ScriptTab
+              topicTitle={topicTitle}
+              scriptContent={scriptContent}
+              setScriptContent={setScriptContent}
+              isEditingScript={isEditingScript}
+              setIsEditingScript={setIsEditingScript}
+              scriptNotice={scriptNotice}
+              handleClearScript={handleClearScript}
+              handleUpdateScript={handleUpdateScript}
+              handleGenerateScript={handleGenerateScript}
+            />
+          )}
+
+          {/* TAB 3: SCENES (JSON) */}
+          {activeTab === "scenes" && (
+            <ScenesTab
+              scenesJson={scenesJson}
+              setScenesJson={setScenesJson}
+              isEditingScenes={isEditingScenes}
+              setIsEditingScenes={setIsEditingScenes}
+              scenesNotice={scenesNotice}
+              jsonError={jsonError}
+              handleClearScenes={handleClearScenes}
+              handleUpdateScenes={handleUpdateScenes}
+              handleGenerateScenes={handleGenerateScenes}
+            />
+          )}
+
+          {/* TAB 4: AUDIO */}
+          {activeTab === "audio" && (
+            <AudioTab
+              scenesJson={scenesJson}
+              sceneAudios={sceneAudios}
+              selectedVoice={selectedVoice}
+              setSelectedVoice={setSelectedVoice}
+              bgMusic={bgMusic}
+              setBgMusic={setBgMusic}
+              handleUploadSceneAudio={handleUploadSceneAudio}
+              handleDeleteSceneAudio={handleDeleteSceneAudio}
+              handleGenerateSceneAudio={handleGenerateSceneAudio}
+              handleGenerateAllAudios={handleGenerateAllAudios}
+            />
+          )}
+
+          {/* TAB 5: IMAGES */}
+          {activeTab === "images" && (
+            <ImagesTab
+              scenesJson={scenesJson}
+              sceneImages={sceneImages}
+              handleUploadSceneImage={handleUploadSceneImage}
+              handleDeleteSceneImage={handleDeleteSceneImage}
+              handleGenerateSceneImage={handleGenerateSceneImage}
+              handleGenerateAllImages={handleGenerateAllImages}
+            />
+          )}
+
+          {/* TAB 6: SCENE FRAMES */}
+          {activeTab === "scene_frames" && (
+            <SceneFramesTab
+              scenesJson={scenesJson}
+              sceneVideos={sceneVideos}
+              handleUploadSceneVideo={handleUploadSceneVideo}
+              handleDeleteSceneVideo={handleDeleteSceneVideo}
+              handleGenerateSceneVideo={handleGenerateSceneVideo}
+              handleGenerateAllVideos={handleGenerateAllVideos}
+            />
+          )}
+
+          {/* TAB 7: COMPLETED MASTER VIDEO */}
+          {activeTab === "completed_video" && (
+            <CompletedVideoTab
+              scenesJson={scenesJson}
+              completedMasterVideo={completedMasterVideo}
+              isRenderingMaster={isRenderingMaster}
+              renderProgress={renderProgress}
+              handleUploadMasterVideo={handleUploadMasterVideo}
+              handleDeleteMasterVideo={handleDeleteMasterVideo}
+              handleRenderMasterVideo={handleRenderMasterVideo}
+            />
+          )}
+        </>
       )}
 
-      {/* TAB 2: SCRIPT */}
-      {activeTab === "script" && (
-        <ScriptTab
-          scriptContent={scriptContent}
-          setScriptContent={setScriptContent}
-          isEditingScript={isEditingScript}
-          setIsEditingScript={setIsEditingScript}
-          scriptNotice={scriptNotice}
-          handleClearScript={handleClearScript}
-          handleUpdateScript={handleUpdateScript}
-          handleGenerateScript={handleGenerateScript}
-          triggerScriptNotice={triggerScriptNotice}
-        />
-      )}
-
-      {/* TAB 3: SCENES */}
-      {activeTab === "scenes" && (
-        <ScenesTab
-          scenesJson={scenesJson}
-          setScenesJson={setScenesJson}
-          scenesNotice={scenesNotice}
-          jsonError={jsonError}
-          setJsonError={setJsonError}
-          handleClearScenes={handleClearScenes}
-          handleGenerateScenes={handleGenerateScenes}
-          triggerScenesNotice={triggerScenesNotice}
-        />
-      )}
-
-      {/* TAB 4: AUDIO */}
-      {activeTab === "audio" && (
-        <AudioTab
-          scenesJson={scenesJson}
-          sceneAudios={sceneAudios}
-          selectedVoice={selectedVoice}
-          setSelectedVoice={setSelectedVoice}
-          bgMusic={bgMusic}
-          setBgMusic={setBgMusic}
-          handleUploadSceneAudio={handleUploadSceneAudio}
-          handleDeleteSceneAudio={handleDeleteSceneAudio}
-          handleGenerateSceneAudio={handleGenerateSceneAudio}
-          handleGenerateAllAudios={handleGenerateAllAudios}
-        />
-      )}
-
-      {/* TAB 5: IMAGES */}
-      {activeTab === "images" && (
-        <ImagesTab
-          scenesJson={scenesJson}
-          sceneImages={sceneImages}
-          handleUploadSceneImage={handleUploadSceneImage}
-          handleDeleteSceneImage={handleDeleteSceneImage}
-          handleGenerateSceneImage={handleGenerateSceneImage}
-          handleGenerateAllImages={handleGenerateAllImages}
-        />
-      )}
-
-      {/* TAB 6: SCENEFRAMES (VIDEOS) */}
-      {activeTab === "sceneframes" && (
-        <SceneFramesTab
-          scenesJson={scenesJson}
-          sceneVideos={sceneVideos}
-          sceneImages={sceneImages}
-          sceneAudios={sceneAudios}
-          handleUploadSceneVideo={handleUploadSceneVideo}
-          handleDeleteSceneVideo={handleDeleteSceneVideo}
-          handleGenerateSceneVideo={handleGenerateSceneVideo}
-          handleGenerateAllVideos={handleGenerateAllVideos}
-        />
-      )}
-
-      {/* TAB 7: COMPLETED VIDEO */}
-      {activeTab === "completedvideo" && (
-        <CompletedVideoTab
-          topicTitle={topicTitle}
-          scenesJson={scenesJson}
-          sceneVideos={sceneVideos}
-          sceneImages={sceneImages}
-          sceneAudios={sceneAudios}
-          thumbnailImage={thumbnailImage}
-          completedMasterVideo={completedMasterVideo}
-          setCompletedMasterVideo={setCompletedMasterVideo}
-          handleUploadMasterVideo={handleUploadMasterVideo}
-          handleDeleteMasterVideo={handleDeleteMasterVideo}
-          handleRenderMasterVideo={handleRenderMasterVideo}
-          isRenderingMaster={isRenderingMaster}
-          renderProgress={renderProgress}
-        />
-      )}
-
-      {/* GLOBAL DELETE CONFIRMATION MODAL */}
+      {/* Global Studio Delete Confirmation Modal */}
       <DeleteConfirmModal
-        mounted={mounted}
-        deleteModal={deleteModal}
-        closeDeleteModal={closeDeleteModal}
+        isOpen={deleteModalState.isOpen}
+        title={deleteModalState.title}
+        description={deleteModalState.description}
+        confirmLabel={deleteModalState.confirmLabel}
+        onConfirm={deleteModalState.onConfirm}
+        onCancel={cancelDelete}
       />
     </div>
   );
