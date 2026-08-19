@@ -18,7 +18,9 @@ export default function DashboardLayout({ children }) {
   // Derive active label or channel title
   const activeLabel =
     navigation.find((item) => item.href === pathname)?.label ??
-    (pathname.includes("/topic/")
+    (pathname.includes("/edit")
+      ? "Edit Channel Desk"
+      : pathname.includes("/topic/")
       ? "Content Topic Studio"
       : pathname.includes("/content_pillar/")
       ? "Pillar Directive"

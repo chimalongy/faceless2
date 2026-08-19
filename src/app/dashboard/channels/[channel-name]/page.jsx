@@ -21,7 +21,13 @@ import {
   ChevronRight,
   BookOpen,
   Compass,
-  Check
+  Check,
+  Eye,
+  Volume2,
+  Globe,
+  Shield,
+  Image as ImageIcon,
+  Copy
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -252,11 +258,68 @@ export default function ChannelWorkspace() {
     description: "",
   });
 
+  const [channelProfile, setChannelProfile] = useState(null);
+  const [copiedJson, setCopiedJson] = useState(false);
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    try {
+      const stored = localStorage.getItem("faceless_channels");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const found = parsed.find((c) => c.slug === channelSlug);
+          if (found) setChannelProfile(found);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }, [channelSlug]);
+
+  function handleCopyJson() {
+    const cp = channelProfile || {};
+    const nestedData = {
+      channel: {
+        name: cp.name || channelTitle,
+        slug: cp.slug || channelSlug,
+        handle: cp.handle || `@${channelSlug}`,
+        channel_url: cp.channelUrl || `https://youtube.com/@${channelSlug}`,
+        tagline: cp.tagline || "",
+        description: cp.description || "",
+        status: cp.status || "Active",
+        videos: cp.videos || completedVideos.length || 0
+      },
+      niche_and_audience: {
+        niche: cp.niche || "Documentaries",
+        sub_niche: cp.subNiche || "",
+        content_category: cp.contentCategory || "Education & Documentaries",
+        target_audience: cp.targetAudience || ""
+      },
+      brand_strategy: {
+        mission: cp.mission || "",
+        value_proposition: cp.valueProposition || "",
+        personality: cp.personality || "",
+        brand_positioning: cp.brandPositioning || "",
+        brand_promise: cp.brandPromise || ""
+      },
+      creative_themes: {
+        image_theme: cp.imageTheme || "",
+        thumbnail_theme: cp.thumbnailTheme || "",
+        audio_theme: cp.audioTheme || ""
+      }
+    };
+
+    try {
+      navigator.clipboard.writeText(JSON.stringify(nestedData, null, 2));
+      setCopiedJson(true);
+      setTimeout(() => setCopiedJson(false), 2000);
+    } catch {
+      // Fallback
+    }
+  }
 
   function handleDeleteChannel() {
     try {
@@ -396,14 +459,60 @@ export default function ChannelWorkspace() {
               <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
                 Channel Operations
               </span>
-              <span className="text-xs font-mono text-ink-muted">/{channelSlug}</span>
+              <span className="text-xs font-mono text-ink-muted">
+                {channelProfile?.handle || `/@${channelSlug}`}
+              </span>
+              {channelProfile?.status && (
+                <span className="px-2 py-0.5 text-[9px] font-mono uppercase bg-signal/10 text-signal border border-signal/20 font-semibold">
+                  {channelProfile.status}
+                </span>
+              )}
             </div>
             <h1 className="text-3xl font-display font-semibold text-ink tracking-tight">
-              {channelTitle}
+              {channelProfile?.name || channelTitle}
             </h1>
+            <p className="text-xs sm:text-sm text-ink-muted mt-1 max-w-2xl">
+              {channelProfile?.tagline || channelProfile?.description || "Automated long-form documentary production desk."}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyJson}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+              title="Copy full nested JSON schema of channel brand architecture"
+            >
+              {copiedJson ? (
+                <>
+                  <Check size={14} className="text-emerald-600" />
+                  <span className="text-emerald-700">Copied JSON!</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={14} />
+                  <span>Copy JSON</span>
+                </>
+              )}
+            </button>
+            {channelProfile?.channelUrl && (
+              <a
+                href={channelProfile.channelUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink-muted hover:text-ink text-xs font-semibold transition-all"
+                title="View Channel URL"
+              >
+                <Globe size={14} /> URL
+              </a>
+            )}
+            <Link
+              href={`/dashboard/channels/${channelSlug}/edit`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+              title="Edit channel settings & 16 brand fields"
+            >
+              <Edit3 size={14} /> Edit Channel
+            </Link>
             <button
               type="button"
               onClick={() => setDeleteChannelModalOpen(true)}
