@@ -146,7 +146,7 @@ export async function PUT(request, { params }) {
   }
 }
 
-// DELETE /api/channels/[channel-name]/topics/[topic-name] - Delete topic
+// DELETE /api/channels/[channel-name]/topics/[topic-name] - Delete topic and all its uploaded files in Cloudflare R2
 export async function DELETE(request, { params }) {
   try {
     const rawParams = await params;
@@ -167,16 +167,41 @@ export async function DELETE(request, { params }) {
     }
     const channelId = channelRows[0].id;
 
+    // 1. Fetch all asset keys for this topic before deleting from DB
+    const assetRows = await sql`
+      SELECT ta.file_key 
+      FROM topic_assets ta
+      JOIN topics t ON t.id = ta.topic_id
+      WHERE t.channel_id = ${channelId} AND t.slug = ${topicSlug};
+    `;
+
+    const keysToDelete = (assetRows || []).map((r) => r.file_key).filter(Boolean);
+
+    // 2. Delete all physical files from Cloudflare R2 bucket
+    if (keysToDelete.length > 0) {
+      try {
+        const { deleteMultipleFromR2 } = await import("@/lib/storage");
+        await deleteMultipleFromR2(keysToDelete);
+      } catch (r2Err) {
+        console.warn("Could not delete some files from R2:", r2Err);
+      }
+    }
+
+    // 3. Delete topic from DB (cascades to topic_assets records)
     await sql`
       DELETE FROM topics
       WHERE channel_id = ${channelId} AND slug = ${topicSlug};
     `;
 
-    return NextResponse.json({ success: true, deletedTopic: topicSlug });
+    return NextResponse.json({
+      success: true,
+      deletedTopic: topicSlug,
+      deletedFilesCount: keysToDelete.length,
+    });
   } catch (error) {
     console.error("Error deleting topic:", error);
     return NextResponse.json(
-      { error: "Failed to delete topic" },
+      { error: error.message || "Failed to delete topic" },
       { status: 500 }
     );
   }

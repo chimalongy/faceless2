@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -99,18 +100,52 @@ export async function getPresignedR2UploadUrl({ key, mimeType, expiresIn = 3600 
 }
 
 /**
- * Delete an object from Cloudflare R2
+ * Delete a single object from Cloudflare R2
  */
 export async function deleteFromR2(key) {
+  if (!key) return false;
   const client = getR2Client();
   if (!client) return false;
 
-  const bucket = getBucketName();
-  const command = new DeleteObjectCommand({
-    Bucket: bucket,
-    Key: key,
-  });
+  try {
+    const bucket = getBucketName();
+    const command = new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    });
 
-  await client.send(command);
-  return true;
+    await client.send(command);
+    return true;
+  } catch (err) {
+    console.warn("Failed to delete object from Cloudflare R2:", key, err);
+    return false;
+  }
+}
+
+/**
+ * Delete multiple objects in batch from Cloudflare R2
+ */
+export async function deleteMultipleFromR2(keys = []) {
+  const validKeys = (keys || []).filter(Boolean);
+  if (validKeys.length === 0) return true;
+
+  const client = getR2Client();
+  if (!client) return false;
+
+  try {
+    const bucket = getBucketName();
+    const command = new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: {
+        Objects: validKeys.map((k) => ({ Key: k })),
+        Quiet: true,
+      },
+    });
+
+    await client.send(command);
+    return true;
+  } catch (err) {
+    console.warn("Failed to batch delete objects from Cloudflare R2:", err);
+    return false;
+  }
 }

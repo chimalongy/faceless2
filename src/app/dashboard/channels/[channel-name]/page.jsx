@@ -523,8 +523,8 @@ export default function ChannelWorkspace() {
                 type="button"
                 onClick={() => setSelectedPillarFilter("All")}
                 className={`px-3 py-1 text-xs font-medium border transition-colors cursor-pointer ${selectedPillarFilter === "All"
-                    ? "bg-signal text-white border-signal"
-                    : "bg-paper-card text-ink-muted border-line hover:text-ink"
+                  ? "bg-signal text-white border-signal"
+                  : "bg-paper-card text-ink-muted border-line hover:text-ink"
                   }`}
               >
                 All Pillars ({topics.length})
@@ -535,8 +535,8 @@ export default function ChannelWorkspace() {
                   type="button"
                   onClick={() => setSelectedPillarFilter(pillar.slug)}
                   className={`px-3 py-1 text-xs font-medium border transition-colors cursor-pointer ${selectedPillarFilter === pillar.slug
-                      ? "bg-signal text-white border-signal"
-                      : "bg-paper-card text-ink-muted border-line hover:text-ink"
+                    ? "bg-signal text-white border-signal"
+                    : "bg-paper-card text-ink-muted border-line hover:text-ink"
                     }`}
                 >
                   {pillar.name}

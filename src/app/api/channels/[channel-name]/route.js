@@ -122,7 +122,7 @@ export async function PUT(request, { params }) {
   }
 }
 
-// DELETE /api/channels/[channel-name] - Delete a channel
+// DELETE /api/channels/[channel-name] - Delete a channel and all its Cloudflare R2 media assets
 export async function DELETE(request, { params }) {
   try {
     const rawSlug = (await params)?.["channel-name"] || "";
@@ -136,16 +136,41 @@ export async function DELETE(request, { params }) {
       );
     }
 
+    // 1. Fetch all asset keys for this channel from topic_assets before deleting
+    const assetRows = await sql`
+      SELECT ta.file_key 
+      FROM topic_assets ta
+      JOIN channels c ON c.id = ta.channel_id
+      WHERE c.slug = ${channelSlug};
+    `;
+
+    const keysToDelete = (assetRows || []).map((r) => r.file_key).filter(Boolean);
+
+    // 2. Delete all physical files from Cloudflare R2 bucket
+    if (keysToDelete.length > 0) {
+      try {
+        const { deleteMultipleFromR2 } = await import("@/lib/storage");
+        await deleteMultipleFromR2(keysToDelete);
+      } catch (r2Err) {
+        console.warn("Could not delete some files from R2:", r2Err);
+      }
+    }
+
+    // 3. Delete channel from database (cascades to pillars, topics, and topic_assets)
     await sql`
       DELETE FROM channels
       WHERE slug = ${channelSlug};
     `;
 
-    return NextResponse.json({ success: true, deletedSlug: channelSlug });
+    return NextResponse.json({
+      success: true,
+      deletedSlug: channelSlug,
+      deletedFilesCount: keysToDelete.length,
+    });
   } catch (error) {
     console.error("Error deleting channel:", error);
     return NextResponse.json(
-      { error: "Failed to delete channel" },
+      { error: error.message || "Failed to delete channel" },
       { status: 500 }
     );
   }
