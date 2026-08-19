@@ -530,11 +530,10 @@ Understanding this story isn't just about ancient history—it reveals how the l
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer shrink-0 ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer shrink-0 ${isActive
                   ? "border-signal text-signal bg-signal/5"
                   : "border-transparent text-ink-muted hover:text-ink hover:bg-ink/5"
-              }`}
+                }`}
             >
               <Icon size={15} />
               <span>{tab.label}</span>
