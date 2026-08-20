@@ -12,7 +12,7 @@ import {
   Braces,
   Check,
   Video,
-  RefreshCw,
+  Loader2,
   Clock
 } from "lucide-react";
 import Link from "next/link";
@@ -726,7 +726,7 @@ Understanding this story isn't just about ancient history—it reveals how the l
               onClick={handleSaveStudioState}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
             >
-              {saving ? <RefreshCw size={15} className="animate-spin" /> : saved ? <Check size={15} /> : <Save size={15} />}
+              {saving ? <Loader2 size={15} className="animate-spin" /> : saved ? <Check size={15} /> : <Save size={15} />}
               <span>{saving ? "Saving..." : saved ? "State Saved" : "Save Studio State"}</span>
             </button>
           </div>
@@ -735,7 +735,7 @@ Understanding this story isn't just about ancient history—it reveals how the l
 
       {loading ? (
         <section className="p-12 border border-line bg-paper-card text-center space-y-3 rounded-xl">
-          <RefreshCw size={24} className="animate-spin text-signal mx-auto" />
+          <Loader2 size={24} className="animate-spin text-signal mx-auto" />
           <p className="text-xs text-ink-muted">Loading topic production desk from database...</p>
         </section>
       ) : (

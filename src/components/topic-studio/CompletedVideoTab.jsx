@@ -15,7 +15,7 @@ import {
   Volume2,
   Settings,
   Share2,
-  RefreshCw,
+  Loader2,
   ExternalLink,
   ShieldCheck,
   Check
@@ -103,7 +103,7 @@ export default function CompletedVideoTab({
             >
               {isRenderingMaster ? (
                 <>
-                  <RefreshCw size={13} className="animate-spin" />
+                  <Loader2 size={13} className="animate-spin" />
                   <span>Merging ({renderProgress}%)...</span>
                 </>
               ) : (

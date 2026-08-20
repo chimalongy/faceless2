@@ -6,6 +6,7 @@
 dist/
 build/
 *.dist
+.trigger/
 
 # Environment variables
 .env

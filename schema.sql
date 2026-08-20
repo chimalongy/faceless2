@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS channels (
     image_theme TEXT,
     thumbnail_theme TEXT,
     audio_theme TEXT,
+    banner_url TEXT,
+    avatar_url TEXT,
     status TEXT DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

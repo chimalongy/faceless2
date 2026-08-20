@@ -35,6 +35,8 @@ export async function GET(request, { params }) {
         image_theme AS "imageTheme",
         thumbnail_theme AS "thumbnailTheme",
         audio_theme AS "audioTheme",
+        banner_url AS "bannerUrl",
+        avatar_url AS "avatarUrl",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -102,6 +104,8 @@ export async function PUT(request, { params }) {
         image_theme = ${body.imageTheme || null},
         thumbnail_theme = ${body.thumbnailTheme || null},
         audio_theme = ${body.audioTheme || null},
+        banner_url = ${body.bannerUrl !== undefined ? body.bannerUrl : null},
+        avatar_url = ${body.avatarUrl !== undefined ? body.avatarUrl : null},
         status = ${body.status || 'Active'},
         updated_at = NOW()
       WHERE slug = ${channelSlug}

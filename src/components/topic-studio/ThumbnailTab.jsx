@@ -9,7 +9,7 @@ import {
   Check,
   Upload,
   Sparkles,
-  RefreshCw
+  Loader2
 } from "lucide-react";
 
 export default function ThumbnailTab({
@@ -143,7 +143,7 @@ export default function ThumbnailTab({
               isUploadingThumbnail ? "opacity-60 pointer-events-none" : ""
             }`}>
               {isUploadingThumbnail ? (
-                <RefreshCw size={13} className="animate-spin text-signal" />
+                <Loader2 size={13} className="animate-spin text-signal" />
               ) : (
                 <Upload size={13} />
               )}

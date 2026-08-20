@@ -19,7 +19,7 @@ import {
   Globe,
   Copy,
   Check,
-  RefreshCw
+  Loader2
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -389,7 +389,7 @@ export default function ChannelWorkspace() {
 
       {loading ? (
         <section className="p-12 border border-line bg-paper-card text-center space-y-3 rounded-xl">
-          <RefreshCw size={24} className="animate-spin text-signal mx-auto" />
+          <Loader2 size={24} className="animate-spin text-signal mx-auto" />
           <p className="text-xs text-ink-muted">Loading workspace metadata...</p>
         </section>
       ) : (
@@ -814,7 +814,7 @@ export default function ChannelWorkspace() {
                   disabled={creatingTopics}
                   className="px-5 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white font-semibold transition-all cursor-pointer inline-flex items-center gap-2"
                 >
-                  {creatingTopics ? <RefreshCw size={14} className="animate-spin" /> : null}
+                  {creatingTopics ? <Loader2 size={14} className="animate-spin" /> : null}
                   <span>
                     {creatingTopics
                       ? "Creating Topics..."

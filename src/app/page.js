@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, Sparkles, AlertCircle } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, Sparkles, AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -198,8 +198,17 @@ export default function LoginPage() {
               disabled={submitting}
               className="w-full h-11 mt-2 rounded-lg bg-signal hover:bg-signal-hover active:scale-[0.99] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-md shadow-signal/20 transition-all cursor-pointer disabled:opacity-60"
             >
-              {submitting ? "Checking credentials…" : "Enter Faceless 2.0"}
-              <ArrowRight size={16} />
+              {submitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Checking credentials…</span>
+                </>
+              ) : (
+                <>
+                  <span>Enter Faceless 2.0</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </form>
 

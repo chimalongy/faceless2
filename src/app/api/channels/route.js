@@ -81,11 +81,11 @@ export async function POST(request) {
 
     const handle = body.handle?.trim() || `@${slug.replace(/-/g, "")}`;
     const channelUrl = body.channelUrl?.trim() || `https://youtube.com/${handle}`;
-    const description = body.description?.trim() || `Automated production engine desk for ${name}.`;
+    const description = body.description?.trim() || "";
     const tagline = body.tagline?.trim() || "";
-    const niche = body.niche?.trim() || "Documentaries";
+    const niche = body.niche?.trim() || "";
     const subNiche = body.subNiche?.trim() || "";
-    const contentCategory = body.contentCategory?.trim() || "Education & Documentaries";
+    const contentCategory = body.contentCategory?.trim() || "";
     const targetAudience = body.targetAudience?.trim() || "";
     const mission = body.mission?.trim() || "";
     const valueProposition = body.valueProposition?.trim() || "";

@@ -56,11 +56,18 @@ export async function initDbSchema() {
         image_theme TEXT,
         thumbnail_theme TEXT,
         audio_theme TEXT,
+        banner_url TEXT,
+        avatar_url TEXT,
         status TEXT DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `;
+
+    try {
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS banner_url TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
+    } catch {}
 
     // 2. Content Pillars Table
     await sql`

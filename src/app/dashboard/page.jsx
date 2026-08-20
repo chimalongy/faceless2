@@ -11,7 +11,7 @@ import {
   Edit3,
   Copy,
   Check,
-  RefreshCw,
+  Loader2,
   Tv
 } from "lucide-react";
 import Link from "next/link";
@@ -156,20 +156,20 @@ export default function OverviewPage() {
       slug: cleanSlug,
       handle: cleanHandle,
       channelUrl: `https://youtube.com/${cleanHandle}`,
-      description: `Automated narrative production engine for ${trimmed}.`,
-      tagline: `Documentaries and deep analysis covering ${trimmed}.`,
-      niche: "Documentaries",
-      subNiche: "Investigative Stories",
-      contentCategory: "Education & Documentaries",
-      targetAudience: "Documentary viewers and curious researchers",
-      mission: `To produce meticulously researched, visually captivating documentaries on ${trimmed}.`,
-      valueProposition: "High-retention storytelling backed by rigorous research and visual mastery.",
-      personality: "Analytical, calm, authoritative, investigative",
-      brandPositioning: `The premier documentary desk for ${trimmed}.`,
-      brandPromise: "Uncompromising factual rigor, zero sensationalism, and cinematic production values.",
-      imageTheme: "Cinematic 8K documentary, volumetric lighting, Unreal Engine 5 render, rim lighting",
-      thumbnailTheme: "High-contrast bold focal typography, dramatic visual contrast, vibrant hook lighting",
-      audioTheme: "Deep baritone narrator, subtle low-frequency drone (-18dB)",
+      description: "",
+      tagline: "",
+      niche: "",
+      subNiche: "",
+      contentCategory: "",
+      targetAudience: "",
+      mission: "",
+      valueProposition: "",
+      personality: "",
+      brandPositioning: "",
+      brandPromise: "",
+      imageTheme: "",
+      thumbnailTheme: "",
+      audioTheme: "",
       status: "Active",
     };
 
@@ -245,7 +245,7 @@ export default function OverviewPage() {
       {/* Grid of Channels */}
       {loading ? (
         <section className="p-12 border border-line bg-paper-card text-center space-y-3 rounded-xl">
-          <RefreshCw size={24} className="animate-spin text-signal mx-auto" />
+          <Loader2 size={24} className="animate-spin text-signal mx-auto" />
           <p className="text-xs text-ink-muted">Loading channels from database...</p>
         </section>
       ) : channels.length === 0 ? (
@@ -469,7 +469,7 @@ export default function OverviewPage() {
                 disabled={creating}
                 className="px-5 py-2.5 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer inline-flex items-center gap-2"
               >
-                {creating ? <RefreshCw size={14} className="animate-spin" /> : null}
+                {creating ? <Loader2 size={14} className="animate-spin" /> : null}
                 <span>{creating ? "Creating..." : "Create Channel"}</span>
               </button>
             </div>

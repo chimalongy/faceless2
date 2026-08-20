@@ -95,6 +95,24 @@ export async function POST(request) {
               WHERE id = ${topicId};
             `;
           }
+
+          // If asset is a channel banner, automatically persist to channels.banner_url
+          if ((assetType === "channel_banner" || assetType === "banner") && channelId) {
+            await sql`
+              UPDATE channels
+              SET banner_url = ${uploadResult.publicUrl}, updated_at = NOW()
+              WHERE id = ${channelId};
+            `;
+          }
+
+          // If asset is a channel avatar / picture, automatically persist to channels.avatar_url
+          if ((assetType === "channel_avatar" || assetType === "avatar" || assetType === "channel_picture") && channelId) {
+            await sql`
+              UPDATE channels
+              SET avatar_url = ${uploadResult.publicUrl}, updated_at = NOW()
+              WHERE id = ${channelId};
+            `;
+          }
         }
       }
     } catch (dbErr) {
