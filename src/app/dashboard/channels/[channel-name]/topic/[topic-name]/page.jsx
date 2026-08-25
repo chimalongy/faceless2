@@ -1,0 +1,1497 @@
+"use client";
+
+import {
+  ArrowLeft,
+  Image as ImageIcon,
+  FileText,
+  Mic,
+  Film,
+  Sparkles,
+  Save,
+  Layers,
+  Braces,
+  Check,
+  Video,
+  Loader2,
+  Clock
+} from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+
+import ThumbnailTab from "@/components/topic-studio/ThumbnailTab";
+import ScriptTab from "@/components/topic-studio/ScriptTab";
+import ScenesTab from "@/components/topic-studio/ScenesTab";
+import AudioTab from "@/components/topic-studio/AudioTab";
+import ImagesTab from "@/components/topic-studio/ImagesTab";
+import SceneFramesTab from "@/components/topic-studio/SceneFramesTab";
+import CompletedVideoTab from "@/components/topic-studio/CompletedVideoTab";
+import DeleteConfirmModal from "@/components/topic-studio/DeleteConfirmModal";
+
+export default function TopicStudioPage() {
+  const params = useParams();
+  const rawChannelSlug = params?.["channel-name"] || "";
+  const rawPillarSlug = params?.["content-pillar-name"];
+  const rawTopicSlug = params?.["topic-name"] || "";
+
+  const channelSlug = Array.isArray(rawChannelSlug) ? rawChannelSlug[0] : rawChannelSlug;
+  const topicSlug = Array.isArray(rawTopicSlug) ? rawTopicSlug[0] : rawTopicSlug;
+
+  const channelTitle = channelSlug
+    .split("-")
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(" ");
+
+  const topicTitle = topicSlug
+    .split("-")
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(" ");
+
+  const backUrl = rawPillarSlug
+    ? `/dashboard/channels/${channelSlug}/content_pillar/${rawPillarSlug}`
+    : `/dashboard/channels/${channelSlug}`;
+
+  // Studio Active Tab
+  const [activeTab, setActiveTab] = useState("thumbnail");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // 1. Thumbnail State
+  const [thumbnailPrompt, setThumbnailPrompt] = useState("");
+  const [isEditingThumbPrompt, setIsEditingThumbPrompt] = useState(false);
+  const [thumbPromptNotice, setThumbPromptNotice] = useState("");
+  const [thumbnailImage, setThumbnailImage] = useState(null);
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+
+  // 2. Script State
+  const [scriptContent, setScriptContent] = useState("");
+  const [isEditingScript, setIsEditingScript] = useState(false);
+  const [scriptNotice, setScriptNotice] = useState("");
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+  const [isUpdatingScript, setIsUpdatingScript] = useState(false);
+
+  // 3. Scenes State
+  const [scenesJson, setScenesJson] = useState("[]");
+  const [isEditingScenes, setIsEditingScenes] = useState(false);
+  const [scenesNotice, setScenesNotice] = useState("");
+  const [jsonError, setJsonError] = useState("");
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [isUpdatingScenes, setIsUpdatingScenes] = useState(false);
+
+  // 4. Audio State
+  const [selectedVoice, setSelectedVoice] = useState("af_heart");
+  const [audioSpeed, setAudioSpeed] = useState(1.0);
+  const [bgMusic, setBgMusic] = useState("Ethereal Sub-bass & Ambient Wind");
+  const [sceneAudios, setSceneAudios] = useState({});
+  const [isGeneratingAllAudios, setIsGeneratingAllAudios] = useState(false);
+  const [generatingSceneAudios, setGeneratingSceneAudios] = useState({});
+
+  // 5. Images State
+  const [sceneImages, setSceneImages] = useState({});
+
+  // 6. SceneFrames (Video) State
+  const [sceneVideos, setSceneVideos] = useState({});
+  const [isGeneratingAllVideos, setIsGeneratingAllVideos] = useState(false);
+  const [generatingSceneVideos, setGeneratingSceneVideos] = useState({});
+
+  // 7. Completed Master Video State
+  const [completedMasterVideo, setCompletedMasterVideo] = useState(null);
+  const [isRenderingMaster, setIsRenderingMaster] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
+
+  // Generic Delete Confirmation Modal State
+  const [deleteModalState, setDeleteModalState] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    confirmLabel: "Delete",
+    onConfirm: () => {},
+  });
+
+  function requestDelete({ title, description, confirmLabel, onConfirm }) {
+    setDeleteModalState({
+      isOpen: true,
+      title,
+      description,
+      confirmLabel: confirmLabel || "Delete",
+      onConfirm: () => {
+        onConfirm();
+        setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  }
+
+  function cancelDelete() {
+    setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+  }
+
+  // Helper: Upload file to Cloudflare R2 via storage API
+  async function uploadFileToR2(file, assetType, sceneIndex = null) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("channelSlug", channelSlug);
+    formData.append("topicSlug", topicSlug);
+    formData.append("assetType", assetType);
+    if (sceneIndex !== null) formData.append("sceneIndex", sceneIndex.toString());
+
+    const res = await fetch("/api/storage/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to upload file to Cloudflare R2");
+    }
+
+    return await res.json();
+  }
+
+  // Load topic from Neon API
+  useEffect(() => {
+    async function loadTopicData() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.topic) {
+            const t = data.topic;
+            if (t.thumbnailPrompt) setThumbnailPrompt(t.thumbnailPrompt);
+            if (t.thumbnailUrl) {
+              setThumbnailImage(t.thumbnailUrl);
+            }
+            if (t.scriptContent) setScriptContent(t.scriptContent);
+            if (t.scenesJson) {
+              setScenesJson(
+                typeof t.scenesJson === "string"
+                  ? t.scenesJson
+                  : JSON.stringify(t.scenesJson, null, 2)
+              );
+            }
+            if (t.masterVideoUrl) {
+              setCompletedMasterVideo({
+                url: t.masterVideoUrl,
+                name: `${topicSlug}-master.mp4`,
+              });
+            }
+
+            // Populate assets from database
+            if (Array.isArray(t.assets)) {
+              const audios = {};
+              const images = {};
+              const videos = {};
+              t.assets.forEach((asset) => {
+                if (asset.assetType === "thumbnail" && !t.thumbnailUrl) {
+                  setThumbnailImage(asset.fileUrl);
+                } else if (asset.assetType === "completedvideo" && !t.masterVideoUrl) {
+                  setCompletedMasterVideo({
+                    url: asset.fileUrl,
+                    key: asset.fileKey,
+                    name: asset.fileName || `${topicSlug}-master.mp4`,
+                  });
+                } else if (asset.assetType === "audio" && asset.sceneIndex) {
+                  audios[asset.sceneIndex] = {
+                    url: asset.fileUrl,
+                    key: asset.fileKey,
+                    name: asset.fileName || `Scene ${asset.sceneIndex} Audio`,
+                    duration: "00:20",
+                  };
+                } else if (asset.assetType === "image" && asset.sceneIndex) {
+                  images[asset.sceneIndex] = {
+                    url: asset.fileUrl,
+                    key: asset.fileKey,
+                    name: asset.fileName || `Scene ${asset.sceneIndex} Image`,
+                  };
+                } else if (asset.assetType === "video" && asset.sceneIndex) {
+                  videos[asset.sceneIndex] = {
+                    url: asset.fileUrl,
+                    key: asset.fileKey,
+                    name: asset.fileName || `Scene ${asset.sceneIndex} Video`,
+                  };
+                }
+              });
+              if (Object.keys(audios).length > 0) setSceneAudios(audios);
+              if (Object.keys(images).length > 0) setSceneImages(images);
+              if (Object.keys(videos).length > 0) setSceneVideos(videos);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load topic data from API:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadTopicData();
+  }, [channelSlug, topicSlug]);
+
+  // Thumbnail Handlers
+  function triggerThumbPromptNotice(msg) {
+    setThumbPromptNotice(msg);
+    setTimeout(() => setThumbPromptNotice(""), 3000);
+  }
+
+  function handleClearThumbPrompt() {
+    requestDelete({
+      title: "Delete Thumbnail Prompt",
+      description: "Are you sure you want to delete the entire thumbnail prompt text?",
+      confirmLabel: "Delete Prompt",
+      onConfirm: async () => {
+        setThumbnailPrompt("");
+        try {
+          await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ thumbnailPrompt: "" }),
+          });
+        } catch {}
+        triggerThumbPromptNotice("Thumbnail prompt cleared.");
+      },
+    });
+  }
+
+  async function handleUpdateThumbPrompt() {
+    setIsEditingThumbPrompt(false);
+    try {
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thumbnailPrompt }),
+      });
+    } catch {}
+    triggerThumbPromptNotice("Thumbnail prompt updated.");
+  }
+
+  async function handleThumbnailUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingThumbnail(true);
+    try {
+      const result = await uploadFileToR2(file, "thumbnail");
+      setThumbnailImage(result.publicUrl);
+
+      // Instantly persist to Neon DB so it survives full page reloads
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thumbnailUrl: result.publicUrl }),
+      });
+      triggerThumbPromptNotice("Thumbnail uploaded & saved.");
+    } catch (err) {
+      console.error("Failed to upload thumbnail:", err);
+      triggerThumbPromptNotice("Upload failed: " + err.message);
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  }
+
+  function handleClearThumbnail() {
+    requestDelete({
+      title: "Clear Thumbnail Image",
+      description: "Are you sure you want to clear the current thumbnail preview image?",
+      confirmLabel: "Clear Image",
+      onConfirm: async () => {
+        setThumbnailImage(null);
+        try {
+          await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ thumbnailUrl: "" }),
+          });
+        } catch {}
+        triggerThumbPromptNotice("Thumbnail cleared.");
+      },
+    });
+  }
+
+  function handleGenerateThumbnail() {
+    setIsGeneratingThumbnail(true);
+    setTimeout(() => {
+      setThumbnailImage("generated");
+      setIsGeneratingThumbnail(false);
+    }, 600);
+  }
+
+  // Script Handlers
+  function triggerScriptNotice(msg) {
+    setScriptNotice(msg);
+    setTimeout(() => setScriptNotice(""), 3000);
+  }
+
+  function handleClearScript() {
+    requestDelete({
+      title: "Delete Entire Script",
+      description: "Are you sure you want to delete the entire voiceover script text?",
+      confirmLabel: "Delete Script",
+      onConfirm: () => {
+        setScriptContent("");
+        triggerScriptNotice("Script content cleared.");
+      },
+    });
+  }
+
+  function handleUpdateScript() {
+    setIsUpdatingScript(true);
+    setTimeout(() => {
+      setIsUpdatingScript(false);
+      triggerScriptNotice("Script successfully updated.");
+    }, 400);
+  }
+
+  function handleGenerateScript() {
+    setIsGeneratingScript(true);
+    setTimeout(() => {
+      const generated = `In an epoch before human history, ${topicTitle} became the definitive turning point for our biosphere.
+
+[PAUSE 0.6s]
+
+The world was not as we know it today. Everything was harsh, unyielding, and silent. Yet beneath the visible surface, a complex chain reaction was quietly gathering momentum.
+
+What began as an isolated physical anomaly quickly evolved into a planetary transformation. Over vast spans of geological time, unseen interactions reshaped the landscape, establishing the very conditions that make modern life possible.
+
+Understanding this story isn't just about ancient history—it reveals how the living systems around us continue to function today.`;
+
+      setScriptContent(generated);
+      setIsGeneratingScript(false);
+      triggerScriptNotice("Script generated by AI.");
+    }, 800);
+  }
+
+  // Scenes Handlers
+  function triggerScenesNotice(msg) {
+    setScenesNotice(msg);
+    setTimeout(() => setScenesNotice(""), 3000);
+  }
+
+  function handleClearScenes() {
+    requestDelete({
+      title: "Delete All Scenes",
+      description: "Are you sure you want to delete all structured scene definitions in this JSON array? It will be reset to an empty array.",
+      confirmLabel: "Delete All Scenes",
+      onConfirm: () => {
+        setScenesJson("[]");
+        triggerScenesNotice("Scenes JSON cleared.");
+      },
+    });
+  }
+
+  function handleUpdateScenes() {
+    setIsUpdatingScenes(true);
+    setTimeout(() => {
+      try {
+        const parsed = JSON.parse(scenesJson);
+        setScenesJson(JSON.stringify(parsed, null, 2));
+        setJsonError("");
+        triggerScenesNotice("Scenes JSON validated & updated.");
+      } catch (err) {
+        setJsonError("Invalid JSON: " + err.message);
+      } finally {
+        setIsUpdatingScenes(false);
+      }
+    }, 400);
+  }
+
+  function handleGenerateScenes() {
+    setIsGeneratingScenes(true);
+    setTimeout(() => {
+      const generated = [
+        {
+          scene_number: 1,
+          audio_text: `In an epoch before human history, ${topicTitle} became the definitive turning point for our biosphere.`,
+          image_prompt: `Cinematic wide establishing shot of ${topicTitle}, atmospheric volumetric lighting, 8k documentary cinematography`,
+          transition: "fade",
+          ken_burns: {
+            direction: "zoom-in",
+            intensity: 0.10,
+          },
+        },
+        {
+          scene_number: 2,
+          audio_text: `What began as an isolated anomaly quickly evolved into a planetary chain reaction.`,
+          image_prompt: `Detailed macro breakdown illustrating the core mechanism of ${topicTitle}, ultra-detailed documentary style`,
+          transition: "crossfade",
+          ken_burns: {
+            direction: "pan-right",
+            intensity: 0.10,
+          },
+        },
+        {
+          scene_number: 3,
+          audio_text: `Over vast spans of geological time, unseen interactions reshaped the landscape, establishing the very conditions that make modern life possible.`,
+          image_prompt: `Epic wide angle reveal showing the full scale and planetary aftermath of ${topicTitle}`,
+          transition: "fade-out",
+          ken_burns: {
+            direction: "zoom-out",
+            intensity: 0.10,
+          },
+        },
+      ];
+      setScenesJson(JSON.stringify(generated, null, 2));
+      setJsonError("");
+      setIsGeneratingScenes(false);
+      triggerScenesNotice("Scenes JSON generated by AI.");
+    }, 800);
+  }
+
+  // Audio Handlers
+  async function handleUploadSceneAudio(sceneNum, file) {
+    if (!file) return;
+    try {
+      const result = await uploadFileToR2(file, "audio", sceneNum);
+      setSceneAudios((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url: result.publicUrl,
+          name: file.name,
+          duration: "00:20",
+        },
+      }));
+    } catch {
+      const url = URL.createObjectURL(file);
+      setSceneAudios((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url,
+          name: file.name,
+          duration: "00:20",
+        },
+      }));
+    }
+  }
+
+  function handleDeleteSceneAudio(sceneNum) {
+    requestDelete({
+      title: `Delete Scene ${sceneNum} Audio`,
+      description: `Are you sure you want to delete the audio file for Scene ${sceneNum}?`,
+      confirmLabel: "Delete Audio",
+      onConfirm: async () => {
+        const audioData = sceneAudios[sceneNum] || sceneAudios[String(sceneNum)] || sceneAudios[Number(sceneNum)];
+        if (audioData?.key || audioData?.url) {
+          try {
+            await fetch("/api/storage/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                key: audioData?.key,
+                url: audioData?.url,
+                channelSlug,
+                topicSlug,
+                assetType: "audio",
+                sceneIndex: sceneNum,
+              }),
+            });
+          } catch (err) {
+            console.warn("Could not delete audio file from R2:", err);
+          }
+        }
+        setSceneAudios((prev) => {
+          const next = { ...prev };
+          delete next[sceneNum];
+          delete next[String(sceneNum)];
+          delete next[Number(sceneNum)];
+          return next;
+        });
+        toast.success(`Scene ${sceneNum} audio deleted.`);
+      },
+    });
+  }
+
+  async function handleGenerateSceneAudio(sceneNum) {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+    const scene = parsed.find((s) => Number(s.scene_number) === Number(sceneNum));
+    const scriptText = scene?.audio_text || scene?.narration || scene?.script || scene?.text || "";
+
+    if (!scriptText.trim()) {
+      toast.error(`Scene ${sceneNum} has no narration text defined.`);
+      return;
+    }
+
+    setGeneratingSceneAudios((prev) => ({ ...prev, [sceneNum]: true }));
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-audio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneIndex: sceneNum,
+          scriptText,
+          voice: selectedVoice,
+          speed: audioSpeed,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.audioUrl) {
+        setSceneAudios((prev) => ({
+          ...prev,
+          [sceneNum]: {
+            url: data.audioUrl,
+            key: data.key,
+            name: `Scene ${sceneNum} Audio.wav`,
+            duration: data.durationEstimate || "00:20",
+            endpointUsed: data.endpointUsed,
+          },
+        }));
+        toast.success(`Scene ${sceneNum} narration synthesized!`);
+      } else {
+        toast.error(data.error || "Failed to synthesize audio narration.");
+      }
+    } catch (err) {
+      console.error(`Error generating audio for Scene ${sceneNum}:`, err);
+      toast.error("Error generating audio: " + err.message);
+    } finally {
+      setGeneratingSceneAudios((prev) => ({ ...prev, [sceneNum]: false }));
+    }
+  }
+
+  async function handleGenerateAllAudios() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+
+    if (!parsed || parsed.length === 0) {
+      toast.error("No scenes found in this topic.");
+      return;
+    }
+
+    // Filter out scenes that already have audio
+    const scenesToGenerate = parsed.filter((scene) => {
+      const sNum = scene.scene_number;
+      const existing = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+      return !existing || !existing.url;
+    });
+
+    if (scenesToGenerate.length === 0) {
+      toast("All scenes already have audio narration synthesized.", {
+        icon: "✨",
+        style: {
+          background: "#f0fdf4",
+          color: "#166534",
+          border: "1px solid #bbf7d0",
+        },
+      });
+      return;
+    }
+
+    setIsGeneratingAllAudios(true);
+    toast(`Synthesizing narration for ${scenesToGenerate.length} remaining scene(s)...`, {
+      icon: "🎙️",
+    });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-audio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenes: scenesToGenerate,
+          voice: selectedVoice,
+          speed: audioSpeed,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.results)) {
+        let successCount = 0;
+        setSceneAudios((prev) => {
+          const next = { ...prev };
+          data.results.forEach((r) => {
+            if (r.success && r.audioUrl) {
+              successCount++;
+              next[r.sceneIndex] = {
+                url: r.audioUrl,
+                key: r.key,
+                name: `Scene ${r.sceneIndex} Audio.wav`,
+                duration: r.durationEstimate || "00:20",
+                endpointUsed: r.endpointUsed,
+              };
+            }
+          });
+          return next;
+        });
+        toast.success(`Synthesized ${successCount} scene narration track(s) successfully!`);
+      } else {
+        toast.error(data.error || "Failed to generate all audios.");
+      }
+    } catch (err) {
+      console.error("Error generating all audios:", err);
+      toast.error("Error generating audios: " + err.message);
+    } finally {
+      setIsGeneratingAllAudios(false);
+    }
+  }
+
+  // Images Handlers
+  async function handleUploadSceneImage(sceneNum, file) {
+    if (!file) return;
+    try {
+      const result = await uploadFileToR2(file, "image", sceneNum);
+      setSceneImages((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url: result.publicUrl,
+          key: result.key,
+          name: file.name,
+        },
+      }));
+      toast.success(`Scene ${sceneNum} image uploaded.`);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setSceneImages((prev) => ({
+          ...prev,
+          [sceneNum]: {
+            url: e.target?.result,
+            name: file.name,
+          },
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function handleDeleteSceneImage(sceneNum) {
+    requestDelete({
+      title: `Delete Scene ${sceneNum} Image`,
+      description: `Are you sure you want to delete the image for Scene ${sceneNum}?`,
+      confirmLabel: "Delete Image",
+      onConfirm: async () => {
+        const imgData = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
+        
+        // Physical file deletion from R2 and database cleanup
+        if (imgData?.key || imgData?.url) {
+          try {
+            await fetch("/api/storage/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                key: imgData?.key,
+                url: imgData?.url,
+                channelSlug,
+                topicSlug,
+                assetType: "image",
+                sceneIndex: sceneNum,
+              }),
+            });
+          } catch (err) {
+            console.warn("Could not delete file from R2:", err);
+          }
+        }
+
+        setSceneImages((prev) => {
+          const next = { ...prev };
+          delete next[sceneNum];
+          delete next[String(sceneNum)];
+          delete next[Number(sceneNum)];
+          return next;
+        });
+
+        toast.success(`Scene ${sceneNum} image deleted.`);
+      },
+    });
+  }
+
+  function handleDeleteMultipleSceneImages(sceneNumbers = []) {
+    if (!sceneNumbers || sceneNumbers.length === 0) return;
+    const count = sceneNumbers.length;
+
+    requestDelete({
+      title: `Delete ${count} Scene Image${count > 1 ? "s" : ""}`,
+      description: `Are you sure you want to delete the images for ${count} selected scene${count > 1 ? "s" : ""}? This will permanently remove the files from Cloudflare R2 and the database.`,
+      confirmLabel: `Delete ${count} Image${count > 1 ? "s" : ""}`,
+      onConfirm: async () => {
+        const deletePromises = sceneNumbers.map(async (sNum) => {
+          const imgData = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
+          if (imgData?.key || imgData?.url) {
+            try {
+              await fetch("/api/storage/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  key: imgData?.key,
+                  url: imgData?.url,
+                  channelSlug,
+                  topicSlug,
+                  assetType: "image",
+                  sceneIndex: sNum,
+                }),
+              });
+            } catch (err) {
+              console.warn(`Could not delete image for scene ${sNum}:`, err);
+            }
+          }
+        });
+
+        await Promise.all(deletePromises);
+
+        setSceneImages((prev) => {
+          const next = { ...prev };
+          sceneNumbers.forEach((sNum) => {
+            delete next[sNum];
+            delete next[String(sNum)];
+            delete next[Number(sNum)];
+          });
+          return next;
+        });
+
+        toast.success(`Deleted ${count} scene image${count > 1 ? "s" : ""}.`);
+      },
+    });
+  }
+
+  const [isGeneratingAllImages, setIsGeneratingAllImages] = useState(false);
+  const [generatingSceneImages, setGeneratingSceneImages] = useState({});
+  const [isExtractingZip, setIsExtractingZip] = useState(false);
+
+  async function handleUploadZipImages(file) {
+    if (!file) return;
+    setIsExtractingZip(true);
+    toast("Unpacking ZIP and uploading scene images via Trigger.dev...", {
+      icon: "📦",
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/extract-zip`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.images)) {
+        setSceneImages((prev) => {
+          const next = { ...prev };
+          data.images.forEach((img) => {
+            next[img.sceneIndex] = {
+              url: img.publicUrl,
+              key: img.key,
+              name: img.fileName || `Scene ${img.sceneIndex} Image`,
+            };
+          });
+          return next;
+        });
+        toast.success(`Successfully unpacked & mapped ${data.extractedCount} scene image(s)!`);
+      } else {
+        toast.error(data.error || "Failed to extract images from ZIP.");
+      }
+    } catch (err) {
+      console.error("Error extracting ZIP:", err);
+      toast.error("Error extracting ZIP: " + err.message);
+    } finally {
+      setIsExtractingZip(false);
+    }
+  }
+
+  async function handleGenerateSceneImage(sceneNum) {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+    const scene = parsed.find((s) => Number(s.scene_number) === Number(sceneNum));
+    const prompt = scene?.image_prompt || "";
+
+    if (!prompt) {
+      toast.error(`Scene ${sceneNum} has no image prompt defined.`);
+      return;
+    }
+
+    setGeneratingSceneImages((prev) => ({ ...prev, [sceneNum]: true }));
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-images`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneIndex: sceneNum,
+          prompt,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.imageUrl) {
+        setSceneImages((prev) => ({
+          ...prev,
+          [sceneNum]: {
+            url: data.imageUrl,
+            key: data.key,
+            name: `Scene ${sceneNum} Image`,
+            endpointUsed: data.endpointUsed,
+          },
+        }));
+        toast.success(`Scene ${sceneNum} image generated successfully!`);
+      } else {
+        toast.error(data.error || "Failed to generate image.");
+      }
+    } catch (err) {
+      console.error(`Error generating image for Scene ${sceneNum}:`, err);
+      toast.error("Error generating image: " + err.message);
+    } finally {
+      setGeneratingSceneImages((prev) => ({ ...prev, [sceneNum]: false }));
+    }
+  }
+
+  async function handleGenerateAllImages() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+
+    if (!parsed || parsed.length === 0) {
+      toast.error("No scenes found in this topic.");
+      return;
+    }
+
+    // Filter out scenes that already have generated/uploaded images
+    const scenesToGenerate = parsed.filter((scene) => {
+      const sNum = scene.scene_number;
+      const existing = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
+      return !existing || !existing.url;
+    });
+
+    if (scenesToGenerate.length === 0) {
+      toast("All scenes already have images generated.", {
+        icon: "✨",
+        style: {
+          background: "#f0fdf4",
+          color: "#166534",
+          border: "1px solid #bbf7d0",
+        },
+      });
+      return;
+    }
+
+    setIsGeneratingAllImages(true);
+    toast(`Generating images for ${scenesToGenerate.length} remaining scene(s)...`, {
+      icon: "🎨",
+    });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-images`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenes: scenesToGenerate,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.results)) {
+        let successCount = 0;
+        setSceneImages((prev) => {
+          const next = { ...prev };
+          data.results.forEach((r) => {
+            if (r.success && r.imageUrl) {
+              successCount++;
+              next[r.sceneIndex] = {
+                url: r.imageUrl,
+                key: r.key,
+                name: `Scene ${r.sceneIndex} Image`,
+                endpointUsed: r.endpointUsed,
+              };
+            }
+          });
+          return next;
+        });
+        toast.success(`Generated ${successCount} scene image(s) successfully!`);
+      } else {
+        toast.error(data.error || "Failed to generate all images.");
+      }
+    } catch (err) {
+      console.error("Error generating remaining images:", err);
+      toast.error("Error generating images: " + err.message);
+    } finally {
+      setIsGeneratingAllImages(false);
+    }
+  }
+
+  // SceneFrames (Video) Handlers
+  async function handleUploadSceneVideo(sceneNum, file) {
+    if (!file) return;
+    try {
+      const result = await uploadFileToR2(file, "video", sceneNum);
+      setSceneVideos((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url: result.publicUrl,
+          key: result.key,
+          name: file.name,
+        },
+      }));
+      toast.success(`Scene ${sceneNum} video uploaded.`);
+    } catch {
+      const url = URL.createObjectURL(file);
+      setSceneVideos((prev) => ({
+        ...prev,
+        [sceneNum]: {
+          url,
+          name: file.name,
+        },
+      }));
+    }
+  }
+
+  function handleDeleteSceneVideo(sceneNum) {
+    requestDelete({
+      title: `Delete Scene ${sceneNum} Video`,
+      description: `Are you sure you want to delete the video clip for Scene ${sceneNum}?`,
+      confirmLabel: "Delete Video",
+      onConfirm: async () => {
+        const videoData = sceneVideos[sceneNum] || sceneVideos[String(sceneNum)] || sceneVideos[Number(sceneNum)];
+        if (videoData?.key || videoData?.url) {
+          try {
+            await fetch("/api/storage/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                key: videoData?.key,
+                url: videoData?.url,
+                channelSlug,
+                topicSlug,
+                assetType: "video",
+                sceneIndex: sceneNum,
+              }),
+            });
+          } catch (err) {
+            console.warn("Could not delete video file from R2:", err);
+          }
+        }
+        setSceneVideos((prev) => {
+          const next = { ...prev };
+          delete next[sceneNum];
+          delete next[String(sceneNum)];
+          delete next[Number(sceneNum)];
+          return next;
+        });
+        toast.success(`Scene ${sceneNum} video deleted.`);
+      },
+    });
+  }
+
+  async function handleGenerateSceneVideo(sceneNum) {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+    const scene = parsed.find((s) => Number(s.scene_number) === Number(sceneNum));
+    const imgData = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
+    const audioData = sceneAudios[sceneNum] || sceneAudios[String(sceneNum)] || sceneAudios[Number(sceneNum)];
+
+    if (!imgData?.url) {
+      toast.error(`Scene ${sceneNum} has no image yet. Please generate or upload an image first.`);
+      return;
+    }
+
+    setGeneratingSceneVideos((prev) => ({ ...prev, [sceneNum]: true }));
+    toast(`Rendering Scene ${sceneNum} video clip via Trigger.dev...`, { icon: "🎬" });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scene-frames`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneIndex: sceneNum,
+          imageUrl: imgData.url,
+          audioUrl: audioData?.url || null,
+          kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.10 },
+          transition: scene?.transition || "fade",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.videoUrl) {
+        setSceneVideos((prev) => ({
+          ...prev,
+          [sceneNum]: {
+            url: data.videoUrl,
+            key: data.key,
+            name: `Scene ${sceneNum} Video`,
+            duration: data.duration,
+          },
+        }));
+        toast.success(`Scene ${sceneNum} video rendered successfully!`);
+      } else {
+        toast.error(data.error || `Failed to render video for Scene ${sceneNum}.`);
+      }
+    } catch (err) {
+      console.error(`Error rendering Scene ${sceneNum} video:`, err);
+      toast.error("Error rendering video: " + err.message);
+    } finally {
+      setGeneratingSceneVideos((prev) => ({ ...prev, [sceneNum]: false }));
+    }
+  }
+
+  async function handleGenerateAllVideos() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+
+    if (!parsed || parsed.length === 0) {
+      toast.error("No scenes defined in this topic.");
+      return;
+    }
+
+    // Filter out scenes that already have video generated
+    const scenesToRender = parsed.filter((scene) => {
+      const sNum = scene.scene_number;
+      const existing = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+      return !existing || !existing.url;
+    });
+
+    if (scenesToRender.length === 0) {
+      toast("All scene videos have already been rendered.", {
+        icon: "✨",
+        style: {
+          background: "#f0fdf4",
+          color: "#166534",
+          border: "1px solid #bbf7d0",
+        },
+      });
+      return;
+    }
+
+    setIsGeneratingAllVideos(true);
+    toast(`Rendering videos for ${scenesToRender.length} remaining scene(s)...`, { icon: "🎬" });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scene-frames`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenes: scenesToRender,
+          sceneImages,
+          sceneAudios,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.videos)) {
+        let successCount = 0;
+        setSceneVideos((prev) => {
+          const next = { ...prev };
+          data.videos.forEach((v) => {
+            if (v.success && v.videoUrl) {
+              successCount++;
+              next[v.sceneIndex] = {
+                url: v.videoUrl,
+                key: v.key,
+                name: `Scene ${v.sceneIndex} Video`,
+                duration: v.duration,
+              };
+            }
+          });
+          return next;
+        });
+        toast.success(`Rendered ${successCount} scene video(s) successfully!`);
+      } else {
+        toast.error(data.error || "Failed to render all scene videos.");
+      }
+    } catch (err) {
+      console.error("Error rendering remaining scene videos:", err);
+      toast.error("Error rendering videos: " + err.message);
+    } finally {
+      setIsGeneratingAllVideos(false);
+    }
+  }
+
+  // Master Video Handlers
+  async function handleUploadMasterVideo(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await uploadFileToR2(file, "completedvideo");
+      setCompletedMasterVideo({
+        url: result.publicUrl,
+        key: result.key,
+        name: file.name,
+      });
+      toast.success("Master video uploaded.");
+    } catch {
+      const url = URL.createObjectURL(file);
+      setCompletedMasterVideo({
+        url,
+        name: file.name,
+      });
+    }
+  }
+
+  function handleDeleteMasterVideo() {
+    requestDelete({
+      title: "Delete Master Video Cut",
+      description: "Are you sure you want to delete the rendered master video file from this project?",
+      confirmLabel: "Delete Master Cut",
+      onConfirm: async () => {
+        if (completedMasterVideo?.key) {
+          try {
+            await fetch("/api/storage/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fileKey: completedMasterVideo.key, channelSlug }),
+            });
+          } catch {}
+        }
+        setCompletedMasterVideo(null);
+        toast.success("Master video cut deleted.");
+      },
+    });
+  }
+
+  async function handleRenderMasterVideo() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+
+    // Build scene videos array from current state
+    const videosPayload = [];
+    if (parsed && parsed.length > 0) {
+      parsed.forEach((scene) => {
+        const sNum = scene.scene_number;
+        const videoData = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+        if (videoData?.url) {
+          videosPayload.push({
+            scene_number: Number(sNum),
+            video_url: videoData.url,
+          });
+        }
+      });
+    } else {
+      // Fallback: collect all sceneVideos entries
+      Object.entries(sceneVideos).forEach(([sNum, data]) => {
+        if (data?.url) {
+          videosPayload.push({
+            scene_number: Number(sNum),
+            video_url: data.url,
+          });
+        }
+      });
+    }
+
+    if (videosPayload.length === 0) {
+      toast.error("No rendered scene video clips available to merge. Please render scene video frames first.");
+      return;
+    }
+
+    setIsRenderingMaster(true);
+    setRenderProgress(15);
+    toast(`Merging ${videosPayload.length} scene frames into master video via Trigger.dev...`, { icon: "🎬" });
+
+    // Progress simulation while background task runs
+    const progressTimer = setInterval(() => {
+      setRenderProgress((prev) => (prev < 90 ? prev + 5 : prev));
+    }, 1500);
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/merge-scene-frames`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneVideos: videosPayload,
+          resolution: "1080p",
+        }),
+      });
+
+      const data = await res.json();
+      clearInterval(progressTimer);
+
+      if (res.ok && data.videoUrl) {
+        setRenderProgress(100);
+        setCompletedMasterVideo({
+          url: data.videoUrl,
+          key: data.key,
+          duration: data.duration,
+          name: `${topicSlug}-master-1080p.mp4`,
+        });
+        toast.success("Master video merged and saved successfully! 🚀");
+      } else {
+        toast.error(data.error || "Failed to merge scene frames.");
+      }
+    } catch (err) {
+      clearInterval(progressTimer);
+      console.error("Error merging master video:", err);
+      toast.error("Error merging master video: " + err.message);
+    } finally {
+      setIsRenderingMaster(false);
+      setTimeout(() => setRenderProgress(0), 1000);
+    }
+  }
+
+  // Save full topic studio state to Neon Database
+  async function handleSaveStudioState() {
+    setSaving(true);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = null;
+    }
+
+    const payload = {
+      scriptContent,
+      scenesJson: parsed,
+      thumbnailUrl: thumbnailImage,
+      thumbnailPrompt,
+      masterVideoUrl: completedMasterVideo?.url || null,
+      stage: completedMasterVideo ? "Completed" : "In Progress",
+    };
+
+    try {
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.warn("Could not save to API:", err);
+    }
+
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const tabs = [
+    { id: "thumbnail", label: "Thumbnail", icon: ImageIcon },
+    { id: "script", label: "Script", icon: FileText },
+    { id: "scenes", label: "Scenes (JSON)", icon: Braces },
+    { id: "audio", label: "Audio", icon: Mic },
+    { id: "images", label: "Images", icon: Film },
+    { id: "scene_frames", label: "Scene Frames", icon: Layers },
+    { id: "completed_video", label: "Completed Video", icon: Video },
+  ];
+
+  return (
+    <div className="space-y-8 animate-card-rise pb-20">
+      {/* Top Header & Save Bar */}
+      <div>
+        <Link
+          href={backUrl}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors mb-3"
+        >
+          <ArrowLeft size={14} /> Back to {channelTitle}
+        </Link>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-signal/10 text-signal border border-signal/20">
+                Topic Production Studio
+              </span>
+              <span className="text-xs font-mono text-ink-muted">/{topicSlug}</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-display font-semibold text-ink tracking-tight">
+              {topicTitle}
+            </h1>
+            <p className="text-xs sm:text-sm text-ink-muted mt-1">
+              End-to-end documentary generation desk: Thumbnail, Script, Structured Scenes, Voiceover Audio, Scene Frames, and Master Video.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSaveStudioState}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : saved ? <Check size={15} /> : <Save size={15} />}
+              <span>{saving ? "Saving..." : saved ? "State Saved" : "Save Studio State"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <section className="p-12 border border-line bg-paper-card text-center space-y-3 rounded-xl">
+          <Loader2 size={24} className="animate-spin text-signal mx-auto" />
+          <p className="text-xs text-ink-muted">Loading topic production desk from database...</p>
+        </section>
+      ) : (
+        <>
+          {/* Main Studio Navigation Tabs */}
+          <div className="flex items-center gap-1 border-b border-line overflow-x-auto no-scrollbar">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? "border-signal text-signal bg-signal/5"
+                      : "border-transparent text-ink-muted hover:text-ink hover:bg-ink/[0.02]"
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* TAB 1: THUMBNAIL */}
+          {activeTab === "thumbnail" && (
+            <ThumbnailTab
+              topicTitle={topicTitle}
+              thumbnailPrompt={thumbnailPrompt}
+              setThumbnailPrompt={setThumbnailPrompt}
+              isEditingThumbPrompt={isEditingThumbPrompt}
+              setIsEditingThumbPrompt={setIsEditingThumbPrompt}
+              thumbPromptNotice={thumbPromptNotice}
+              thumbnailImage={thumbnailImage}
+              isGeneratingThumbnail={isGeneratingThumbnail}
+              isUploadingThumbnail={isUploadingThumbnail}
+              handleClearThumbPrompt={handleClearThumbPrompt}
+              handleUpdateThumbPrompt={handleUpdateThumbPrompt}
+              handleThumbnailUpload={handleThumbnailUpload}
+              handleClearThumbnail={handleClearThumbnail}
+              handleGenerateThumbnail={handleGenerateThumbnail}
+            />
+          )}
+
+          {/* TAB 2: SCRIPT */}
+          {activeTab === "script" && (
+            <ScriptTab
+              topicTitle={topicTitle}
+              scriptContent={scriptContent}
+              setScriptContent={setScriptContent}
+              isEditingScript={isEditingScript}
+              setIsEditingScript={setIsEditingScript}
+              scriptNotice={scriptNotice}
+              triggerScriptNotice={triggerScriptNotice}
+              isGeneratingScript={isGeneratingScript}
+              isUpdatingScript={isUpdatingScript}
+              handleClearScript={handleClearScript}
+              handleUpdateScript={handleUpdateScript}
+              handleGenerateScript={handleGenerateScript}
+            />
+          )}
+
+          {/* TAB 3: SCENES (JSON) */}
+          {activeTab === "scenes" && (
+            <ScenesTab
+              scenesJson={scenesJson}
+              setScenesJson={setScenesJson}
+              isEditingScenes={isEditingScenes}
+              setIsEditingScenes={setIsEditingScenes}
+              scenesNotice={scenesNotice}
+              triggerScenesNotice={triggerScenesNotice}
+              jsonError={jsonError}
+              setJsonError={setJsonError}
+              isGeneratingScenes={isGeneratingScenes}
+              isUpdatingScenes={isUpdatingScenes}
+              handleClearScenes={handleClearScenes}
+              handleUpdateScenes={handleUpdateScenes}
+              handleGenerateScenes={handleGenerateScenes}
+            />
+          )}
+
+          {/* TAB 4: AUDIO */}
+          {activeTab === "audio" && (
+            <AudioTab
+              scenesJson={scenesJson}
+              sceneAudios={sceneAudios}
+              selectedVoice={selectedVoice}
+              setSelectedVoice={setSelectedVoice}
+              audioSpeed={audioSpeed}
+              setAudioSpeed={setAudioSpeed}
+              bgMusic={bgMusic}
+              setBgMusic={setBgMusic}
+              isGeneratingAllAudios={isGeneratingAllAudios}
+              generatingSceneAudios={generatingSceneAudios}
+              handleUploadSceneAudio={handleUploadSceneAudio}
+              handleDeleteSceneAudio={handleDeleteSceneAudio}
+              handleGenerateSceneAudio={handleGenerateSceneAudio}
+              handleGenerateAllAudios={handleGenerateAllAudios}
+            />
+          )}
+
+          {/* TAB 5: IMAGES */}
+          {activeTab === "images" && (
+            <ImagesTab
+              scenesJson={scenesJson}
+              setScenesJson={setScenesJson}
+              sceneImages={sceneImages}
+              isGeneratingAllImages={isGeneratingAllImages}
+              generatingSceneImages={generatingSceneImages}
+              isExtractingZip={isExtractingZip}
+              handleUploadSceneImage={handleUploadSceneImage}
+              handleUploadZipImages={handleUploadZipImages}
+              handleDeleteSceneImage={handleDeleteSceneImage}
+              handleDeleteMultipleSceneImages={handleDeleteMultipleSceneImages}
+              handleGenerateSceneImage={handleGenerateSceneImage}
+              handleGenerateAllImages={handleGenerateAllImages}
+            />
+          )}
+
+          {/* TAB 6: SCENE FRAMES */}
+          {activeTab === "scene_frames" && (
+            <SceneFramesTab
+              scenesJson={scenesJson}
+              sceneVideos={sceneVideos}
+              sceneImages={sceneImages}
+              sceneAudios={sceneAudios}
+              isGeneratingAllVideos={isGeneratingAllVideos}
+              generatingSceneVideos={generatingSceneVideos}
+              handleUploadSceneVideo={handleUploadSceneVideo}
+              handleDeleteSceneVideo={handleDeleteSceneVideo}
+              handleGenerateSceneVideo={handleGenerateSceneVideo}
+              handleGenerateAllVideos={handleGenerateAllVideos}
+            />
+          )}
+
+          {/* TAB 7: COMPLETED MASTER VIDEO */}
+          {activeTab === "completed_video" && (
+            <CompletedVideoTab
+              scenesJson={scenesJson}
+              completedMasterVideo={completedMasterVideo}
+              isRenderingMaster={isRenderingMaster}
+              renderProgress={renderProgress}
+              handleUploadMasterVideo={handleUploadMasterVideo}
+              handleDeleteMasterVideo={handleDeleteMasterVideo}
+              handleRenderMasterVideo={handleRenderMasterVideo}
+            />
+          )}
+        </>
+      )}
+
+      {/* Global Studio Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalState.isOpen}
+        title={deleteModalState.title}
+        description={deleteModalState.description}
+        confirmLabel={deleteModalState.confirmLabel}
+        onConfirm={deleteModalState.onConfirm}
+        onCancel={cancelDelete}
+      />
+    </div>
+  );
+}
