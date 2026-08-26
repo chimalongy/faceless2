@@ -102,6 +102,28 @@ CREATE TABLE IF NOT EXISTS audio_endpoints (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. LLM ACCOUNTS TABLE
+-- Multiple LLM accounts with provider account ID, API token/key, and timestamps.
+CREATE TABLE IF NOT EXISTS llm_accounts (
+    id SERIAL PRIMARY KEY,
+    account_email TEXT NOT NULL,
+    account_id TEXT,
+    api_token TEXT NOT NULL,
+    created TIMESTAMPTZ DEFAULT NOW(),
+    updated TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. GENERAL SETTINGS TABLE
+-- Stores global system configuration such as default LLM model, script gen model, and scene gen model.
+CREATE TABLE IF NOT EXISTS general_settings (
+    id SERIAL PRIMARY KEY,
+    default_llm_model TEXT DEFAULT 'gpt-4o',
+    script_gen_model TEXT DEFAULT 'gpt-4o',
+    scene_gen_model TEXT DEFAULT 'gpt-4o',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- INDEXES FOR HIGH-SPEED QUERIES
 -- ==============================================================================
@@ -113,3 +135,4 @@ CREATE INDEX IF NOT EXISTS idx_topic_assets_topic_id ON topic_assets(topic_id);
 CREATE INDEX IF NOT EXISTS idx_topic_assets_channel_id ON topic_assets(channel_id);
 CREATE INDEX IF NOT EXISTS idx_image_endpoints_email ON image_endpoints(account_email);
 CREATE INDEX IF NOT EXISTS idx_audio_endpoints_email ON audio_endpoints(account_email);
+CREATE INDEX IF NOT EXISTS idx_llm_accounts_email ON llm_accounts(account_email);

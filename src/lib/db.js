@@ -146,9 +146,35 @@ export async function initDbSchema() {
       );
     `;
 
+    // 7. LLM Accounts Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS llm_accounts (
+        id SERIAL PRIMARY KEY,
+        account_email TEXT NOT NULL,
+        account_id TEXT,
+        api_token TEXT NOT NULL,
+        created TIMESTAMPTZ DEFAULT NOW(),
+        updated TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    // 8. General Settings Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS general_settings (
+        id SERIAL PRIMARY KEY,
+        default_llm_model TEXT DEFAULT 'gpt-4o',
+        script_gen_model TEXT DEFAULT 'gpt-4o',
+        scene_gen_model TEXT DEFAULT 'gpt-4o',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
     try {
       await sql`ALTER TABLE image_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
       await sql`ALTER TABLE audio_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_model TEXT DEFAULT 'gpt-4o';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_model TEXT DEFAULT 'gpt-4o';`;
     } catch {}
 
     return true;

@@ -18,7 +18,7 @@ const execAsync = promisify(exec);
 export const mergeSceneFramesTask = task({
   id: "merge-scene-frames",
   maxDuration: 7200, // 2 hour max
-  machine: "medium-2x",
+  machine: "large-2x",
   run: async (payload) => {
     const {
       channelSlug,
@@ -200,7 +200,7 @@ export const mergeSceneFramesTask = task({
           if (oldMasters && oldMasters.length > 0) {
             for (const row of oldMasters) {
               if (row.file_key) {
-                await deleteFromR2(row.file_key).catch(() => {});
+                await deleteFromR2(row.file_key).catch(() => { });
               }
             }
             await freshSql`
