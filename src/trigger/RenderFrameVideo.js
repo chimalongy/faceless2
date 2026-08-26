@@ -374,11 +374,13 @@ export const renderSceneFrameTask = task({
 });
 
 /**
- * Task: Render All Scene Frame Videos (Batch)
+ * Task: Render All Scene Frame Videos (Concurrent Multi-Machine Batch)
+ * Spawns an isolated machine instance for each individual scene using batchTriggerAndWait.
+ * All scenes render simultaneously across separate worker machines without shared memory limits.
  */
 export const renderAllSceneFramesTask = task({
   id: "render-all-scene-frames",
-  maxDuration: 3600,
+  maxDuration: 7200, // 2 hour max
   run: async (payload) => {
     const {
       channelSlug,
@@ -402,7 +404,7 @@ export const renderAllSceneFramesTask = task({
     }
 
     logger.log(
-      `Starting batch scene video render for ${scenes.length} scene(s)...`,
+      `Preparing concurrent multi-machine batch render for ${scenes.length} scene(s)...`,
       {
         channelSlug,
         topicSlug,
@@ -410,71 +412,102 @@ export const renderAllSceneFramesTask = task({
       }
     );
 
-    // Render all scenes concurrently in parallel
-    const results = await Promise.all(
-      scenes.map(async (scene) => {
-        const sceneIndex =
-          scene.scene_number || scene.scene_index || scene.index || 1;
+    // 1. Build payload for each separate scene
+    const batchPayloads = [];
+    const skippedResults = [];
 
-        const imgData =
-          sceneImages[sceneIndex] ||
-          sceneImages[String(sceneIndex)] ||
-          sceneImages[Number(sceneIndex)];
-        const audioData =
-          sceneAudios[sceneIndex] ||
-          sceneAudios[String(sceneIndex)] ||
-          sceneAudios[Number(sceneIndex)];
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      const sceneIndex =
+        scene.scene_number || scene.scene_index || scene.index || (i + 1);
 
-        const imageUrl = imgData?.url || scene.imageUrl || scene.visual_url || "";
-        const audioUrl = audioData?.url || scene.audioUrl || null;
+      const imgData =
+        sceneImages[sceneIndex] ||
+        sceneImages[String(sceneIndex)] ||
+        sceneImages[Number(sceneIndex)];
+      const audioData =
+        sceneAudios[sceneIndex] ||
+        sceneAudios[String(sceneIndex)] ||
+        sceneAudios[Number(sceneIndex)];
 
-        if (!imageUrl) {
-          logger.warn(
-            `[Parallel] Skipping scene ${sceneIndex} video render because no image URL was found.`
-          );
-          return {
-            sceneIndex,
-            success: false,
-            error: `No image URL found for Scene ${sceneIndex}.`,
-          };
-        }
+      const imageUrl = imgData?.url || scene.imageUrl || scene.visual_url || "";
+      const audioUrl = audioData?.url || scene.audioUrl || null;
 
-        try {
-          logger.log(`[Parallel] Dispatching video render for Scene ${sceneIndex}...`);
-          const res = await renderSingleScene({
-            channelSlug,
-            topicSlug,
-            sceneIndex,
-            imageUrl,
-            audioUrl,
-            fps,
-            width,
-            height,
-            kenBurns: scene?.ken_burns || {
-              direction: "zoom-in",
-              intensity: 0.1,
-            },
-            transition: scene?.transition || "fade",
-          });
+      if (!imageUrl) {
+        logger.warn(
+          `Skipping scene ${sceneIndex} because no image URL was found.`
+        );
+        skippedResults.push({
+          sceneIndex,
+          success: false,
+          error: `No image URL found for Scene ${sceneIndex}.`,
+        });
+        continue;
+      }
 
-          logger.log(`[Parallel] Scene ${sceneIndex} video completed successfully!`);
-          return res;
-        } catch (err) {
-          logger.error(
-            `[Parallel] Failed to render video for Scene ${sceneIndex}: ${err.message}`
-          );
-          return {
-            sceneIndex,
-            success: false,
-            error: err.message,
-          };
-        }
-      })
+      batchPayloads.push({
+        payload: {
+          channelSlug,
+          topicSlug,
+          sceneIndex,
+          imageUrl,
+          audioUrl,
+          fps,
+          width,
+          height,
+          kenBurns: scene?.ken_burns || {
+            direction: "zoom-in",
+            intensity: 0.1,
+          },
+          transition: scene?.transition || "fade",
+        },
+      });
+    }
+
+    if (batchPayloads.length === 0) {
+      return {
+        success: false,
+        channelSlug,
+        topicSlug,
+        totalScenes: scenes.length,
+        completedVideos: 0,
+        videos: skippedResults,
+      };
+    }
+
+    logger.log(
+      `Dispatching ${batchPayloads.length} separate concurrent machine instances via batchTriggerAndWait...`
     );
 
-    const completedCount = results.filter((r) => r.success).length;
+    // 2. Trigger all scenes simultaneously across isolated worker instances and await results
+    const batch = await renderSceneFrameTask.batchTriggerAndWait(batchPayloads);
+
     logger.log(
-      `Batch scene video render completed: ${completedCount}/${scenes.length} successful.`
+      `All ${batch.runs?.length || 0} concurrent machine instances finished execution.`
+    );
+
+    // 3. Process results from all instances
+    const renderedResults = (batch.runs || []).map((run, idx) => {
+      const sceneIndex = batchPayloads[idx]?.payload?.sceneIndex || idx + 1;
+      if (run.ok) {
+        return run.output;
+      } else {
+        logger.error(`Instance for Scene ${sceneIndex} failed:`, { error: run.error });
+        return {
+          sceneIndex,
+          success: false,
+          error: run.error?.message || "Task instance failed",
+        };
+      }
+    });
+
+    const allResults = [...renderedResults, ...skippedResults].sort(
+      (a, b) => (a.sceneIndex || 0) - (b.sceneIndex || 0)
+    );
+
+    const completedCount = allResults.filter((r) => r.success).length;
+    logger.log(
+      `Concurrent batch render summary: ${completedCount}/${scenes.length} successful.`
     );
 
     return {
@@ -483,7 +516,7 @@ export const renderAllSceneFramesTask = task({
       topicSlug,
       totalScenes: scenes.length,
       completedVideos: completedCount,
-      videos: results,
+      videos: allResults,
     };
   },
 });
