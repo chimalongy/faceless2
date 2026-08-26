@@ -221,8 +221,19 @@ export function normalizeKenBurnsDirection(
 /**
  * Build a smooth cinematic Ken Burns filter.
  *
- * Uses optimized supersampling (1.25x - 1.5x) to provide smooth
- * subpixel motion without exceeding container memory limits.
+ * IMPORTANT:
+ *
+ * We render the camera movement on a
+ * 4x supersampled canvas.
+ *
+ * Final:
+ *   1280x720
+ *
+ * Internal:
+ *   5120x2880
+ *
+ * This dramatically reduces visible
+ * 1-pixel jumps on illustrated line art.
  */
 export function buildKenBurnsFilter(
   kenBurns = {},
@@ -293,7 +304,7 @@ export function buildKenBurnsFilter(
 
   const panZoom =
     Number.isFinite(envPan) &&
-    envPan > 1
+      envPan > 1
       ? Math.min(envPan, 1.30)
       : 1.10;
 
@@ -324,17 +335,14 @@ export function buildKenBurnsFilter(
 
   /**
    * --------------------------------------------------
-   * INTERNAL RESOLUTION (OPTIMIZED 1.25x - 1.5x)
+   * 4X INTERNAL RESOLUTION
    * --------------------------------------------------
    */
-  const envMultiplier = parseFloat(process.env.KEN_BURNS_SUPERSAMPLE || "1.25");
-  const scaleMultiplier = Number.isFinite(envMultiplier) && envMultiplier >= 1.0 && envMultiplier <= 2.0
-    ? envMultiplier
-    : 1.25;
+  const internalWidth =
+    width * 4;
 
-  // Ensure dimensions are even integers for FFmpeg compatibility
-  const internalWidth = Math.round((width * scaleMultiplier) / 2) * 2;
-  const internalHeight = Math.round((height * scaleMultiplier) / 2) * 2;
+  const internalHeight =
+    height * 4;
 
   let z;
   let x;
@@ -490,12 +498,12 @@ export function buildKenBurnsFilter(
      * Supersampled camera movement.
      */
     `zoompan=` +
-      `z='${z}':` +
-      `x='${x}':` +
-      `y='${y}':` +
-      `d=${total}:` +
-      `s=${internalWidth}x${internalHeight}:` +
-      `fps=${fps}`,
+    `z='${z}':` +
+    `x='${x}':` +
+    `y='${y}':` +
+    `d=${total}:` +
+    `s=${internalWidth}x${internalHeight}:` +
+    `fps=${fps}`,
 
     /**
      * Final high-quality downsample.
@@ -574,7 +582,7 @@ export function buildTransitionFilter(
     Math.max(
       0,
       safeDuration -
-        fadeDuration
+      fadeDuration
     );
 
   switch (norm) {
