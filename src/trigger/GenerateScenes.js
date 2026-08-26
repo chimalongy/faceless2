@@ -71,13 +71,33 @@ export const generateScenesTask = task({
       LIMIT 1;
     `;
 
-    let configuredModel = customModel || generalRows?.[0]?.sceneGenModel || generalRows?.[0]?.defaultLlmModel || "@cf/meta/llama-3.3-70b-instruct";
+    const rawModel = customModel || generalRows?.[0]?.sceneGenModel || generalRows?.[0]?.defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct";
 
-    // Normalize to Cloudflare Workers AI model format if OpenAI model name was stored
-    if (!configuredModel.startsWith("@cf/")) {
-      configuredModel = "@cf/meta/llama-3.3-70b-instruct";
+    // Resolve to official Cloudflare Workers AI model URI
+    function resolveCloudflareModel(modelStr) {
+      if (!modelStr || typeof modelStr !== "string") return "@cf/meta/llama-3.1-70b-instruct";
+      const m = modelStr.trim();
+      if (m.startsWith("@cf/")) return m;
+      if (m.startsWith("cf/")) return `@${m}`;
+      if (m.startsWith("@")) return `@cf/${m.slice(1)}`;
+      if (m.includes("/")) return `@cf/${m.replace(/^\/+/, "")}`;
+
+      const aliasMap = {
+        "kimi": "@cf/moonshotai/kimi-k2.7-code",
+        "kimi-k2.7-code": "@cf/moonshotai/kimi-k2.7-code",
+        "llama-3.1-70b": "@cf/meta/llama-3.1-70b-instruct",
+        "llama-3.1-8b": "@cf/meta/llama-3.1-8b-instruct",
+        "deepseek-r1": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+        "qwen-72b": "@cf/qwen/qwen2.5-72b-instruct",
+        "mistral-7b": "@cf/mistral/mistral-7b-instruct-v0.2",
+        "gpt-4o": "@cf/meta/llama-3.1-70b-instruct",
+        "gpt-4o-mini": "@cf/meta/llama-3.1-8b-instruct",
+      };
+
+      return aliasMap[m.toLowerCase()] || "@cf/meta/llama-3.1-70b-instruct";
     }
 
+    const configuredModel = resolveCloudflareModel(rawModel);
     logger.log(`Using scene generation model: ${configuredModel}`);
 
     // 3. Fetch all LLM Accounts from DB (Ordered from top/first added)

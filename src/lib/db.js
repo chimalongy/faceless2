@@ -162,9 +162,9 @@ export async function initDbSchema() {
     await sql`
       CREATE TABLE IF NOT EXISTS general_settings (
         id SERIAL PRIMARY KEY,
-        default_llm_model TEXT DEFAULT 'gpt-4o',
-        script_gen_model TEXT DEFAULT 'gpt-4o',
-        scene_gen_model TEXT DEFAULT 'gpt-4o',
+        default_llm_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
+        script_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
+        scene_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -173,8 +173,8 @@ export async function initDbSchema() {
     try {
       await sql`ALTER TABLE image_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
       await sql`ALTER TABLE audio_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
-      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_model TEXT DEFAULT 'gpt-4o';`;
-      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_model TEXT DEFAULT 'gpt-4o';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct';`;
     } catch {}
 
     return true;

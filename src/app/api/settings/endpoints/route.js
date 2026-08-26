@@ -7,9 +7,9 @@ export async function GET() {
     const sql = getDbSql();
     if (!sql) {
       return NextResponse.json({
-        defaultLlmModel: "gpt-4o",
-        scriptGenModel: "gpt-4o",
-        sceneGenModel: "gpt-4o",
+        defaultLlmModel: "@cf/meta/llama-3.1-70b-instruct",
+        scriptGenModel: "@cf/meta/llama-3.1-70b-instruct",
+        sceneGenModel: "@cf/meta/llama-3.1-70b-instruct",
         imageEndpoints: [],
         audioEndpoints: [],
         llmAccounts: [],
@@ -50,9 +50,9 @@ export async function GET() {
       ORDER BY id ASC;
     `;
 
-    const defaultLlmModel = generalRows && generalRows[0] ? (generalRows[0].defaultLlmModel || "gpt-4o") : "gpt-4o";
-    const scriptGenModel = generalRows && generalRows[0] ? (generalRows[0].scriptGenModel || "gpt-4o") : "gpt-4o";
-    const sceneGenModel = generalRows && generalRows[0] ? (generalRows[0].sceneGenModel || "gpt-4o") : "gpt-4o";
+    const defaultLlmModel = generalRows && generalRows[0] ? (generalRows[0].defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct") : "@cf/meta/llama-3.1-70b-instruct";
+    const scriptGenModel = generalRows && generalRows[0] ? (generalRows[0].scriptGenModel || "@cf/meta/llama-3.1-70b-instruct") : "@cf/meta/llama-3.1-70b-instruct";
+    const sceneGenModel = generalRows && generalRows[0] ? (generalRows[0].sceneGenModel || "@cf/meta/llama-3.1-70b-instruct") : "@cf/meta/llama-3.1-70b-instruct";
 
     return NextResponse.json({
       success: true,

@@ -117,9 +117,9 @@ CREATE TABLE IF NOT EXISTS llm_accounts (
 -- Stores global system configuration such as default LLM model, script gen model, and scene gen model.
 CREATE TABLE IF NOT EXISTS general_settings (
     id SERIAL PRIMARY KEY,
-    default_llm_model TEXT DEFAULT 'gpt-4o',
-    script_gen_model TEXT DEFAULT 'gpt-4o',
-    scene_gen_model TEXT DEFAULT 'gpt-4o',
+    default_llm_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
+    script_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
+    scene_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -531,7 +531,7 @@ export default function SettingsPage() {
                       disabled={!editingGeneral}
                       value={defaultLlmModel}
                       onChange={(e) => setDefaultLlmModel(e.target.value)}
-                      placeholder="e.g. gpt-4o"
+                      placeholder="e.g. @cf/meta/llama-3.1-70b-instruct"
                       className={`flex-1 h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
                         editingGeneral
                           ? "bg-white border-line-dark focus:border-signal"
@@ -540,14 +540,20 @@ export default function SettingsPage() {
                     />
                     {editingGeneral && (
                       <div className="flex items-center gap-1 flex-wrap">
-                        {["gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022", "gemini-1.5-pro"].map((preset) => (
+                        {[
+                          "@cf/meta/llama-3.1-70b-instruct",
+                          "@cf/moonshotai/kimi-k2.7-code",
+                          "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+                          "@cf/qwen/qwen2.5-72b-instruct",
+                          "@cf/meta/llama-3.1-8b-instruct",
+                        ].map((preset) => (
                           <button
                             key={preset}
                             type="button"
                             onClick={() => setDefaultLlmModel(preset)}
                             className="px-2 py-1 text-[10px] font-mono border border-line bg-paper hover:border-signal/50 text-ink-muted hover:text-signal transition-all cursor-pointer"
                           >
-                            {preset}
+                            {preset.replace("@cf/", "")}
                           </button>
                         ))}
                       </div>
@@ -575,7 +581,7 @@ export default function SettingsPage() {
                       disabled={!editingGeneral}
                       value={scriptGenModel}
                       onChange={(e) => setScriptGenModel(e.target.value)}
-                      placeholder="e.g. gpt-4o or claude-3-5-sonnet-20241022"
+                      placeholder="e.g. @cf/meta/llama-3.1-70b-instruct or @cf/moonshotai/kimi-k2.7-code"
                       className={`flex-1 h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
                         editingGeneral
                           ? "bg-white border-line-dark focus:border-signal"
@@ -584,14 +590,20 @@ export default function SettingsPage() {
                     />
                     {editingGeneral && (
                       <div className="flex items-center gap-1 flex-wrap">
-                        {["gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022", "gemini-1.5-pro"].map((preset) => (
+                        {[
+                          "@cf/meta/llama-3.1-70b-instruct",
+                          "@cf/moonshotai/kimi-k2.7-code",
+                          "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+                          "@cf/qwen/qwen2.5-72b-instruct",
+                          "@cf/meta/llama-3.1-8b-instruct",
+                        ].map((preset) => (
                           <button
                             key={preset}
                             type="button"
                             onClick={() => setScriptGenModel(preset)}
                             className="px-2 py-1 text-[10px] font-mono border border-line bg-paper hover:border-signal/50 text-ink-muted hover:text-signal transition-all cursor-pointer"
                           >
-                            {preset}
+                            {preset.replace("@cf/", "")}
                           </button>
                         ))}
                       </div>
@@ -619,7 +631,7 @@ export default function SettingsPage() {
                       disabled={!editingGeneral}
                       value={sceneGenModel}
                       onChange={(e) => setSceneGenModel(e.target.value)}
-                      placeholder="e.g. gpt-4o or gpt-4o-mini"
+                      placeholder="e.g. @cf/meta/llama-3.1-70b-instruct or @cf/meta/llama-3.1-8b-instruct"
                       className={`flex-1 h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
                         editingGeneral
                           ? "bg-white border-line-dark focus:border-signal"
@@ -628,14 +640,20 @@ export default function SettingsPage() {
                     />
                     {editingGeneral && (
                       <div className="flex items-center gap-1 flex-wrap">
-                        {["gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022", "gemini-1.5-pro"].map((preset) => (
+                        {[
+                          "@cf/meta/llama-3.1-70b-instruct",
+                          "@cf/moonshotai/kimi-k2.7-code",
+                          "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+                          "@cf/qwen/qwen2.5-72b-instruct",
+                          "@cf/meta/llama-3.1-8b-instruct",
+                        ].map((preset) => (
                           <button
                             key={preset}
                             type="button"
                             onClick={() => setSceneGenModel(preset)}
                             className="px-2 py-1 text-[10px] font-mono border border-line bg-paper hover:border-signal/50 text-ink-muted hover:text-signal transition-all cursor-pointer"
                           >
-                            {preset}
+                            {preset.replace("@cf/", "")}
                           </button>
                         ))}
                       </div>
