@@ -18,7 +18,7 @@ const execAsync = promisify(exec);
 export const mergeSceneFramesTask = task({
   id: "merge-scene-frames",
   maxDuration: 7200, // 2 hour max
-  machine: "large-2x",
+  machine: "large-1x",
   run: async (payload) => {
     const {
       channelSlug,

@@ -18,7 +18,9 @@ import {
   Loader2,
   ExternalLink,
   ShieldCheck,
-  Check
+  Check,
+  Copy,
+  Link2
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
@@ -43,7 +45,19 @@ export default function CompletedVideoTab({
   const [isMuted, setIsMuted] = useState(false);
   const [publishedToYoutube, setPublishedToYoutube] = useState(false);
   const [publishNotice, setPublishNotice] = useState("");
+  const [copiedUrl, setCopiedUrl] = useState(false);
   const videoRef = useRef(null);
+
+  function handleCopyVideoUrl() {
+    if (!completedMasterVideo?.url || completedMasterVideo.url === "generated") return;
+    navigator.clipboard.writeText(completedMasterVideo.url);
+    setCopiedUrl(true);
+    setPublishNotice("Master video URL copied to clipboard!");
+    setTimeout(() => {
+      setCopiedUrl(false);
+      setPublishNotice("");
+    }, 3500);
+  }
 
   let parsedScenes = [];
   try {
@@ -273,6 +287,30 @@ export default function CompletedVideoTab({
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Share / Copy URL Button */}
+                <button
+                  type="button"
+                  onClick={handleCopyVideoUrl}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 border text-xs font-semibold transition-all cursor-pointer ${
+                    copiedUrl
+                      ? "bg-emerald-50 border-emerald-400 text-emerald-700 font-bold"
+                      : "border-line bg-white hover:bg-ink/5 text-ink"
+                  }`}
+                  title="Copy public master video URL to clipboard"
+                >
+                  {copiedUrl ? (
+                    <>
+                      <Check size={13} className="text-emerald-600" />
+                      <span>URL Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 size={13} className="text-signal" />
+                      <span>Share URL</span>
+                    </>
+                  )}
+                </button>
+
                 <a
                   href={completedMasterVideo.url !== "generated" ? completedMasterVideo.url : "#"}
                   download={completedMasterVideo.name || "Master_Cut_Final_4K.mp4"}
@@ -282,6 +320,7 @@ export default function CompletedVideoTab({
                   <Download size={13} />
                   <span>Download MP4</span>
                 </a>
+
                 <button
                   type="button"
                   onClick={handleDeleteMasterVideo}
@@ -298,6 +337,58 @@ export default function CompletedVideoTab({
 
         {/* Right Column: Master Specifications & Publishing Desk */}
         <div className="space-y-6">
+          {/* Share & Direct URL Card */}
+          {hasMaster && completedMasterVideo.url !== "generated" && (
+            <div className="p-5 border border-line bg-paper-card space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-line pb-2.5 text-xs font-semibold text-ink">
+                <span className="flex items-center gap-1.5">
+                  <Share2 size={14} className="text-signal" />
+                  <span>Share Master Video</span>
+                </span>
+                <span className="text-[10px] font-mono text-emerald-700 font-semibold uppercase bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                  Public URL
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-1.5 bg-white border border-line p-1">
+                  <input
+                    type="text"
+                    readOnly
+                    value={completedMasterVideo.url}
+                    className="flex-1 bg-transparent px-2 py-1 text-[11px] font-mono text-ink outline-none select-all truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyVideoUrl}
+                    className={`px-3 py-1.5 text-[11px] font-semibold flex items-center gap-1 shrink-0 transition-all cursor-pointer ${
+                      copiedUrl
+                        ? "bg-emerald-600 text-white"
+                        : "bg-signal hover:bg-signal-hover text-white"
+                    }`}
+                    title="Copy video link"
+                  >
+                    {copiedUrl ? <Check size={12} /> : <Copy size={12} />}
+                    <span>{copiedUrl ? "Copied" : "Copy URL"}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono pt-0.5">
+                  <a
+                    href={completedMasterVideo.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-signal hover:underline inline-flex items-center gap-1 font-semibold"
+                  >
+                    <ExternalLink size={12} />
+                    <span>Open in new tab</span>
+                  </a>
+                  <span className="text-ink-muted text-[10px]">Cloudflare R2 Direct</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Export & Publishing Widget */}
           <div className="p-5 border border-line bg-paper-card space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
