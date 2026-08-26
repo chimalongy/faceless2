@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 export function getFfmpegPath() {
   const customPath = process.env.FFMPEG_PATH;
 
-  if (customPath && fs.existsSync(customPath)) {
+  if (customPath && (fs.existsSync(customPath) || !path.isAbsolute(customPath))) {
     return customPath;
   }
 
@@ -91,7 +91,7 @@ export function getFfmpegPath() {
 export function getFfprobePath() {
   const customPath = process.env.FFPROBE_PATH;
 
-  if (customPath && fs.existsSync(customPath)) {
+  if (customPath && (fs.existsSync(customPath) || !path.isAbsolute(customPath))) {
     return customPath;
   }
 
