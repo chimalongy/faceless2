@@ -84,8 +84,7 @@ async function renderSingleScene({
         logger.log(`Audio duration for scene ${sceneIndex}: ${duration}s`);
       } catch (err) {
         logger.warn(
-          `Audio processing warning for scene ${sceneIndex}: ${
-            err?.message || err
+          `Audio processing warning for scene ${sceneIndex}: ${err?.message || err
           }`
         );
       }
@@ -217,7 +216,7 @@ async function renderSingleScene({
           if (oldRows && oldRows.length > 0) {
             for (const row of oldRows) {
               if (row.file_key) {
-                await deleteFromR2(row.file_key).catch(() => {});
+                await deleteFromR2(row.file_key).catch(() => { });
               }
             }
             await sql`
@@ -333,7 +332,8 @@ async function renderSingleScene({
  */
 export const renderSceneFrameTask = task({
   id: "render-scene-frame",
-  maxDuration: 1800,
+  machine: "medium-2x",
+  maxDuration: 7200, // 2 hour max
   run: async (payload) => {
     const {
       channelSlug,
