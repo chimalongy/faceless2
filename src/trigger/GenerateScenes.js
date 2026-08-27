@@ -142,13 +142,22 @@ export const generateScenesTask = task({
 
     logger.log(`Loaded ${llmAccounts.length} LLM account(s) for scene generation.`);
 
-    // 4. Construct Full Prompt using extracted SceneGenerationPrompt module
+    // 4. Construct Full Prompt using SceneGenerationPrompt module
     const fullPrompt = getSceneGenerationPrompt({
-      visualTheme,
-      activeScript,
-      tone: pillarTone,
+      channelName: channel.name,
+      channelNiche: channel.niche,
+      channelSubNiche: channel.sub_niche,
+      channelDescription: channel.description,
+      channelMission: channel.mission,
+      channelImageTheme: visualTheme,
+      contentPillarName: pillar?.name || channel.niche || "General Content",
+      contentPillarCategoryTag: pillar?.tag || "General",
+      contentPillarTone: pillarTone || "Calm, analytical, insightful",
+      contentPillarDescription: pillar?.description || channel.description || "In-depth strategic insights and engaging narrative storytelling.",
+      tone: pillarTone || "Calm, analytical, insightful",
       useMainCharacter: pillarUseMainCharacter,
       mainCharacterDescription: pillarMainCharacterDescription,
+      activeScript,
     });
 
     // 5. Fallback Loop Across LLM Accounts starting from the top
