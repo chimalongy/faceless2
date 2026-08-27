@@ -1,7 +1,7 @@
 import { task, logger } from "@trigger.dev/sdk";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import {
-  getScriptGenerationPrompt,
+  getScriptGenerationSystemPrompt,
   SCRIPT_GENERATION_SYSTEM_PROMPT,
 } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
 
@@ -61,7 +61,7 @@ export const generateScriptTask = task({
     let pillar = null;
     if (topic.pillar_id) {
       const pillarRows = await sql`
-        SELECT id, name, slug, tag, description, tone, use_main_character AS "useMainCharacter", main_character_description AS "mainCharacterDescription"
+        SELECT id, name, slug, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount", use_main_character AS "useMainCharacter", main_character_description AS "mainCharacterDescription"
         FROM content_pillars
         WHERE id = ${topic.pillar_id}
         LIMIT 1;
@@ -73,6 +73,8 @@ export const generateScriptTask = task({
     const pillarName = pillar?.name || channel.niche || "General Content";
     const pillarDescription = pillar?.description || channel.description || "In-depth strategic insights and engaging narrative storytelling.";
     const pillarTone = pillar?.tone || channel.personality || null;
+    const pillarContentLength = pillar?.contentLength || "15-20 minutes (~2500 words)";
+    const pillarContentWordsCount = pillar?.contentWordsCount || "2,500 - 3,500 words";
     const pillarUseMainCharacter = Boolean(pillar?.useMainCharacter);
     const pillarMainCharacterDescription = pillar?.mainCharacterDescription || null;
 
@@ -128,17 +130,25 @@ export const generateScriptTask = task({
 
     logger.log(`Loaded ${llmAccounts.length} LLM account(s) for execution pool.`);
 
-    // 4. Construct Prompt using extracted ScriptGenerationPrompt module
-    const fullPrompt =
-      customPrompt ||
-      getScriptGenerationPrompt({
-        topicTitle,
-        pillarName,
-        pillarDescription,
-        tone: pillarTone,
-        useMainCharacter: pillarUseMainCharacter,
-        mainCharacterDescription: pillarMainCharacterDescription,
-      });
+    // 4. Construct System & User Prompt
+    const fullSystemPrompt = getScriptGenerationSystemPrompt({
+      channelName: channel.name,
+      channelNiche: channel.niche,
+      channelSubNiche: channel.sub_niche,
+      channelDescription: channel.description,
+      channelMission: channel.mission,
+      contentPillarName: pillarName,
+      contentPillarCategoryTag: pillar?.tag || "General",
+      contentPillarTone: pillarTone || "Calm, analytical, insightful",
+      contentPillarLength: pillarContentLength,
+      contentPillarWordsCount: pillarContentWordsCount,
+      contentPillarDescription: pillarDescription,
+      topic: topicTitle,
+      useMainCharacter: pillarUseMainCharacter,
+      mainCharacterDescription: pillarMainCharacterDescription || "",
+    });
+
+    const userPromptContent = customPrompt || `Generate the complete, engaging, long-form YouTube script for the topic: "${topicTitle}". Follow all instructions in the system prompt.`;
 
     // 5. Fallback Loop Across LLM Accounts starting from the top
     let generatedScript = null;
@@ -172,11 +182,11 @@ export const generateScriptTask = task({
             messages: [
               {
                 role: "system",
-                content: SCRIPT_GENERATION_SYSTEM_PROMPT,
+                content: fullSystemPrompt,
               },
               {
                 role: "user",
-                content: fullPrompt,
+                content: userPromptContent,
               },
             ],
             max_tokens: 4096,

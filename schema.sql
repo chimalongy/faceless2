@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS content_pillars (
     tag TEXT,
     description TEXT,
     tone TEXT,
+    content_length TEXT,
+    content_words_count TEXT,
     use_main_character BOOLEAN DEFAULT FALSE,
     main_character_description TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),

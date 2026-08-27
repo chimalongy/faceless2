@@ -24,6 +24,8 @@ export async function GET(request, { params }) {
         cp.tag,
         cp.description,
         cp.tone,
+        cp.content_length AS "contentLength",
+        cp.content_words_count AS "contentWordsCount",
         cp.use_main_character AS "useMainCharacter",
         cp.main_character_description AS "mainCharacterDescription",
         cp.created_at AS "createdAt",
@@ -87,6 +89,8 @@ export async function POST(request, { params }) {
     const tag = body.tag?.trim() || "";
     const description = body.description?.trim() || "";
     const tone = body.tone?.trim() || "";
+    const contentLength = body.contentLength?.trim() || body.content_length?.trim() || "";
+    const contentWordsCount = body.contentWordsCount?.trim() || body.content_words_count?.trim() || body.wordsCount?.trim() || body.wordCount?.trim() || "";
     const useMainCharacter = Boolean(body.useMainCharacter ?? body.use_main_character);
     const mainCharacterDescription = body.mainCharacterDescription?.trim() || body.main_character_description?.trim() || "";
 
@@ -98,6 +102,8 @@ export async function POST(request, { params }) {
         tag,
         description,
         tone,
+        content_length,
+        content_words_count,
         use_main_character,
         main_character_description
       ) VALUES (
@@ -107,6 +113,8 @@ export async function POST(request, { params }) {
         ${tag},
         ${description},
         ${tone},
+        ${contentLength},
+        ${contentWordsCount},
         ${useMainCharacter},
         ${mainCharacterDescription}
       )
@@ -115,6 +123,8 @@ export async function POST(request, { params }) {
         tag = EXCLUDED.tag,
         description = EXCLUDED.description,
         tone = EXCLUDED.tone,
+        content_length = EXCLUDED.content_length,
+        content_words_count = EXCLUDED.content_words_count,
         use_main_character = EXCLUDED.use_main_character,
         main_character_description = EXCLUDED.main_character_description,
         updated_at = NOW()

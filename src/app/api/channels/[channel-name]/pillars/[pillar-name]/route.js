@@ -25,6 +25,8 @@ export async function GET(request, { params }) {
         cp.tag,
         cp.description,
         cp.tone,
+        cp.content_length AS "contentLength",
+        cp.content_words_count AS "contentWordsCount",
         cp.use_main_character AS "useMainCharacter",
         cp.main_character_description AS "mainCharacterDescription",
         cp.created_at AS "createdAt",
@@ -88,6 +90,8 @@ export async function PUT(request, { params }) {
         tag = ${body.tag || null},
         description = ${body.description || null},
         tone = ${body.tone || null},
+        content_length = ${body.contentLength || body.content_length || null},
+        content_words_count = ${body.contentWordsCount || body.content_words_count || body.wordsCount || body.wordCount || null},
         use_main_character = ${Boolean(body.useMainCharacter ?? body.use_main_character)},
         main_character_description = ${body.mainCharacterDescription || body.main_character_description || null},
         updated_at = NOW()

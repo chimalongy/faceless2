@@ -81,6 +81,8 @@ export async function initDbSchema() {
         tag TEXT,
         description TEXT,
         tone TEXT,
+        content_length TEXT,
+        content_words_count TEXT,
         use_main_character BOOLEAN DEFAULT FALSE,
         main_character_description TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -91,6 +93,8 @@ export async function initDbSchema() {
 
     try {
       await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS tone TEXT;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS content_length TEXT;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS content_words_count TEXT;`;
       await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS use_main_character BOOLEAN DEFAULT FALSE;`;
       await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS main_character_description TEXT;`;
     } catch {}

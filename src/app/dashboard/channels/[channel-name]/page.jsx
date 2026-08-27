@@ -92,6 +92,26 @@ function extractPillarFromJson(item) {
     target.narrativeTone ||
     target.voiceTone ||
     "";
+  const contentLength =
+    target.content_length ||
+    target.contentLength ||
+    target.length ||
+    target.target_length ||
+    target.targetLength ||
+    target.target_content_length ||
+    target.targetContentLength ||
+    "";
+  const contentWordsCount =
+    target.content_words_count ||
+    target.contentWordsCount ||
+    target.words_count ||
+    target.word_count ||
+    target.wordsCount ||
+    target.wordCount ||
+    target.target_word_count ||
+    target.targetWordsCount ||
+    target.target_words_count ||
+    "";
   const useMainCharacter = Boolean(
     target.use_main_character ??
     target.useMainCharacter ??
@@ -113,6 +133,8 @@ function extractPillarFromJson(item) {
     tag: String(tag).trim(),
     description: String(description).trim(),
     tone: String(tone).trim(),
+    contentLength: String(contentLength).trim(),
+    contentWordsCount: String(contentWordsCount).trim(),
     useMainCharacter,
     mainCharacterDescription: String(mainCharacterDescription).trim(),
   };
@@ -188,9 +210,12 @@ export default function ChannelWorkspace() {
   const [pillarTag, setPillarTag] = useState("");
   const [pillarDescription, setPillarDescription] = useState("");
   const [pillarTone, setPillarTone] = useState("");
+  const [pillarContentLength, setPillarContentLength] = useState("");
+  const [pillarContentWordsCount, setPillarContentWordsCount] = useState("");
   const [pillarUseMainCharacter, setPillarUseMainCharacter] = useState(false);
   const [pillarMainCharacterDescription, setPillarMainCharacterDescription] = useState("");
   const [editingPillarSlug, setEditingPillarSlug] = useState(null);
+  const [savingPillar, setSavingPillar] = useState(false);
 
   // Paste Pillar JSON State
   const [pastedPillarJsonText, setPastedPillarJsonText] = useState("");
@@ -293,6 +318,8 @@ export default function ChannelWorkspace() {
       tag: p.tag || "",
       description: p.description || "",
       tone: p.tone || "",
+      content_length: p.contentLength || p.content_length || "15-20 minutes (~2500 words)",
+      content_words_count: p.contentWordsCount || p.content_words_count || "2,500 - 3,500 words",
       use_main_character: Boolean(p.useMainCharacter ?? p.use_main_character),
       main_character_description: p.mainCharacterDescription || p.main_character_description || "",
     }));
@@ -315,6 +342,8 @@ export default function ChannelWorkspace() {
       tag: pillar.tag || "",
       description: pillar.description || "",
       tone: pillar.tone || "",
+      content_length: pillar.contentLength || pillar.content_length || "15-20 minutes (~2500 words)",
+      content_words_count: pillar.contentWordsCount || pillar.content_words_count || "2,500 - 3,500 words",
       use_main_character: Boolean(pillar.useMainCharacter ?? pillar.use_main_character),
       main_character_description: pillar.mainCharacterDescription || pillar.main_character_description || "",
     };
@@ -344,6 +373,8 @@ export default function ChannelWorkspace() {
     setPillarTag("");
     setPillarDescription("");
     setPillarTone("");
+    setPillarContentLength("");
+    setPillarContentWordsCount("");
     setPillarUseMainCharacter(false);
     setPillarMainCharacterDescription("");
     setCreatePillarModalOpen(true);
@@ -376,6 +407,8 @@ export default function ChannelWorkspace() {
         setPillarTag(p.tag || "");
         setPillarDescription(p.description || "");
         setPillarTone(p.tone || "");
+        setPillarContentLength(p.contentLength || p.content_length || "");
+        setPillarContentWordsCount(p.contentWordsCount || p.content_words_count || "");
         setPillarUseMainCharacter(p.useMainCharacter);
         setPillarMainCharacterDescription(p.mainCharacterDescription || "");
       }
@@ -403,6 +436,8 @@ export default function ChannelWorkspace() {
             tag: p.tag,
             description: p.description,
             tone: p.tone,
+            contentLength: p.contentLength,
+            contentWordsCount: p.contentWordsCount,
             useMainCharacter: p.useMainCharacter,
             mainCharacterDescription: p.mainCharacterDescription,
           }),
@@ -429,6 +464,8 @@ export default function ChannelWorkspace() {
     setPillarTag(pillar.tag || "");
     setPillarDescription(pillar.description || "");
     setPillarTone(pillar.tone || "");
+    setPillarContentLength(pillar.contentLength || pillar.content_length || "");
+    setPillarContentWordsCount(pillar.contentWordsCount || pillar.content_words_count || "");
     setPillarUseMainCharacter(Boolean(pillar.useMainCharacter ?? pillar.use_main_character));
     setPillarMainCharacterDescription(pillar.mainCharacterDescription || pillar.main_character_description || "");
     setCreatePillarModalOpen(true);
@@ -439,11 +476,14 @@ export default function ChannelWorkspace() {
     const trimmed = pillarName.trim();
     if (!trimmed) return;
 
+    setSavingPillar(true);
     const payload = {
       name: trimmed,
       tag: pillarTag.trim(),
       description: pillarDescription.trim(),
       tone: pillarTone.trim(),
+      contentLength: pillarContentLength.trim(),
+      contentWordsCount: pillarContentWordsCount.trim(),
       useMainCharacter: pillarUseMainCharacter,
       mainCharacterDescription: pillarMainCharacterDescription.trim(),
     };
@@ -463,10 +503,11 @@ export default function ChannelWorkspace() {
         });
       }
       await loadWorkspaceData();
-    } catch {
-      // Fallback
-    } finally {
       setCreatePillarModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save pillar:", err);
+    } finally {
+      setSavingPillar(false);
     }
   }
 
@@ -1039,6 +1080,34 @@ export default function ChannelWorkspace() {
                 />
               </div>
 
+              <div>
+                <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-length">
+                  Target Content Length
+                </label>
+                <input
+                  id="p-length"
+                  type="text"
+                  value={pillarContentLength}
+                  onChange={(e) => setPillarContentLength(e.target.value)}
+                  placeholder="e.g. 15-20 minutes (~2500 words) or 10-12 minutes"
+                  className="w-full h-9 px-3 border border-line-dark bg-white text-ink outline-none focus:border-signal"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-words">
+                  Target Word Count
+                </label>
+                <input
+                  id="p-words"
+                  type="text"
+                  value={pillarContentWordsCount}
+                  onChange={(e) => setPillarContentWordsCount(e.target.value)}
+                  placeholder="e.g. 2,500 - 3,500 words or 3,000 words"
+                  className="w-full h-9 px-3 border border-line-dark bg-white text-ink outline-none focus:border-signal"
+                />
+              </div>
+
               <div className="p-3 bg-ink/5 border border-line space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -1070,19 +1139,29 @@ export default function ChannelWorkspace() {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+              <div className="flex items-center justify-between pt-4 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setCreatePillarModalOpen(false)}
-                  className="px-4 py-2 border border-line text-ink hover:bg-ink/5 transition-colors cursor-pointer"
+                  className="px-4 py-2 border border-line text-ink hover:bg-ink/5 transition-colors cursor-pointer text-xs font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-signal hover:bg-signal-hover text-white font-semibold transition-all cursor-pointer"
+                  disabled={savingPillar}
+                  className="px-5 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs"
                 >
-                  {editingPillarSlug ? "Save Changes" : "Create Pillar"}
+                  {savingPillar ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Plus size={14} />
+                  )}
+                  <span>
+                    {savingPillar
+                      ? (editingPillarSlug ? "Saving Changes..." : "Establishing Pillar...")
+                      : (editingPillarSlug ? "Save Changes" : "Establish Pillar")}
+                  </span>
                 </button>
               </div>
             </form>
@@ -1091,7 +1170,7 @@ export default function ChannelWorkspace() {
         document.body
       )}
 
-      {/* CREATE TOPIC MODAL */}
+      {/* CREATE TOPICS MODAL */}
       {mounted && createTopicModalOpen && createPortal(
         <div
           className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
@@ -1100,9 +1179,9 @@ export default function ChannelWorkspace() {
           <div className="relative w-full max-w-lg bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-6 animate-scale-in text-ink my-auto">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2">
-                <Film size={18} className="text-signal" />
+                <Sparkles size={18} className="text-signal" />
                 <h3 className="text-lg font-display font-semibold text-ink">
-                  New Content Topic
+                  Establish Content Topic
                 </h3>
               </div>
               <button
@@ -1114,47 +1193,46 @@ export default function ChannelWorkspace() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveTopic} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateTopic} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-ink/80 mb-1" htmlFor="t-pillar">
+                  Assign Content Pillar *
+                </label>
+                <select
+                  id="t-pillar"
+                  required
+                  value={topicPillar}
+                  onChange={(e) => setTopicPillar(e.target.value)}
+                  className="w-full h-9 px-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal"
+                >
+                  <option value="" disabled>Select a Content Pillar</option>
+                  {pillars.map((p) => (
+                    <option key={p.slug} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block font-semibold text-ink/80 mb-1" htmlFor="t-titles">
-                  Topic Name(s) *
+                  Topic Title(s) *
                 </label>
-                <p className="text-[11px] text-ink-muted mb-2">
-                  Enter one or multiple topic names (one per line) to upload multiple topics at once.
+                <p className="text-[11px] text-ink-muted mb-1.5">
+                  Enter one title or paste multiple lines to batch create multiple story episodes.
                 </p>
                 <textarea
                   id="t-titles"
                   required
-                  rows={4}
+                  rows={5}
                   value={topicTitles}
                   onChange={(e) => setTopicTitles(e.target.value)}
-                  placeholder={`e.g.\nThe 1971 Gold Window Default That Changed Global Trade\nHow Central Banks Manage Shadow Liquidity Flows\nThe Anatomy of a Sovereign Debt Spiral`}
-                  className="w-full p-3 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
+                  placeholder={"The Secret History of Fiat Inflation\nWhy the Panic of 1907 Created the Modern Fed\nThe Collapse of Bretton Woods"}
+                  className="w-full p-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal leading-relaxed font-mono text-xs"
                 />
               </div>
 
-              {pillars.length > 0 && (
-                <div>
-                  <label className="block font-semibold text-ink/80 mb-1" htmlFor="t-pillar">
-                    Assign Content Pillar (Optional)
-                  </label>
-                  <select
-                    id="t-pillar"
-                    value={topicPillar}
-                    onChange={(e) => setTopicPillar(e.target.value)}
-                    className="w-full h-9 px-3 border border-line-dark bg-white text-ink outline-none focus:border-signal cursor-pointer"
-                  >
-                    <option value="">-- No Content Pillar (Unassigned) --</option>
-                    {pillars.map((p) => (
-                      <option key={p.slug} value={p.slug}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+              <div className="flex items-center justify-between pt-4 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setCreateTopicModalOpen(false)}
@@ -1165,9 +1243,9 @@ export default function ChannelWorkspace() {
                 <button
                   type="submit"
                   disabled={creatingTopics}
-                  className="px-5 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white font-semibold transition-all cursor-pointer inline-flex items-center gap-2"
+                  className="px-5 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  {creatingTopics ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {creatingTopics ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                   <span>
                     {creatingTopics
                       ? "Creating Topics..."
@@ -1280,7 +1358,7 @@ export default function ChannelWorkspace() {
                     setPastedPillarJsonText(e.target.value);
                     if (pastePillarError) setPastePillarError("");
                   }}
-                  placeholder={`[\n  {\n    "name": "Cognitive Biases & Mental Models",\n    "tag": "Psychology",\n    "description": "Deep breakdowns of counterintuitive human psychological flaws and decision heuristics.",\n    "tone": "Calm, analytical, investigative, authoritative",\n    "use_main_character": true,\n    "main_character_description": "A weary 30-something male clinical psychologist with unruly dark hair, round spectacles, wearing a faded olive tweed coat."\n  }\n]`}
+                  placeholder={`[\n  {\n    "name": "Cognitive Biases & Mental Models",\n    "tag": "Psychology",\n    "description": "Deep breakdowns of counterintuitive human psychological flaws and decision heuristics.",\n    "tone": "Calm, analytical, investigative, authoritative",\n    "content_length": "15-20 minutes (~2500 words)",\n    "content_words_count": "2,500 - 3,500 words",\n    "use_main_character": true,\n    "main_character_description": "A weary 30-something male clinical psychologist with unruly dark hair, round spectacles, wearing a faded olive tweed coat."\n  }\n]`}
                   className="w-full flex-1 min-h-[220px] p-3.5 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
                 />
               </div>
