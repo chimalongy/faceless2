@@ -107,7 +107,6 @@ export async function getPresignedR2UploadUrl({ key, mimeType, expiresIn = 3600 
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: key,
-    ContentType: mimeType,
   });
 
   const uploadUrl = await getSignedUrl(client, command, { expiresIn });

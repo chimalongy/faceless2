@@ -795,8 +795,9 @@ export default function TopicStudioPage() {
     try {
       let zipFileKey = null;
 
-      // 1. Attempt direct-to-R2 presigned upload (bypasses Vercel 4.5MB request limit & Trigger.dev payload limit)
+      // 1. Direct-to-R2 presigned upload (essential for archives > 4MB)
       try {
+        console.log(`[ZIP Upload] Requesting presigned URL for ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...`);
         const presignRes = await fetch("/api/storage/presign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -809,36 +810,52 @@ export default function TopicStudioPage() {
           }),
         });
 
-        if (presignRes.ok) {
-          const presignData = await presignRes.json();
-          if (presignData.uploadUrl && presignData.key) {
-            const uploadRes = await fetch(presignData.uploadUrl, {
-              method: "PUT",
-              headers: {
-                "Content-Type": file.type || "application/zip",
-              },
-              body: file,
-            });
-
-            if (uploadRes.ok) {
-              zipFileKey = presignData.key;
-            }
-          }
+        if (!presignRes.ok) {
+          const presignError = await presignRes.json().catch(() => ({}));
+          throw new Error(presignError.error || `Presign request failed (${presignRes.status})`);
         }
+
+        const presignData = await presignRes.json();
+        if (!presignData.uploadUrl || !presignData.key) {
+          throw new Error("Invalid presigned URL received from server");
+        }
+
+        console.log("[ZIP Upload] Uploading directly from browser to Cloudflare R2...");
+        const uploadRes = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          body: file,
+        });
+
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text().catch(() => "");
+          console.error("[ZIP Upload] Direct R2 PUT failed:", uploadRes.status, errText);
+          throw new Error(`R2 direct upload failed (${uploadRes.status}): Please ensure Cloudflare R2 CORS allows PUT requests.`);
+        }
+
+        zipFileKey = presignData.key;
+        console.log("[ZIP Upload] R2 upload successful, key:", zipFileKey);
       } catch (presignErr) {
-        console.warn("Direct R2 presign upload failed, falling back to server relay:", presignErr);
+        console.error("[ZIP Upload] Direct upload error:", presignErr);
+        if (file.size > 4 * 1024 * 1024) {
+          // File is too large for serverless relay fallback (Vercel 4.5MB limit)
+          throw new Error(
+            presignErr.message || "Failed to upload large ZIP to Cloudflare R2. Check your R2 bucket CORS settings."
+          );
+        }
       }
 
       let res;
       if (zipFileKey) {
         // Dispatch task passing lightweight R2 key (<200 bytes JSON)
+        console.log("[ZIP Upload] Dispatching extraction task via R2 key...");
         res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/extract-zip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ zipFileKey }),
         });
       } else {
-        // Fallback: standard FormData
+        // Small file fallback (<4MB only)
+        console.log("[ZIP Upload] Falling back to serverless formData relay...");
         const formData = new FormData();
         formData.append("file", file);
         res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/extract-zip`, {
