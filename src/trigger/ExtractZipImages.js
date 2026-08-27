@@ -68,6 +68,7 @@ export const extractZipImagesTask = task({
         lowerPath.includes(".png") ||
         lowerPath.includes(".jpg") ||
         lowerPath.includes(".jpeg") ||
+        lowerPath.includes(".jfif") ||
         lowerPath.includes(".webp") ||
         lowerPath.includes(".gif");
 
@@ -80,7 +81,7 @@ export const extractZipImagesTask = task({
     });
 
     if (imageFiles.length === 0) {
-      throw new Error("No supported image files (.png, .jpg, .jpeg, .webp) found in the uploaded ZIP.");
+      throw new Error("No supported image files (.png, .jpg, .jpeg, .jfif, .webp) found in the uploaded ZIP.");
     }
 
     logger.log(`Found ${imageFiles.length} image candidate(s) in ZIP archive.`);
@@ -103,12 +104,13 @@ export const extractZipImagesTask = task({
     for (const item of imageFiles) {
       const fullFileName = item.path.split("/").pop() || item.path;
       
-      // Filenames in ZIP can be e.g. "1.png_202608210053", "2.jpg_timestamp", "scene_3.png"
-      // Step A: Split at '_' to extract primary filename (e.g. "1.png")
-      const primaryPart = fullFileName.split("_")[0];
+      // Filenames in ZIP can be e.g. "1.jfif", "2.jfif", "1.png_202608210053", "2.jpg_timestamp", "scene_3.png"
+      // Step A: Strip extension to extract the basename
+      const nameWithoutExt = fullFileName.replace(/\.[^/.]+$/, "");
+      const primaryPart = nameWithoutExt.split("_")[0];
       
-      // Step B: Extract scene number from the primary part or full name
-      const numberMatch = primaryPart.match(/(\d+)/) || fullFileName.match(/(\d+)/);
+      // Step B: Extract scene number from primary part or full filename
+      const numberMatch = primaryPart.match(/(\d+)/) || nameWithoutExt.match(/(\d+)/) || fullFileName.match(/(\d+)/);
       if (!numberMatch) {
         logger.warn(`Could not extract scene number from filename: ${fullFileName}. Skipping.`);
         continue;
@@ -120,7 +122,10 @@ export const extractZipImagesTask = task({
       // Determine extension and MIME type
       let ext = "png";
       let mimeType = "image/png";
-      if (lowerFull.includes(".jpg") || lowerFull.includes(".jpeg")) {
+      if (lowerFull.includes(".jfif")) {
+        ext = "jfif";
+        mimeType = "image/jpeg";
+      } else if (lowerFull.includes(".jpg") || lowerFull.includes(".jpeg")) {
         ext = "jpg";
         mimeType = "image/jpeg";
       } else if (lowerFull.includes(".webp")) {

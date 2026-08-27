@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Faceless Studio — Flow Image Gen",
+  "version": "2.0.0",
+  "description": "Generate scene images for Faceless Studio topics via Google Flow automation. Select channel → pillar → topic, then batch-generate all scene images.",
+  "permissions": ["sidePanel", "storage", "downloads", "scripting", "tabs", "debugger"],
+  "host_permissions": ["https://labs.google/*", "http://localhost:3000/*", "http://localhost/*", "https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Faceless Studio — Flow Image Gen" },
+  "content_scripts": [
+    {
+      "matches": ["https://labs.google/fx/tools/flow*"],
+      "js": ["flow-adapter.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

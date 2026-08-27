@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="sidepanel.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <title>Faceless Studio</title>
+</head>
+<body>
+
+  <!-- ═══════ LOGIN SCREEN ═══════ -->
+  <div id="loginScreen" class="screen">
+    <div class="login-container">
+      <div class="logo-area">
+        <div class="logo-icon">F</div>
+        <h1>Faceless Studio</h1>
+        <p class="subtitle">Flow Image Generator</p>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="admin@facelessstudio.com" autocomplete="email" />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <div class="form-row">
+        <label class="checkbox-label">
+          <input id="remember" type="checkbox" checked />
+          <span>Remember me</span>
+        </label>
+        <button id="settingsToggle" class="link-btn" title="Server settings">⚙</button>
+      </div>
+
+      <div id="serverSettings" class="server-settings hidden">
+        <label for="baseUrlInput">Server URL</label>
+        <input id="baseUrlInput" type="url" placeholder="http://localhost:3000" />
+      </div>
+
+      <button id="loginBtn" class="btn-primary">Sign In</button>
+      <div id="loginError" class="error-msg hidden"></div>
+    </div>
+  </div>
+
+  <!-- ═══════ MAIN SCREEN ═══════ -->
+  <div id="mainScreen" class="screen hidden">
+    <header>
+      <div class="header-left">
+        <div class="logo-sm">F</div>
+        <h2>Faceless Studio</h2>
+      </div>
+      <button id="logoutBtn" class="link-btn" title="Logout">⏻</button>
+    </header>
+
+    <!-- Selection Card -->
+    <section class="card">
+      <div class="card-header-row">
+        <h3>Select Topic</h3>
+        <div class="header-inputs-wrapper">
+          <div class="header-input-group">
+            <label for="startSceneInput" title="Starting scene number">Start</label>
+            <input id="startSceneInput" type="number" min="1" value="1" title="Start from scene number (default: 1)" />
+          </div>
+          <div class="header-input-group">
+            <label for="batchCountInput" title="Batch count per prompt">Batch</label>
+            <input id="batchCountInput" type="number" min="1" max="50" value="3" title="Batch count per prompt" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="channelSelect">Channel</label>
+        <select id="channelSelect">
+          <option value="">— Select channel —</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="pillarSelect">Content Pillar</label>
+        <select id="pillarSelect" disabled>
+          <option value="">— Select pillar —</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="topicSelect">Topic</label>
+        <select id="topicSelect" disabled>
+          <option value="">— Select topic —</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Scenes Preview -->
+    <section id="scenesCard" class="card hidden">
+      <div class="card-header-row">
+        <h3>Scenes <span id="sceneCount" class="badge">0</span></h3>
+        <div id="selectedCountBadge" class="selected-badge hidden">0 selected</div>
+      </div>
+      <div id="scenesList" class="scenes-list"></div>
+      <button id="genSelectedBtn" class="btn-selected hidden">▶ Generate Selected (<span id="genSelectedCount">0</span>)</button>
+    </section>
+
+    <!-- Controls -->
+    <section class="actions">
+      <button id="startBtn" class="btn-primary" disabled>▶ Start Generation</button>
+      <div class="action-row">
+        <button id="pauseBtn" class="btn-secondary" disabled>Pause</button>
+        <button id="stopBtn" class="btn-danger" disabled>Stop</button>
+      </div>
+    </section>
+
+    <!-- Progress -->
+    <section id="progressCard" class="card hidden">
+      <div class="progress-header">
+        <strong>Progress</strong>
+        <span id="progressText">0 / 0</span>
+      </div>
+      <div class="progress-bar-track">
+        <div id="progressBar" class="progress-bar-fill" style="width: 0%"></div>
+      </div>
+      <div id="statusText" class="status-text">Idle</div>
+    </section>
+
+    <!-- Log -->
+    <section class="card log-card">
+      <h3>Activity Log</h3>
+      <div id="log" class="log-area"></div>
+    </section>
+  </div>
+
+  <script src="settings.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
