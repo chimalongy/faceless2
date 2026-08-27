@@ -202,14 +202,86 @@ export const generateScenesTask = task({
 
         const data = await response.json();
 
-        // Extract raw text response
-        let textResult = data?.result?.response || data?.result?.text || (typeof data?.result === "string" ? data.result : null);
-        if (!textResult && data?.response) {
-          textResult = data.response;
+        // Robust multi-schema text extraction for Cloudflare Workers AI models
+        function extractAiResponseText(payload) {
+          if (!payload) return null;
+          if (typeof payload === "string") return payload.trim();
+
+          // 1. Direct result string
+          if (typeof payload.result === "string" && payload.result.trim()) {
+            return payload.result.trim();
+          }
+
+          // 2. data.result object
+          if (payload.result && typeof payload.result === "object") {
+            if (typeof payload.result.response === "string" && payload.result.response.trim()) {
+              return payload.result.response.trim();
+            }
+            if (typeof payload.result.text === "string" && payload.result.text.trim()) {
+              return payload.result.text.trim();
+            }
+            if (typeof payload.result.generated_text === "string" && payload.result.generated_text.trim()) {
+              return payload.result.generated_text.trim();
+            }
+            if (typeof payload.result.content === "string" && payload.result.content.trim()) {
+              return payload.result.content.trim();
+            }
+            if (typeof payload.result.output === "string" && payload.result.output.trim()) {
+              return payload.result.output.trim();
+            }
+            if (payload.result.message && typeof payload.result.message.content === "string" && payload.result.message.content.trim()) {
+              return payload.result.message.content.trim();
+            }
+            if (Array.isArray(payload.result.choices) && payload.result.choices.length > 0) {
+              const choice = payload.result.choices[0];
+              if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
+                return choice.message.content.trim();
+              }
+              if (typeof choice?.text === "string" && choice.text.trim()) {
+                return choice.text.trim();
+              }
+            }
+            if (Array.isArray(payload.result) && payload.result.length > 0) {
+              const item = payload.result[0];
+              if (typeof item === "string" && item.trim()) return item.trim();
+              if (item?.response) return String(item.response).trim();
+              if (item?.generated_text) return String(item.generated_text).trim();
+              if (item?.text) return String(item.text).trim();
+              if (item?.message?.content) return String(item.message.content).trim();
+            }
+            if (typeof payload.result.reasoning_content === "string" && payload.result.reasoning_content.trim()) {
+              return payload.result.reasoning_content.trim();
+            }
+          }
+
+          // 3. Root-level standard OpenAI / Cloudflare format
+          if (typeof payload.response === "string" && payload.response.trim()) {
+            return payload.response.trim();
+          }
+          if (typeof payload.text === "string" && payload.text.trim()) {
+            return payload.text.trim();
+          }
+          if (typeof payload.generated_text === "string" && payload.generated_text.trim()) {
+            return payload.generated_text.trim();
+          }
+          if (Array.isArray(payload.choices) && payload.choices.length > 0) {
+            const choice = payload.choices[0];
+            if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
+              return choice.message.content.trim();
+            }
+            if (typeof choice?.text === "string" && choice.text.trim()) {
+              return choice.text.trim();
+            }
+          }
+
+          return null;
         }
 
-        if (!textResult || typeof textResult !== "string" || !textResult.trim()) {
-          throw new Error(`Empty response returned from Cloudflare Workers AI for account ${email}`);
+        const textResult = extractAiResponseText(data);
+
+        if (!textResult) {
+          const preview = JSON.stringify(data).slice(0, 300);
+          throw new Error(`Empty response returned from Cloudflare Workers AI for account ${email}. Raw response: ${preview}`);
         }
 
         // Clean and parse JSON
