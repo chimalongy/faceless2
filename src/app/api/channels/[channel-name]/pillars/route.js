@@ -23,6 +23,9 @@ export async function GET(request, { params }) {
         cp.slug,
         cp.tag,
         cp.description,
+        cp.tone,
+        cp.use_main_character AS "useMainCharacter",
+        cp.main_character_description AS "mainCharacterDescription",
         cp.created_at AS "createdAt",
         cp.updated_at AS "updatedAt"
       FROM content_pillars cp
@@ -83,6 +86,9 @@ export async function POST(request, { params }) {
 
     const tag = body.tag?.trim() || "";
     const description = body.description?.trim() || "";
+    const tone = body.tone?.trim() || "";
+    const useMainCharacter = Boolean(body.useMainCharacter ?? body.use_main_character);
+    const mainCharacterDescription = body.mainCharacterDescription?.trim() || body.main_character_description?.trim() || "";
 
     const inserted = await sql`
       INSERT INTO content_pillars (
@@ -90,18 +96,27 @@ export async function POST(request, { params }) {
         name,
         slug,
         tag,
-        description
+        description,
+        tone,
+        use_main_character,
+        main_character_description
       ) VALUES (
         ${channelId},
         ${name},
         ${slug},
         ${tag},
-        ${description}
+        ${description},
+        ${tone},
+        ${useMainCharacter},
+        ${mainCharacterDescription}
       )
       ON CONFLICT (channel_id, slug) DO UPDATE SET
         name = EXCLUDED.name,
         tag = EXCLUDED.tag,
         description = EXCLUDED.description,
+        tone = EXCLUDED.tone,
+        use_main_character = EXCLUDED.use_main_character,
+        main_character_description = EXCLUDED.main_character_description,
         updated_at = NOW()
       RETURNING *;
     `;

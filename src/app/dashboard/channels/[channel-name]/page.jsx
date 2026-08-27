@@ -19,7 +19,9 @@ import {
   Globe,
   Copy,
   Check,
-  Loader2
+  Loader2,
+  ClipboardPaste,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -61,6 +63,104 @@ function getStageBadge(stage) {
   }
 }
 
+function extractPillarFromJson(item) {
+  if (!item || typeof item !== "object") return null;
+
+  const target = item.content_pillar || item.pillar || item;
+
+  const name =
+    target.name ||
+    target.pillar_name ||
+    target.title ||
+    target.pillarName ||
+    target.pillarTitle ||
+    "";
+
+  if (!name || typeof name !== "string") return null;
+
+  const tag = target.tag || target.category || target.category_tag || target.categoryTag || "";
+  const description =
+    target.description ||
+    target.strategic_description ||
+    target.strategicDescription ||
+    target.summary ||
+    "";
+  const tone =
+    target.tone ||
+    target.narrative_tone ||
+    target.voice_tone ||
+    target.narrativeTone ||
+    target.voiceTone ||
+    "";
+  const useMainCharacter = Boolean(
+    target.use_main_character ??
+    target.useMainCharacter ??
+    target.has_main_character ??
+    target.hasMainCharacter ??
+    target.main_character_active ??
+    (target.main_character_description || target.mainCharacterDescription)
+  );
+  const mainCharacterDescription =
+    target.main_character_description ||
+    target.mainCharacterDescription ||
+    target.character_description ||
+    target.characterDescription ||
+    target.character ||
+    "";
+
+  return {
+    name: String(name).trim(),
+    tag: String(tag).trim(),
+    description: String(description).trim(),
+    tone: String(tone).trim(),
+    useMainCharacter,
+    mainCharacterDescription: String(mainCharacterDescription).trim(),
+  };
+}
+
+function parsePillarsJsonText(rawText) {
+  if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
+    return { success: false, error: "Please enter valid JSON." };
+  }
+
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    return { success: false, error: `Invalid JSON syntax: ${err.message}` };
+  }
+
+  let list = [];
+  if (Array.isArray(parsed)) {
+    list = parsed.map(extractPillarFromJson).filter(Boolean);
+  } else if (parsed && typeof parsed === "object") {
+    if (Array.isArray(parsed.pillars)) {
+      list = parsed.pillars.map(extractPillarFromJson).filter(Boolean);
+    } else if (Array.isArray(parsed.content_pillars)) {
+      list = parsed.content_pillars.map(extractPillarFromJson).filter(Boolean);
+    } else if (Array.isArray(parsed.contentPillars)) {
+      list = parsed.contentPillars.map(extractPillarFromJson).filter(Boolean);
+    } else {
+      const single = extractPillarFromJson(parsed);
+      if (single) list = [single];
+    }
+  }
+
+  if (list.length === 0) {
+    return {
+      success: false,
+      error: "No valid content pillar object(s) with a 'name' field found in JSON.",
+    };
+  }
+
+  return { success: true, pillars: list };
+}
+
 export default function ChannelWorkspace() {
   const params = useParams();
   const router = useRouter();
@@ -80,13 +180,25 @@ export default function ChannelWorkspace() {
   // Modals
   const [createTopicModalOpen, setCreateTopicModalOpen] = useState(false);
   const [createPillarModalOpen, setCreatePillarModalOpen] = useState(false);
+  const [pastePillarModalOpen, setPastePillarModalOpen] = useState(false);
   const [deleteChannelModalOpen, setDeleteChannelModalOpen] = useState(false);
 
   // Pillar Form State
   const [pillarName, setPillarName] = useState("");
   const [pillarTag, setPillarTag] = useState("");
   const [pillarDescription, setPillarDescription] = useState("");
+  const [pillarTone, setPillarTone] = useState("");
+  const [pillarUseMainCharacter, setPillarUseMainCharacter] = useState(false);
+  const [pillarMainCharacterDescription, setPillarMainCharacterDescription] = useState("");
   const [editingPillarSlug, setEditingPillarSlug] = useState(null);
+
+  // Paste Pillar JSON State
+  const [pastedPillarJsonText, setPastedPillarJsonText] = useState("");
+  const [pastePillarError, setPastePillarError] = useState("");
+  const [pastingPillars, setPastingPillars] = useState(false);
+  const [pillarSuccessNotice, setPillarSuccessNotice] = useState("");
+  const [copiedPillarsJson, setCopiedPillarsJson] = useState(false);
+  const [copiedSinglePillarSlug, setCopiedSinglePillarSlug] = useState(null);
 
   // Topic Form State
   const [topicTitles, setTopicTitles] = useState("");
@@ -134,35 +246,34 @@ export default function ChannelWorkspace() {
   }, [channelSlug]);
 
   function handleCopyJson() {
-    const cp = channelProfile || {};
     const nestedData = {
       channel: {
-        name: cp.name || channelSlug,
-        slug: cp.slug || channelSlug,
-        handle: cp.handle || `@${channelSlug}`,
-        channel_url: cp.channelUrl || `https://youtube.com/@${channelSlug}`,
-        tagline: cp.tagline || "",
-        description: cp.description || "",
-        status: cp.status || "Active",
-        videos: topics.filter((t) => t.masterVideoUrl).length,
+        name: channelProfile?.name || channelSlug,
+        slug: channelSlug,
+        handle: channelProfile?.handle || `@${channelSlug}`,
+        channel_url: channelProfile?.channelUrl || `https://youtube.com/@${channelSlug}`,
+        tagline: channelProfile?.tagline || "",
+        description: channelProfile?.description || "",
+        default_voice: channelProfile?.defaultVoice || "af_heart",
+        status: channelProfile?.status || "Active",
       },
       niche_and_audience: {
-        niche: cp.niche || "Documentaries",
-        sub_niche: cp.subNiche || "",
-        content_category: cp.contentCategory || "Education & Documentaries",
-        target_audience: cp.targetAudience || "",
+        niche: channelProfile?.niche || "",
+        sub_niche: channelProfile?.subNiche || "",
+        content_category: channelProfile?.contentCategory || "",
+        target_audience: channelProfile?.targetAudience || "",
       },
       brand_strategy: {
-        mission: cp.mission || "",
-        value_proposition: cp.valueProposition || "",
-        personality: cp.personality || "",
-        brand_positioning: cp.brandPositioning || "",
-        brand_promise: cp.brandPromise || "",
+        mission: channelProfile?.mission || "",
+        value_proposition: channelProfile?.valueProposition || "",
+        personality: channelProfile?.personality || "",
+        brand_positioning: channelProfile?.brandPositioning || "",
+        brand_promise: channelProfile?.brandPromise || "",
       },
       creative_themes: {
-        image_theme: cp.imageTheme || "",
-        thumbnail_theme: cp.thumbnailTheme || "",
-        audio_theme: cp.audioTheme || "",
+        image_theme: channelProfile?.imageTheme || "",
+        thumbnail_theme: channelProfile?.thumbnailTheme || "",
+        audio_theme: channelProfile?.audioTheme || "",
       },
     };
 
@@ -173,6 +284,46 @@ export default function ChannelWorkspace() {
     } catch {
       // Fallback
     }
+  }
+
+  function handleCopyAllPillarsJson() {
+    const data = pillars.map((p) => ({
+      name: p.name,
+      slug: p.slug,
+      tag: p.tag || "",
+      description: p.description || "",
+      tone: p.tone || "",
+      use_main_character: Boolean(p.useMainCharacter ?? p.use_main_character),
+      main_character_description: p.mainCharacterDescription || p.main_character_description || "",
+    }));
+
+    try {
+      navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      setCopiedPillarsJson(true);
+      setTimeout(() => setCopiedPillarsJson(false), 2000);
+    } catch {}
+  }
+
+  function handleCopySinglePillarJson(pillar, e) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const data = {
+      name: pillar.name,
+      slug: pillar.slug,
+      tag: pillar.tag || "",
+      description: pillar.description || "",
+      tone: pillar.tone || "",
+      use_main_character: Boolean(pillar.useMainCharacter ?? pillar.use_main_character),
+      main_character_description: pillar.mainCharacterDescription || pillar.main_character_description || "",
+    };
+
+    try {
+      navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      setCopiedSinglePillarSlug(pillar.slug);
+      setTimeout(() => setCopiedSinglePillarSlug(null), 2000);
+    } catch {}
   }
 
   async function handleDeleteChannel() {
@@ -186,13 +337,88 @@ export default function ChannelWorkspace() {
     router.push("/dashboard");
   }
 
-  // Pillar Creation / Update
+  // Pillar Actions
   function handleOpenCreatePillar() {
     setEditingPillarSlug(null);
     setPillarName("");
     setPillarTag("");
     setPillarDescription("");
+    setPillarTone("");
+    setPillarUseMainCharacter(false);
+    setPillarMainCharacterDescription("");
     setCreatePillarModalOpen(true);
+  }
+
+  function handleOpenPastePillarModal() {
+    setPastedPillarJsonText("");
+    setPastePillarError("");
+    setPastePillarModalOpen(true);
+  }
+
+  async function handlePastePillarFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setPastedPillarJsonText(text);
+        setPastePillarError("");
+      }
+    } catch {}
+  }
+
+  async function handleQuickFillPillarFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const res = parsePillarsJsonText(text);
+      if (res.success && res.pillars.length > 0) {
+        const p = res.pillars[0];
+        setPillarName(p.name);
+        setPillarTag(p.tag || "");
+        setPillarDescription(p.description || "");
+        setPillarTone(p.tone || "");
+        setPillarUseMainCharacter(p.useMainCharacter);
+        setPillarMainCharacterDescription(p.mainCharacterDescription || "");
+      }
+    } catch {}
+  }
+
+  async function handleApplyPastedPillarJson(e) {
+    if (e) e.preventDefault();
+    setPastePillarError("");
+    const parsed = parsePillarsJsonText(pastedPillarJsonText);
+    if (!parsed.success) {
+      setPastePillarError(parsed.error);
+      return;
+    }
+
+    setPastingPillars(true);
+    let successCount = 0;
+    try {
+      for (const p of parsed.pillars) {
+        const res = await fetch(`/api/channels/${channelSlug}/pillars`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: p.name,
+            tag: p.tag,
+            description: p.description,
+            tone: p.tone,
+            useMainCharacter: p.useMainCharacter,
+            mainCharacterDescription: p.mainCharacterDescription,
+          }),
+        });
+        if (res.ok) successCount++;
+      }
+      await loadWorkspaceData();
+      setPillarSuccessNotice(`Successfully established ${successCount} content pillar(s)!`);
+      setPastePillarModalOpen(false);
+      setPastedPillarJsonText("");
+      setTimeout(() => setPillarSuccessNotice(""), 4500);
+    } catch (err) {
+      setPastePillarError(`Error importing pillars: ${err.message}`);
+    } finally {
+      setPastingPillars(false);
+    }
   }
 
   function handleOpenEditPillar(pillar, e) {
@@ -202,6 +428,9 @@ export default function ChannelWorkspace() {
     setPillarName(pillar.name);
     setPillarTag(pillar.tag || "");
     setPillarDescription(pillar.description || "");
+    setPillarTone(pillar.tone || "");
+    setPillarUseMainCharacter(Boolean(pillar.useMainCharacter ?? pillar.use_main_character));
+    setPillarMainCharacterDescription(pillar.mainCharacterDescription || pillar.main_character_description || "");
     setCreatePillarModalOpen(true);
   }
 
@@ -214,6 +443,9 @@ export default function ChannelWorkspace() {
       name: trimmed,
       tag: pillarTag.trim(),
       description: pillarDescription.trim(),
+      tone: pillarTone.trim(),
+      useMainCharacter: pillarUseMainCharacter,
+      mainCharacterDescription: pillarMainCharacterDescription.trim(),
     };
 
     try {
@@ -396,30 +628,84 @@ export default function ChannelWorkspace() {
         <>
           {/* SECTION 1: CONTENT PILLARS */}
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <Layers size={18} className="text-signal" />
                 <h2 className="text-lg font-display font-semibold text-ink">
                   Content Pillars
                 </h2>
+                <span className="text-xs font-mono text-ink-muted">
+                  ({pillars.length})
+                </span>
               </div>
-              <span className="text-xs font-mono text-ink-muted">
-                {pillars.length} Registered
-              </span>
+              <div className="flex items-center gap-2">
+                {pillars.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCopyAllPillarsJson}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+                    title="Copy all content pillars as JSON array"
+                  >
+                    {copiedPillarsJson ? (
+                      <>
+                        <Check size={14} className="text-emerald-600" />
+                        <span className="text-emerald-700">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copy JSON</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleOpenPastePillarModal}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+                  title="Paste JSON to automatically create or update content pillars"
+                >
+                  <ClipboardPaste size={14} />
+                  <span>Paste JSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenCreatePillar}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+                >
+                  <Plus size={14} /> Add Pillar
+                </button>
+              </div>
             </div>
+
+            {pillarSuccessNotice && (
+              <div className="p-3 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 flex items-center gap-2 animate-fade-in">
+                <CheckCircle2 size={15} className="shrink-0" />
+                <span>{pillarSuccessNotice}</span>
+              </div>
+            )}
 
             {pillars.length === 0 ? (
               <div className="p-8 border border-line bg-paper-card text-center space-y-3">
                 <p className="text-xs text-ink-muted">
                   No content pillars established yet for this channel.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleOpenCreatePillar}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal text-white text-xs font-semibold cursor-pointer"
-                >
-                  <Plus size={14} /> Establish First Pillar
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenPastePillarModal}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-line text-ink text-xs font-semibold cursor-pointer hover:bg-ink/5"
+                  >
+                    <ClipboardPaste size={14} /> Paste JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreatePillar}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal text-white text-xs font-semibold cursor-pointer"
+                  >
+                    <Plus size={14} /> Establish First Pillar
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -434,6 +720,18 @@ export default function ChannelWorkspace() {
                           {pillar.tag || "Pillar"}
                         </span>
                         <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopySinglePillarJson(pillar, e)}
+                            className="p-1 text-ink-muted hover:text-signal transition-colors cursor-pointer"
+                            title="Copy pillar JSON"
+                          >
+                            {copiedSinglePillarSlug === pillar.slug ? (
+                              <Check size={14} className="text-emerald-600" />
+                            ) : (
+                              <Copy size={14} />
+                            )}
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => handleOpenEditPillar(pillar, e)}
@@ -664,13 +962,23 @@ export default function ChannelWorkspace() {
                   {editingPillarSlug ? "Edit Content Pillar" : "Establish Content Pillar"}
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setCreatePillarModalOpen(false)}
-                className="p-1 text-ink-muted hover:text-ink cursor-pointer"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleQuickFillPillarFromClipboard}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 border border-line text-[11px] font-medium text-ink hover:text-signal hover:border-signal/40 bg-white cursor-pointer"
+                  title="Auto-fill inputs from JSON currently in clipboard"
+                >
+                  <ClipboardPaste size={12} /> Auto-fill from Clipboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreatePillarModalOpen(false)}
+                  className="p-1 text-ink-muted hover:text-ink cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleSavePillar} className="space-y-4 text-xs">
@@ -715,6 +1023,51 @@ export default function ChannelWorkspace() {
                   placeholder="The thematic boundary, core premise, and perspective of this pillar..."
                   className="w-full p-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal leading-relaxed"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-tone">
+                  Tone
+                </label>
+                <input
+                  id="p-tone"
+                  type="text"
+                  value={pillarTone}
+                  onChange={(e) => setPillarTone(e.target.value)}
+                  placeholder="e.g. Calm, investigative, psychologically deep, slightly somber yet authoritative"
+                  className="w-full h-9 px-3 border border-line-dark bg-white text-ink outline-none focus:border-signal"
+                />
+              </div>
+
+              <div className="p-3 bg-ink/5 border border-line space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    id="p-use-main-char"
+                    type="checkbox"
+                    checked={pillarUseMainCharacter}
+                    onChange={(e) => setPillarUseMainCharacter(e.target.checked)}
+                    className="w-4 h-4 rounded border-line text-signal focus:ring-signal"
+                  />
+                  <span className="font-semibold text-ink text-xs">
+                    Use Main Character Anchor (USE_MAIN_CHARACTER)
+                  </span>
+                </label>
+
+                {pillarUseMainCharacter && (
+                  <div>
+                    <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-char-desc">
+                      Main Character Description (MAIN_CHARACTER_DESCRIPTION)
+                    </label>
+                    <textarea
+                      id="p-char-desc"
+                      rows={3}
+                      value={pillarMainCharacterDescription}
+                      onChange={(e) => setPillarMainCharacterDescription(e.target.value)}
+                      placeholder="Describe the recurring character persona (e.g. A weary 30-something male clinical psychologist with unruly dark hair, spectacles, wearing a faded olive tweed coat and linen shirt)..."
+                      className="w-full p-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal leading-relaxed"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
@@ -866,6 +1219,97 @@ export default function ChannelWorkspace() {
                 <Trash2 size={14} /> Delete Channel
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* PASTE CONTENT PILLAR JSON MODAL */}
+      {mounted && pastePillarModalOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
+          style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", zIndex: 99999 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPastePillarModalOpen(false);
+          }}
+        >
+          <div className="relative w-full max-w-2xl bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-5 animate-scale-in text-ink my-auto max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-signal/10 text-signal rounded">
+                  <ClipboardPaste size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-display font-semibold text-ink">
+                    Paste Content Pillar JSON
+                  </h3>
+                  <p className="text-xs text-ink-muted">
+                    Paste a single content pillar object or an array of pillars to batch establish them.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPastePillarModalOpen(false)}
+                className="p-1 text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleApplyPastedPillarJson} className="space-y-4 flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between mb-1.5 text-xs">
+                  <label htmlFor="paste-pillar-json-textarea" className="font-semibold text-ink/80">
+                    Pillar JSON (Single Object or Array) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handlePastePillarFromClipboard}
+                    className="text-signal hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+                  >
+                    <ClipboardPaste size={12} /> Paste from clipboard
+                  </button>
+                </div>
+                <textarea
+                  id="paste-pillar-json-textarea"
+                  required
+                  rows={12}
+                  value={pastedPillarJsonText}
+                  onChange={(e) => {
+                    setPastedPillarJsonText(e.target.value);
+                    if (pastePillarError) setPastePillarError("");
+                  }}
+                  placeholder={`[\n  {\n    "name": "Cognitive Biases & Mental Models",\n    "tag": "Psychology",\n    "description": "Deep breakdowns of counterintuitive human psychological flaws and decision heuristics.",\n    "tone": "Calm, analytical, investigative, authoritative",\n    "use_main_character": true,\n    "main_character_description": "A weary 30-something male clinical psychologist with unruly dark hair, round spectacles, wearing a faded olive tweed coat."\n  }\n]`}
+                  className="w-full flex-1 min-h-[220px] p-3.5 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
+                />
+              </div>
+
+              {pastePillarError && (
+                <div className="flex items-center gap-2 p-3 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{pastePillarError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-4 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setPastePillarModalOpen(false)}
+                  className="px-4 py-2 border border-line text-ink hover:bg-ink/5 transition-colors cursor-pointer text-xs font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pastingPillars}
+                  className="px-5 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-2"
+                >
+                  {pastingPillars ? <Loader2 size={14} className="animate-spin" /> : <ClipboardPaste size={14} />}
+                  <span>{pastingPillars ? "Establishing Pillars..." : "Import Pillars"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

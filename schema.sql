@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS content_pillars (
     slug TEXT NOT NULL,
     tag TEXT,
     description TEXT,
+    tone TEXT,
+    use_main_character BOOLEAN DEFAULT FALSE,
+    main_character_description TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT uq_channel_pillar UNIQUE (channel_id, slug)

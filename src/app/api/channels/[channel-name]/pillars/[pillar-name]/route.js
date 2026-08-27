@@ -24,6 +24,9 @@ export async function GET(request, { params }) {
         cp.slug,
         cp.tag,
         cp.description,
+        cp.tone,
+        cp.use_main_character AS "useMainCharacter",
+        cp.main_character_description AS "mainCharacterDescription",
         cp.created_at AS "createdAt",
         cp.updated_at AS "updatedAt"
       FROM content_pillars cp
@@ -84,6 +87,9 @@ export async function PUT(request, { params }) {
         name = ${name},
         tag = ${body.tag || null},
         description = ${body.description || null},
+        tone = ${body.tone || null},
+        use_main_character = ${Boolean(body.useMainCharacter ?? body.use_main_character)},
+        main_character_description = ${body.mainCharacterDescription || body.main_character_description || null},
         updated_at = NOW()
       WHERE channel_id = ${channelId} AND slug = ${pillarSlug}
       RETURNING *;

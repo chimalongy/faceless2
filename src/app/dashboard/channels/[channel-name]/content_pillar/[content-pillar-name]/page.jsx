@@ -14,7 +14,9 @@ import {
   ChevronRight,
   Loader2,
   Sparkles,
-  Video
+  Video,
+  Copy,
+  Check
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -42,6 +44,7 @@ export default function ContentPillarDetail() {
   const [topics, setTopics] = useState([]);
   const [activeTab, setActiveTab] = useState("topics");
   const [mounted, setMounted] = useState(false);
+  const [copiedJson, setCopiedJson] = useState(false);
 
   // Modals / forms
   const [topicModalOpen, setTopicModalOpen] = useState(false);
@@ -128,6 +131,24 @@ export default function ContentPillarDetail() {
     }
   }
 
+  function handleCopyPillarJson() {
+    const data = {
+      name: pillar?.name || pillarSlug,
+      slug: pillarSlug,
+      tag: pillar?.tag || "",
+      description: pillar?.description || "",
+      tone: pillar?.tone || "",
+      use_main_character: Boolean(pillar?.useMainCharacter ?? pillar?.use_main_character),
+      main_character_description: pillar?.mainCharacterDescription || pillar?.main_character_description || "",
+    };
+
+    try {
+      navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      setCopiedJson(true);
+      setTimeout(() => setCopiedJson(false), 2000);
+    } catch {}
+  }
+
   const completedVideos = topics.filter((t) => t.stage === "Completed" || t.masterVideoUrl);
 
   const pillarName = pillar?.name || pillarSlug.split("-").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
@@ -157,9 +178,48 @@ export default function ContentPillarDetail() {
             <p className="text-xs sm:text-sm text-ink-muted mt-1 max-w-2xl">
               {pillar?.description || "Curated editorial pillar and thesis cluster for this channel."}
             </p>
+
+            {(pillar?.tone || pillar?.useMainCharacter) && (
+              <div className="flex flex-wrap items-center gap-3 mt-3 pt-2 border-t border-line/40 text-xs">
+                {pillar?.tone && (
+                  <div className="flex items-center gap-1.5 text-ink-muted">
+                    <span className="font-semibold text-ink">Tone:</span>
+                    <span className="bg-ink/5 px-2 py-0.5 border border-line text-ink font-mono text-[11px]">
+                      {pillar.tone}
+                    </span>
+                  </div>
+                )}
+                {pillar?.useMainCharacter && (
+                  <div className="flex items-center gap-1.5 text-ink-muted">
+                    <span className="font-semibold text-signal">Main Character:</span>
+                    <span className="bg-signal/10 px-2 py-0.5 border border-signal/20 text-signal font-mono text-[11px] max-w-md truncate" title={pillar.mainCharacterDescription}>
+                      {pillar.mainCharacterDescription || "Active Anchor"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyPillarJson}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+              title="Copy content pillar JSON schema"
+            >
+              {copiedJson ? (
+                <>
+                  <Check size={14} className="text-emerald-600" />
+                  <span className="text-emerald-700">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={14} />
+                  <span>Copy JSON</span>
+                </>
+              )}
+            </button>
             <button
               type="button"
               onClick={handleOpenCreateTopic}

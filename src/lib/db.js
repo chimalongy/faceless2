@@ -80,11 +80,20 @@ export async function initDbSchema() {
         slug TEXT NOT NULL,
         tag TEXT,
         description TEXT,
+        tone TEXT,
+        use_main_character BOOLEAN DEFAULT FALSE,
+        main_character_description TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(channel_id, slug)
       );
     `;
+
+    try {
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS tone TEXT;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS use_main_character BOOLEAN DEFAULT FALSE;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS main_character_description TEXT;`;
+    } catch {}
 
     // 3. Topics Table
     await sql`
