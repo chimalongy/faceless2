@@ -576,17 +576,9 @@ Before returning the JSON, internally verify that:
 
 # OUTPUT FORMAT
 
-Return ONLY a valid raw JSON array.
-
-Do not include:
-
-* Markdown code fences.
-* Explanations.
-* Commentary.
-* Notes.
-* Headings.
-* Additional text before the JSON.
-* Additional text after the JSON.
+CRITICAL: Return ONLY a valid raw JSON array.
+Do not output thinking, reasoning, commentary, or markdown fences.
+Start your response immediately with [ and end with ].
 
 Use exactly this structure:
 
@@ -626,21 +618,49 @@ export function getSceneGenerationPrompt({
   mainCharacterDescription = "None",
   activeScript = "",
 }) {
-  const resolvedImageTheme = visualTheme || channelImageTheme || "Cinematic, moody psychological documentary style with realistic dramatic lighting and film grain texture.";
-  const resolvedTone = tone || contentPillarTone || "Calm, analytical, insightful";
-  const resolvedMainCharDesc = useMainCharacter && mainCharacterDescription ? mainCharacterDescription : "None";
+  const resolvedImageTheme =
+    visualTheme ||
+    channelImageTheme ||
+    "Cinematic, moody psychological documentary style with realistic dramatic lighting and film grain texture.";
+  const resolvedTone =
+    tone || contentPillarTone || "Calm, analytical, insightful";
+  const resolvedMainCharDesc =
+    useMainCharacter && mainCharacterDescription
+      ? mainCharacterDescription
+      : "None";
 
-  return SCENE_GENERATION_SYSTEM_PROMPT
-    .replaceAll("{CHANNEL_NAME}", channelName || "YouTube Channel")
+  return SCENE_GENERATION_SYSTEM_PROMPT.replaceAll(
+    "{CHANNEL_NAME}",
+    channelName || "YouTube Channel",
+  )
     .replaceAll("{CHANNEL_NICHE}", channelNiche || "General")
-    .replaceAll("{CHANNEL_SUB_NICHE}", channelSubNiche || channelNiche || "General")
-    .replaceAll("{CHANNEL_DESCRIPTION}", channelDescription || "Educational and narrative visual documentaries.")
-    .replaceAll("{CHANNEL_MISSION}", channelMission || "Deliver high-value visual stories.")
+    .replaceAll(
+      "{CHANNEL_SUB_NICHE}",
+      channelSubNiche || channelNiche || "General",
+    )
+    .replaceAll(
+      "{CHANNEL_DESCRIPTION}",
+      channelDescription || "Educational and narrative visual documentaries.",
+    )
+    .replaceAll(
+      "{CHANNEL_MISSION}",
+      channelMission || "Deliver high-value visual stories.",
+    )
     .replaceAll("{CHANNEL_IMAGE_THEME}", resolvedImageTheme)
     .replaceAll("{CONTENT_PILLAR_NAME}", contentPillarName || "General Content")
-    .replaceAll("{CONTENT_PILLAR_CATEGORY_TAG}", contentPillarCategoryTag || "General")
-    .replaceAll("{CONTENT_PILLAR_TONE}", contentPillarTone || "Calm, analytical, insightful")
-    .replaceAll("{CONTENT_PILLAR_DESCRIPTION}", contentPillarDescription || "In-depth strategic insights and engaging narrative storytelling.")
+    .replaceAll(
+      "{CONTENT_PILLAR_CATEGORY_TAG}",
+      contentPillarCategoryTag || "General",
+    )
+    .replaceAll(
+      "{CONTENT_PILLAR_TONE}",
+      contentPillarTone || "Calm, analytical, insightful",
+    )
+    .replaceAll(
+      "{CONTENT_PILLAR_DESCRIPTION}",
+      contentPillarDescription ||
+        "In-depth strategic insights and engaging narrative storytelling.",
+    )
     .replaceAll("{TONE}", resolvedTone)
     .replaceAll("{USE_MAIN_CHARACTER}", useMainCharacter ? "Yes" : "No")
     .replaceAll("{MAIN_CHARACTER_DESCRIPTION}", resolvedMainCharDesc)

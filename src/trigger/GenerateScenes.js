@@ -211,6 +211,14 @@ export const generateScenesTask = task({
 
         const data = await response.json();
 
+        // 1. Check for token-exhaustion in reasoning models
+        const firstChoice = data?.result?.choices?.[0] || data?.choices?.[0];
+        if (firstChoice?.finish_reason === "length" && (!firstChoice.message?.content || !firstChoice.message.content.trim())) {
+          throw new Error(
+            `Cloudflare AI model ran out of tokens (finish_reason: length) in its reasoning phase before writing the scene JSON. Please switch your Default LLM Model to an instruction/chat model (e.g. @cf/meta/llama-3.1-70b-instruct or @cf/qwen/qwen2.5-72b-instruct) in General Settings.`
+          );
+        }
+
         // Robust multi-schema text extraction for Cloudflare Workers AI models
         function extractAiResponseText(payload) {
           if (!payload) return null;
@@ -223,6 +231,15 @@ export const generateScenesTask = task({
 
           // 2. data.result object
           if (payload.result && typeof payload.result === "object") {
+            if (Array.isArray(payload.result.choices) && payload.result.choices.length > 0) {
+              const choice = payload.result.choices[0];
+              if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
+                return choice.message.content.trim();
+              }
+              if (typeof choice?.text === "string" && choice.text.trim()) {
+                return choice.text.trim();
+              }
+            }
             if (typeof payload.result.response === "string" && payload.result.response.trim()) {
               return payload.result.response.trim();
             }
@@ -241,15 +258,6 @@ export const generateScenesTask = task({
             if (payload.result.message && typeof payload.result.message.content === "string" && payload.result.message.content.trim()) {
               return payload.result.message.content.trim();
             }
-            if (Array.isArray(payload.result.choices) && payload.result.choices.length > 0) {
-              const choice = payload.result.choices[0];
-              if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
-                return choice.message.content.trim();
-              }
-              if (typeof choice?.text === "string" && choice.text.trim()) {
-                return choice.text.trim();
-              }
-            }
             if (Array.isArray(payload.result) && payload.result.length > 0) {
               const item = payload.result[0];
               if (typeof item === "string" && item.trim()) return item.trim();
@@ -264,15 +272,6 @@ export const generateScenesTask = task({
           }
 
           // 3. Root-level standard OpenAI / Cloudflare format
-          if (typeof payload.response === "string" && payload.response.trim()) {
-            return payload.response.trim();
-          }
-          if (typeof payload.text === "string" && payload.text.trim()) {
-            return payload.text.trim();
-          }
-          if (typeof payload.generated_text === "string" && payload.generated_text.trim()) {
-            return payload.generated_text.trim();
-          }
           if (Array.isArray(payload.choices) && payload.choices.length > 0) {
             const choice = payload.choices[0];
             if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
@@ -281,6 +280,15 @@ export const generateScenesTask = task({
             if (typeof choice?.text === "string" && choice.text.trim()) {
               return choice.text.trim();
             }
+          }
+          if (typeof payload.response === "string" && payload.response.trim()) {
+            return payload.response.trim();
+          }
+          if (typeof payload.text === "string" && payload.text.trim()) {
+            return payload.text.trim();
+          }
+          if (typeof payload.generated_text === "string" && payload.generated_text.trim()) {
+            return payload.generated_text.trim();
           }
 
           return null;
@@ -293,25 +301,62 @@ export const generateScenesTask = task({
           throw new Error(`Empty response returned from Cloudflare Workers AI for account ${email}. Raw response: ${preview}`);
         }
 
-        // Clean and parse JSON
-        let cleaned = textResult.trim();
-        // Remove markdown backticks if present (e.g. ```json ... ``` or ``` ...)
-        if (cleaned.startsWith("```")) {
-          cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-        }
+        // Clean and parse JSON with automatic truncation repair
+        function parseScenesJson(rawStr) {
+          let str = rawStr.trim();
 
-        // Extract JSON array boundary if extra text exists
-        const firstBracket = cleaned.indexOf("[");
-        const lastBracket = cleaned.lastIndexOf("]");
-        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-          cleaned = cleaned.slice(firstBracket, lastBracket + 1);
-        }
+          // Strip <think>...</think> if model output thinking blocks
+          str = str.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
-        const parsed = JSON.parse(cleaned);
+          // Strip markdown code fences
+          if (str.startsWith("```")) {
+            str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+          } else if (str.includes("```")) {
+            const match = str.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+            if (match && match[1]) {
+              str = match[1].trim();
+            }
+          }
 
-        if (!Array.isArray(parsed) || parsed.length === 0) {
+          // Locate JSON array boundaries
+          const firstBracket = str.indexOf("[");
+          if (firstBracket !== -1) {
+            const lastBracket = str.lastIndexOf("]");
+            if (lastBracket !== -1 && lastBracket > firstBracket) {
+              str = str.slice(firstBracket, lastBracket + 1);
+            } else {
+              str = str.slice(firstBracket);
+            }
+          }
+
+          // Direct parse attempt
+          try {
+            const res = JSON.parse(str);
+            if (Array.isArray(res) && res.length > 0) return res;
+          } catch (initialErr) {
+            // Repair truncated JSON by backing up to last closed scene object "}"
+            try {
+              const lastCloseBrace = str.lastIndexOf("}");
+              if (lastCloseBrace !== -1) {
+                const repaired = str.slice(0, lastCloseBrace + 1) + "\n]";
+                const sanitized = repaired.replace(/,\s*\]$/, "\n]");
+                const res = JSON.parse(sanitized);
+                if (Array.isArray(res) && res.length > 0) {
+                  logger.warn(`[GenerateScenes] Recovered ${res.length} complete scenes from partially truncated response.`);
+                  return res;
+                }
+              }
+            } catch (repairErr) {
+              // Ignore repair error and throw detailed message
+            }
+
+            throw new Error(`Failed to parse scene JSON (${initialErr.message}). First 200 chars: ${str.slice(0, 200)}`);
+          }
+
           throw new Error("Model returned JSON that is not a non-empty array of scenes.");
         }
+
+        const parsed = parseScenesJson(textResult);
 
         // Format and validate scene properties
         parsedScenes = parsed.map((sc, idx) => ({
