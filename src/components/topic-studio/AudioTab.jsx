@@ -8,15 +8,19 @@ import {
   Sparkles,
   Trash2,
   Volume2,
+  VolumeX,
   AlertCircle,
   Eye,
   EyeOff,
   Download,
   Loader2,
-  Gauge
+  Gauge,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { KOKORO_VOICES } from "@/lib/audio-generator";
+import toast from "react-hot-toast";
 
 export default function AudioTab({
   scenesJson,
@@ -31,12 +35,14 @@ export default function AudioTab({
   generatingSceneAudios = {},
   handleUploadSceneAudio,
   handleDeleteSceneAudio,
+  handleDeleteMultipleSceneAudios,
   handleGenerateSceneAudio,
   handleGenerateAllAudios,
 }) {
   const [playingSceneNum, setPlayingSceneNum] = useState(null);
   const [expandedPrompts, setExpandedPrompts] = useState({});
   const [downloadingAudios, setDownloadingAudios] = useState({});
+  const [selectedScenes, setSelectedScenes] = useState(new Set());
   const audioRefs = useRef({});
 
   let parsedScenes = [];
@@ -44,6 +50,87 @@ export default function AudioTab({
     parsedScenes = JSON.parse(scenesJson || "[]");
   } catch (e) {
     parsedScenes = [];
+  }
+
+  // Count scenes with/without audio
+  const scenesWithAudio = parsedScenes.filter((s) => {
+    const sNum = s.scene_number;
+    const a = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+    return !!a?.url;
+  });
+
+  const unsynthesizedScenes = parsedScenes.filter((s) => {
+    const sNum = s.scene_number;
+    const a = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+    return !a?.url;
+  });
+
+  const selectedScenesWithAudio = Array.from(selectedScenes).filter((sNum) => {
+    const a = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+    return !!a?.url;
+  });
+
+  const isAllSelected = parsedScenes.length > 0 && selectedScenes.size === parsedScenes.length;
+  const isAllUnsynthesizedSelected =
+    unsynthesizedScenes.length > 0 &&
+    selectedScenes.size === unsynthesizedScenes.length &&
+    unsynthesizedScenes.every((s) => selectedScenes.has(s.scene_number));
+
+  function toggleSelectScene(sceneNum) {
+    setSelectedScenes((prev) => {
+      const next = new Set(prev);
+      if (next.has(sceneNum)) {
+        next.delete(sceneNum);
+      } else {
+        next.add(sceneNum);
+      }
+      return next;
+    });
+  }
+
+  function handleSelectAllScenes() {
+    setSelectedScenes(new Set(parsedScenes.map((s) => s.scene_number)));
+  }
+
+  function handleDeselectAll() {
+    setSelectedScenes(new Set());
+  }
+
+  function handleToggleUnsynthesizedScenes() {
+    if (isAllUnsynthesizedSelected) {
+      setSelectedScenes(new Set());
+    } else {
+      setSelectedScenes(new Set(unsynthesizedScenes.map((s) => s.scene_number)));
+      if (unsynthesizedScenes.length === 0) {
+        toast("All scenes already have audio narration synthesized.", { icon: "✨" });
+      } else {
+        toast.success(`Selected ${unsynthesizedScenes.length} unsynthesized scene(s).`);
+      }
+    }
+  }
+
+  function handleDeleteSelectedAudio() {
+    if (selectedScenes.size === 0) return;
+    if (selectedScenesWithAudio.length === 0) {
+      toast("None of the selected scenes have audio generated yet.");
+      return;
+    }
+    if (handleDeleteMultipleSceneAudios) {
+      handleDeleteMultipleSceneAudios(selectedScenesWithAudio);
+      setSelectedScenes(new Set());
+    }
+  }
+
+  function handleDeleteAllGeneratedAudio() {
+    if (scenesWithAudio.length === 0) {
+      toast("No generated scene audio tracks to delete.");
+      return;
+    }
+    const allAudioSceneNums = scenesWithAudio.map((s) => s.scene_number);
+    if (handleDeleteMultipleSceneAudios) {
+      handleDeleteMultipleSceneAudios(allAudioSceneNums);
+      setSelectedScenes(new Set());
+    }
   }
 
   function togglePrompt(sceneNum) {
@@ -117,24 +204,91 @@ export default function AudioTab({
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled={isGeneratingAllAudios || parsedScenes.length === 0}
-            onClick={handleGenerateAllAudios}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-60 shrink-0"
-          >
-            {isGeneratingAllAudios ? (
-              <>
-                <Loader2 size={13} className="animate-spin" />
-                <span>Generating All Audios...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={13} />
-                <span>Generate All Audios</span>
-              </>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Select All Toggle */}
+            {parsedScenes.length > 0 && (
+              <button
+                type="button"
+                onClick={isAllSelected ? handleDeselectAll : handleSelectAllScenes}
+                className="inline-flex items-center gap-1.5 px-3 py-2 border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
+                title="Select all scene narration tracks"
+              >
+                {isAllSelected ? (
+                  <>
+                    <CheckSquare size={13} className="text-signal" />
+                    <span>Deselect All</span>
+                  </>
+                ) : (
+                  <>
+                    <Square size={13} />
+                    <span>Select All ({parsedScenes.length})</span>
+                  </>
+                )}
+              </button>
             )}
-          </button>
+
+            {/* Select Unsynthesized */}
+            {parsedScenes.length > 0 && (
+              <button
+                type="button"
+                onClick={handleToggleUnsynthesizedScenes}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer ${
+                  unsynthesizedScenes.length === 0 ? "opacity-60" : ""
+                }`}
+                title="Select only scenes that do not have audio narration yet"
+              >
+                {isAllUnsynthesizedSelected ? (
+                  <>
+                    <CheckSquare size={13} className="text-signal" />
+                    <span>Deselect Unsynthesized ({unsynthesizedScenes.length})</span>
+                  </>
+                ) : (
+                  <>
+                    <VolumeX size={13} className="text-amber-600" />
+                    <span>Select Unsynthesized ({unsynthesizedScenes.length})</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Delete All Generated Audios */}
+            {scenesWithAudio.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteAllGeneratedAudio}
+                className="inline-flex items-center gap-1.5 px-3 py-2 border border-rose-200 bg-rose-50/70 hover:bg-rose-100/80 text-xs font-semibold text-rose-700 transition-all cursor-pointer"
+                title="Delete all generated scene narration audio tracks"
+              >
+                <Trash2 size={13} />
+                <span>Delete All Audios ({scenesWithAudio.length})</span>
+              </button>
+            )}
+
+            {/* Generate All Audios */}
+            <button
+              type="button"
+              disabled={isGeneratingAllAudios || parsedScenes.length === 0 || unsynthesizedScenes.length === 0}
+              onClick={handleGenerateAllAudios}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-60 shrink-0"
+              title={
+                unsynthesizedScenes.length > 0
+                  ? `Synthesize narration for ${unsynthesizedScenes.length} remaining scene(s)`
+                  : "All scenes already have narration"
+              }
+            >
+              {isGeneratingAllAudios ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Generating All Audios...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={13} />
+                  <span>Generate All Audios {unsynthesizedScenes.length > 0 ? `(${unsynthesizedScenes.length})` : ""}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Voice Selection & Speed Multiplier */}
@@ -209,6 +363,40 @@ export default function AudioTab({
         </div>
       </div>
 
+      {/* Selected Scenes Action Bar */}
+      {selectedScenes.size > 0 && (
+        <div className="p-3 bg-paper-dark border border-signal/30 flex flex-col lg:flex-row lg:items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-signal animate-pulse" />
+            <span className="text-xs font-semibold text-ink font-mono">
+              {selectedScenes.size} scene{selectedScenes.size > 1 ? "s" : ""} selected ({selectedScenesWithAudio.length} with audio)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Delete Selected Audio Button */}
+            <button
+              type="button"
+              disabled={selectedScenesWithAudio.length === 0}
+              onClick={handleDeleteSelectedAudio}
+              className="px-3.5 py-1.5 border border-rose-300 bg-rose-50 hover:bg-rose-100 text-[11px] font-semibold text-rose-700 transition-colors cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Delete audio tracks for selected scenes"
+            >
+              <Trash2 size={12} />
+              <span>Delete Selected Audio ({selectedScenesWithAudio.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeselectAll}
+              className="px-3 py-1.5 border border-line bg-white hover:bg-ink/5 text-[11px] font-semibold text-ink transition-colors cursor-pointer inline-flex items-center gap-1"
+            >
+              <span>Clear Selection</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Scene-by-Scene Audio Track Cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-line">
@@ -238,12 +426,21 @@ export default function AudioTab({
             return (
               <div
                 key={sceneNum}
-                className="p-3.5 sm:p-5 border border-line bg-paper-card space-y-4 hover:border-signal/40 transition-all overflow-hidden"
+                className={`p-3.5 sm:p-5 border bg-paper-card space-y-4 hover:border-signal/40 transition-all overflow-hidden ${
+                  selectedScenes.has(sceneNum) ? "border-signal/50 bg-signal/[0.02]" : "border-line"
+                }`}
               >
                 {/* Scene Header & Actions */}
                 <div className="flex flex-col gap-3 border-b border-line/60 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedScenes.has(sceneNum)}
+                        onChange={() => toggleSelectScene(sceneNum)}
+                        className="w-4 h-4 accent-signal cursor-pointer"
+                        title="Select this scene narration"
+                      />
                       <span className="w-6 h-6 sm:w-7 sm:h-7 bg-ink text-white font-mono text-[11px] sm:text-xs font-bold flex items-center justify-center shrink-0">
                         {sceneNum}
                       </span>

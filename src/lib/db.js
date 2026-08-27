@@ -58,6 +58,7 @@ export async function initDbSchema() {
         audio_theme TEXT,
         banner_url TEXT,
         avatar_url TEXT,
+        default_voice TEXT DEFAULT 'af_heart',
         status TEXT DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -67,6 +68,7 @@ export async function initDbSchema() {
     try {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS banner_url TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
     } catch {}
 
     // 2. Content Pillars Table

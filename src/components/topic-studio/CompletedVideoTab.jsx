@@ -66,6 +66,14 @@ export default function CompletedVideoTab({
     parsedScenes = [];
   }
 
+  const totalScenes = parsedScenes.length;
+  const renderedVideoCount = parsedScenes.filter((s) => {
+    const sNum = s.scene_number;
+    const v = sceneVideos?.[sNum] || sceneVideos?.[String(sNum)] || sceneVideos?.[Number(sNum)];
+    return !!v?.url;
+  }).length;
+  const allScenesRendered = totalScenes > 0 && renderedVideoCount === totalScenes;
+
   const hasMaster = !!completedMasterVideo?.url;
 
   function togglePlay() {
@@ -105,15 +113,31 @@ export default function CompletedVideoTab({
             <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
               <Film size={16} className="text-signal" /> Completed Master Video
             </h3>
+            <p className="text-xs text-ink-muted mt-0.5">
+              {!allScenesRendered && totalScenes > 0 ? (
+                <span className="text-amber-700 font-mono">
+                  ⚠️ {renderedVideoCount} of {totalScenes} scene frames rendered. All scene frames must be rendered to enable merging.
+                </span>
+              ) : (
+                "Final compiled 1080p master video ready for preview, download, and distribution."
+              )}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {/* Render / Merge Button */}
             <button
               type="button"
-              disabled={isRenderingMaster}
+              disabled={isRenderingMaster || !allScenesRendered}
               onClick={handleRenderMasterVideo}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+              title={
+                totalScenes === 0
+                  ? "No scenes defined"
+                  : !allScenesRendered
+                  ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
+                  : "Merge all scene frames into master video"
+              }
             >
               {isRenderingMaster ? (
                 <>
@@ -123,7 +147,7 @@ export default function CompletedVideoTab({
               ) : (
                 <>
                   <Sparkles size={13} />
-                  <span>Merge Scene Frames</span>
+                  <span>Merge Scene Frames {totalScenes > 0 ? `(${renderedVideoCount}/${totalScenes})` : ""}</span>
                 </>
               )}
             </button>
@@ -209,15 +233,25 @@ export default function CompletedVideoTab({
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-white">No Master Video Compiled</p>
                     <p className="text-xs text-white/50 max-w-sm mx-auto">
-                      Click "Merge Scene Frame" above to automatically compile your scene frames into a master video.
+                      {!allScenesRendered && totalScenes > 0
+                        ? `Render all scene frames first in the SceneFrames tab (${renderedVideoCount}/${totalScenes} rendered).`
+                        : "Click \"Merge Scene Frames\" below to automatically compile your scene frames into a master video."}
                     </p>
                   </div>
                   <button
                     type="button"
+                    disabled={isRenderingMaster || !allScenesRendered}
                     onClick={handleRenderMasterVideo}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/30 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/30 transition-all cursor-pointer"
+                    title={
+                      totalScenes === 0
+                        ? "No scenes defined"
+                        : !allScenesRendered
+                        ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
+                        : "Merge all scene frames into master video"
+                    }
                   >
-                    <Sparkles size={13} /> Merge Scene Frame
+                    <Sparkles size={13} /> Merge Scene Frames {totalScenes > 0 ? `(${renderedVideoCount}/${totalScenes})` : ""}
                   </button>
                 </div>
               )}

@@ -37,6 +37,7 @@ export async function GET(request, { params }) {
         audio_theme AS "audioTheme",
         banner_url AS "bannerUrl",
         avatar_url AS "avatarUrl",
+        default_voice AS "defaultVoice",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -106,6 +107,7 @@ export async function PUT(request, { params }) {
         audio_theme = ${body.audioTheme || null},
         banner_url = ${body.bannerUrl !== undefined ? body.bannerUrl : null},
         avatar_url = ${body.avatarUrl !== undefined ? body.avatarUrl : null},
+        default_voice = ${body.defaultVoice || 'af_heart'},
         status = ${body.status || 'Active'},
         updated_at = NOW()
       WHERE slug = ${channelSlug}

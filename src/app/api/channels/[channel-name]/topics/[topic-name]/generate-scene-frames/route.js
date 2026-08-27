@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { tasks, runs } from "@trigger.dev/sdk";
 
+export const maxDuration = 60;
+
 export async function POST(req, context) {
   try {
     const params = await context.params;
@@ -28,9 +30,9 @@ export async function POST(req, context) {
 
     // Single scene render request
     if (sceneIndex !== undefined) {
-      if (!imageUrl) {
+      if (!imageUrl || !audioUrl) {
         return NextResponse.json(
-          { error: `Scene ${sceneIndex} has no visual image URL to render video.` },
+          { error: `Scene ${sceneIndex} requires both an image and voice audio narration to render video.` },
           { status: 400 }
         );
       }

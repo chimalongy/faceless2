@@ -48,7 +48,11 @@ async function renderSingleScene({
   transition = "fade",
 }) {
   if (!imageUrl) {
-    throw new Error(`No image URL supplied for scene ${sceneIndex}.`);
+    throw new Error(`No image URL supplied for scene ${sceneIndex}. Image is required.`);
+  }
+
+  if (!audioUrl) {
+    throw new Error(`No audio URL supplied for scene ${sceneIndex}. Audio narration is required.`);
   }
 
   const jobId = `scene_${sceneIndex}_${Date.now()}_${Math.random()
@@ -433,14 +437,15 @@ export const renderAllSceneFramesTask = task({
       const imageUrl = imgData?.url || scene.imageUrl || scene.visual_url || "";
       const audioUrl = audioData?.url || scene.audioUrl || null;
 
-      if (!imageUrl) {
+      if (!imageUrl || !audioUrl) {
         logger.warn(
-          `Skipping scene ${sceneIndex} because no image URL was found.`
+          `Skipping scene ${sceneIndex} because it does not have both an image and audio (hasImage: ${!!imageUrl}, hasAudio: ${!!audioUrl}).`
         );
         skippedResults.push({
           sceneIndex,
           success: false,
-          error: `No image URL found for Scene ${sceneIndex}.`,
+          skipped: true,
+          error: `Scene ${sceneIndex} skipped: Requires both image and voice audio to render video.`,
         });
         continue;
       }

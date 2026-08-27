@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS channels (
     audio_theme TEXT,
     banner_url TEXT,
     avatar_url TEXT,
+    default_voice TEXT DEFAULT 'af_heart',
     status TEXT DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

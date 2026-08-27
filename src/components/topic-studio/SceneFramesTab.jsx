@@ -69,6 +69,14 @@ export default function SceneFramesTab({
     }
   }
 
+  const eligibleScenesCount = parsedScenes.filter((s) => {
+    const sNum = s.scene_number;
+    const img = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
+    const aud = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+    const vid = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+    return !!img?.url && !!aud?.url && !vid?.url;
+  }).length;
+
   return (
     <div className="space-y-6 animate-slide-in">
       {/* Header Card */}
@@ -85,9 +93,14 @@ export default function SceneFramesTab({
 
           <button
             type="button"
-            disabled={isGeneratingAllVideos || parsedScenes.length === 0}
+            disabled={isGeneratingAllVideos || parsedScenes.length === 0 || eligibleScenesCount === 0}
             onClick={handleGenerateAllVideos}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-60 shrink-0"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            title={
+              eligibleScenesCount > 0
+                ? `Render remaining ${eligibleScenesCount} scene(s) with image and audio`
+                : "No unrendered scenes with both image and audio ready"
+            }
           >
             {isGeneratingAllVideos ? (
               <>
@@ -97,7 +110,7 @@ export default function SceneFramesTab({
             ) : (
               <>
                 <Sparkles size={13} />
-                <span>Generate All Videos</span>
+                <span>Generate All Videos {eligibleScenesCount > 0 ? `(${eligibleScenesCount})` : ""}</span>
               </>
             )}
           </button>
@@ -205,9 +218,11 @@ export default function SceneFramesTab({
                         />
                         <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex flex-col items-center justify-center text-center p-3">
                           <Clapperboard size={22} className="text-white/80 mb-1" />
-                          <p className="text-[11px] font-mono text-white/90 font-medium">Ready to Render</p>
+                          <p className="text-[11px] font-mono text-white/90 font-medium">
+                            {hasImage && hasAudio ? "Ready to Render" : "Missing Audio"}
+                          </p>
                           <p className="text-[9px] font-mono text-white/60">
-                            {hasAudio ? "Image & Voice Ready" : "Image Ready (No Audio)"}
+                            {hasAudio ? "Image & Voice Ready" : "Voice Audio Required to Render"}
                           </p>
                         </div>
                       </div>
@@ -215,7 +230,7 @@ export default function SceneFramesTab({
                       <div className="text-center space-y-1.5 p-4 text-white/50">
                         <Video size={24} className="mx-auto opacity-40 text-white" />
                         <p className="text-[11px] font-mono text-white/70">No video or image</p>
-                        <p className="text-[9px] text-white/40">Upload an image in the Images tab first</p>
+                        <p className="text-[9px] text-white/40">Upload an image and audio first</p>
                       </div>
                     )}
                   </div>
@@ -262,10 +277,20 @@ export default function SceneFramesTab({
                     {/* Generate Button for Individual Scene Video */}
                     <button
                       type="button"
-                      disabled={isGeneratingThis || !hasImage}
+                      disabled={isGeneratingThis || !hasImage || !hasAudio}
                       onClick={() => handleGenerateSceneVideo(sceneNum)}
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-sm border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-60"
-                      title={hasImage ? "Render MP4 for this scene" : "Generate or upload an image first"}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-sm border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={
+                        !hasImage && !hasAudio
+                          ? "Generate or upload image and voice audio first"
+                          : !hasImage
+                          ? "Generate or upload an image first"
+                          : !hasAudio
+                          ? "Generate or upload voice audio first"
+                          : hasVideo
+                          ? "Regenerate MP4 for this scene"
+                          : "Render MP4 for this scene"
+                      }
                     >
                       {generatingSceneVideos[sceneNum] ? (
                         <>

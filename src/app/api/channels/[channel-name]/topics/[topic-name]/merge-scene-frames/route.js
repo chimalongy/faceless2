@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { tasks, runs } from "@trigger.dev/sdk";
 
+export const maxDuration = 60;
+
 export async function POST(req, context) {
   try {
     const params = await context.params;

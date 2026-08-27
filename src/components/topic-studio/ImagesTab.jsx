@@ -6,6 +6,7 @@ import {
   Sparkles,
   Trash2,
   Image as ImageIcon,
+  ImageOff,
   AlertCircle,
   Eye,
   EyeOff,
@@ -86,8 +87,32 @@ export default function ImagesTab({
     });
   }
 
+  const ungeneratedScenes = parsedScenes.filter((s) => {
+    const sNum = s.scene_number;
+    const imgData = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
+    return !imgData?.url;
+  });
+
+  const isAllUngeneratedSelected =
+    ungeneratedScenes.length > 0 &&
+    selectedScenes.size === ungeneratedScenes.length &&
+    ungeneratedScenes.every((s) => selectedScenes.has(s.scene_number));
+
   function handleSelectAllScenes() {
     setSelectedScenes(new Set(parsedScenes.map((s) => s.scene_number)));
+  }
+
+  function handleToggleUngeneratedScenes() {
+    if (isAllUngeneratedSelected) {
+      setSelectedScenes(new Set());
+    } else {
+      setSelectedScenes(new Set(ungeneratedScenes.map((s) => s.scene_number)));
+      if (ungeneratedScenes.length === 0) {
+        toast("All scene images have already been generated / uploaded.", { icon: "✨" });
+      } else {
+        toast.success(`Selected ${ungeneratedScenes.length} ungenerated scene(s).`);
+      }
+    }
   }
 
   function handleDeselectAll() {
@@ -103,50 +128,38 @@ export default function ImagesTab({
     }
   }
 
-  // Handle Upload ZIP with simulated live progress steps
+  // Handle Upload ZIP with real-time byte progress
   async function onZipFileSelected(file) {
     if (!file) return;
     setZipProgress({
       active: true,
-      percent: 15,
-      stage: "Uploading ZIP archive directly to Cloudflare R2...",
+      percent: 0,
+      stage: `Preparing to upload ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...`,
       fileName: file.name,
+      status: "uploading",
     });
-
-    const progressTimer1 = setTimeout(() => {
-      setZipProgress((prev) => ({
-        ...prev,
-        percent: 45,
-        stage: "Dispatching Trigger.dev extraction worker...",
-      }));
-    }, 800);
-
-    const progressTimer2 = setTimeout(() => {
-      setZipProgress((prev) => ({
-        ...prev,
-        percent: 75,
-        stage: "Unpacking scene images & mapping to scenes...",
-      }));
-    }, 2200);
 
     try {
       if (handleUploadZipImages) {
-        await handleUploadZipImages(file);
+        await handleUploadZipImages(file, (progress) => {
+          setZipProgress((prev) => ({
+            ...prev,
+            ...progress,
+          }));
+        });
       }
       setZipProgress((prev) => ({
         ...prev,
         percent: 100,
         stage: "Extraction complete! Mapping images to scenes...",
+        status: "done",
       }));
       setTimeout(() => {
-        setZipProgress({ active: false, percent: 0, stage: "", fileName: "" });
-      }, 900);
+        setZipProgress({ active: false, percent: 0, stage: "", fileName: "", status: "idle" });
+      }, 1500);
     } catch (err) {
       console.error("ZIP Upload error:", err);
-      setZipProgress({ active: false, percent: 0, stage: "", fileName: "" });
-    } finally {
-      clearTimeout(progressTimer1);
-      clearTimeout(progressTimer2);
+      setZipProgress({ active: false, percent: 0, stage: "", fileName: "", status: "idle" });
     }
   }
 
@@ -343,6 +356,30 @@ export default function ImagesTab({
               </button>
             )}
 
+            {/* Select Ungenerated Scenes Button */}
+            {parsedScenes.length > 0 && (
+              <button
+                type="button"
+                onClick={handleToggleUngeneratedScenes}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer ${
+                  ungeneratedScenes.length === 0 ? "opacity-60" : ""
+                }`}
+                title="Select only scenes whose images have not been generated or uploaded yet"
+              >
+                {isAllUngeneratedSelected ? (
+                  <>
+                    <CheckSquare size={13} className="text-signal" />
+                    <span>Deselect Ungenerated ({ungeneratedScenes.length})</span>
+                  </>
+                ) : (
+                  <>
+                    <ImageOff size={13} className="text-amber-600" />
+                    <span>Select Ungenerated ({ungeneratedScenes.length})</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* Prompts JSON Option Button */}
             {parsedScenes.length > 0 && (
               <button
@@ -385,7 +422,9 @@ export default function ImagesTab({
               <div className="flex items-center gap-2">
                 <FolderArchive size={16} className="text-signal animate-bounce" />
                 <span className="text-xs font-semibold text-ink font-mono">
-                  Extracting ZIP: {zipProgress.fileName}
+                  {zipProgress.status === "uploading"
+                    ? `Uploading ZIP to R2: ${zipProgress.fileName}`
+                    : `Processing ZIP: ${zipProgress.fileName}`}
                 </span>
               </div>
               <span className="text-xs font-mono font-bold text-signal">
@@ -396,15 +435,29 @@ export default function ImagesTab({
             {/* Progress Track */}
             <div className="w-full h-2 bg-line rounded-full overflow-hidden">
               <div
-                className="h-full bg-signal transition-all duration-500 ease-out"
+                className={`h-full transition-all duration-300 ease-out ${
+                  zipProgress.status === "processing" ? "bg-amber-500 animate-pulse" : "bg-signal"
+                }`}
                 style={{ width: `${zipProgress.percent}%` }}
               />
             </div>
 
             <div className="flex items-center justify-between text-[11px] text-ink-muted font-mono">
-              <span>{zipProgress.stage}</span>
-              <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 border border-emerald-300">
-                Trigger.dev Worker Active
+              <span className="truncate pr-2">{zipProgress.stage}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 border shrink-0 ${
+                  zipProgress.status === "uploading"
+                    ? "text-blue-800 bg-blue-50 border-blue-300"
+                    : zipProgress.status === "done"
+                    ? "text-emerald-800 bg-emerald-50 border-emerald-300"
+                    : "text-amber-800 bg-amber-50 border-amber-300"
+                }`}
+              >
+                {zipProgress.status === "uploading"
+                  ? "Direct R2 Upload"
+                  : zipProgress.status === "done"
+                  ? "Completed"
+                  : "Trigger.dev Worker Active"}
               </span>
             </div>
           </div>

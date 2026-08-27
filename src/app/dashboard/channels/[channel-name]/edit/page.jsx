@@ -40,6 +40,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { KOKORO_VOICES } from "@/lib/audio-generator";
 
 const STORAGE_KEY = "faceless_channels";
 
@@ -82,6 +83,7 @@ export default function EditChannelPage() {
   const [imageTheme, setImageTheme] = useState("");
   const [thumbnailTheme, setThumbnailTheme] = useState("");
   const [audioTheme, setAudioTheme] = useState("");
+  const [defaultVoice, setDefaultVoice] = useState("af_heart");
   const [status, setStatus] = useState("Active");
 
   // Artwork & Branding Images
@@ -119,6 +121,7 @@ export default function EditChannelPage() {
             setImageTheme(c.imageTheme || "");
             setThumbnailTheme(c.thumbnailTheme || "");
             setAudioTheme(c.audioTheme || "");
+            setDefaultVoice(c.defaultVoice || "af_heart");
             setBannerUrl(c.bannerUrl || "");
             setAvatarUrl(c.avatarUrl || "");
             setStatus(c.status || "Active");
@@ -154,6 +157,7 @@ export default function EditChannelPage() {
             setImageTheme(found.imageTheme || "");
             setThumbnailTheme(found.thumbnailTheme || "");
             setAudioTheme(found.audioTheme || "");
+            setDefaultVoice(found.defaultVoice || "af_heart");
             setBannerUrl(found.bannerUrl || "");
             setAvatarUrl(found.avatarUrl || "");
             setStatus(found.status || "Active");
@@ -234,6 +238,7 @@ export default function EditChannelPage() {
     setField(setImageTheme, "imageTheme", "image_theme", "imagesTheme", "visualTheme", "visual_theme");
     setField(setThumbnailTheme, "thumbnailTheme", "thumbnail_theme", "thumbnailsTheme");
     setField(setAudioTheme, "audioTheme", "audio_theme", "soundTheme", "voiceoverTheme");
+    setField(setDefaultVoice, "defaultVoice", "default_voice", "voice_id", "narrator_voice");
     setField(setStatus, "status");
 
     if (count === 0) {
@@ -304,6 +309,7 @@ export default function EditChannelPage() {
         image_theme: imageTheme.trim(),
         thumbnail_theme: thumbnailTheme.trim(),
         audio_theme: audioTheme.trim(),
+        default_voice: defaultVoice,
       },
     };
 
@@ -341,6 +347,7 @@ export default function EditChannelPage() {
       imageTheme: imageTheme.trim(),
       thumbnailTheme: thumbnailTheme.trim(),
       audioTheme: audioTheme.trim(),
+      defaultVoice,
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
       status,
@@ -635,6 +642,88 @@ export default function EditChannelPage() {
       )}
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* SECTION: CHANNEL DEFAULT NARRATOR VOICE */}
+        <section className="p-6 border border-line bg-paper-card space-y-4">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Mic size={16} />
+              </span>
+              <span>Channel Default Narrator Voice</span>
+            </div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5">
+              Kokoro-82M Voice Engine
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label
+                className="block text-xs font-semibold text-ink mb-1"
+                htmlFor="channel-default-voice"
+              >
+                Default Voice Actor ({KOKORO_VOICES.length} Profiles Available)
+              </label>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                Select the channel's standard narrator voice. Once configured, this voice profile will automatically be pre-selected in the Audio tab when generating speech for topics.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              <div className="md:col-span-2">
+                <select
+                  id="channel-default-voice"
+                  value={defaultVoice}
+                  onChange={(e) => setDefaultVoice(e.target.value)}
+                  className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
+                >
+                  <optgroup label="🇺🇸 American English (Female)">
+                    {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "female").map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🇺🇸 American English (Male)">
+                    {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "male").map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🇬🇧 British English">
+                    {KOKORO_VOICES.filter((v) => v.lang === "en-GB").map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🌍 International Voices (ES, FR, IT, HI, JA)">
+                    {KOKORO_VOICES.filter((v) => !v.lang.startsWith("en-")).map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Active Voice Pill Badge */}
+              <div className="p-2.5 bg-paper-dark border border-line flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-signal/10 text-signal flex items-center justify-center shrink-0">
+                  <Volume2 size={14} />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[9px] font-mono text-ink-muted uppercase block font-semibold">Active Default</span>
+                  <p className="text-xs font-semibold text-ink truncate font-mono">
+                    {KOKORO_VOICES.find((v) => v.id === defaultVoice)?.name || defaultVoice}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* SECTION 0: CHANNEL ARTWORK & VISUAL BRANDING */}
         <section className="p-6 border border-line bg-paper-card space-y-6">
           <div className="flex items-center justify-between border-b border-line pb-3">

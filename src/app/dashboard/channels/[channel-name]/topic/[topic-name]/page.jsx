@@ -220,6 +220,19 @@ export default function TopicStudioPage() {
             }
           }
         }
+
+        // Fetch channel default voice and apply as default selected voice in Audio tab
+        try {
+          const channelRes = await fetch(`/api/channels/${channelSlug}`);
+          if (channelRes.ok) {
+            const cData = await channelRes.json();
+            if (cData?.channel?.defaultVoice) {
+              setSelectedVoice(cData.channel.defaultVoice);
+            }
+          }
+        } catch (cErr) {
+          console.warn("Could not load channel configuration:", cErr);
+        }
       } catch (err) {
         console.warn("Could not load topic data from API:", err);
       } finally {
@@ -531,6 +544,54 @@ export default function TopicStudioPage() {
     });
   }
 
+  function handleDeleteMultipleSceneAudios(sceneNumbers = []) {
+    if (!sceneNumbers || sceneNumbers.length === 0) return;
+    const count = sceneNumbers.length;
+
+    requestDelete({
+      title: `Delete ${count} Scene Audio Track${count > 1 ? "s" : ""}`,
+      description: `Are you sure you want to delete narration audio for ${count} selected scene${count > 1 ? "s" : ""}? This will permanently remove the audio files from Cloudflare R2 and the database.`,
+      confirmLabel: `Delete ${count} Audio Track${count > 1 ? "s" : ""}`,
+      onConfirm: async () => {
+        const deletePromises = sceneNumbers.map(async (sNum) => {
+          const audioData = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+          if (audioData?.key || audioData?.url) {
+            try {
+              await fetch("/api/storage/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  key: audioData?.key,
+                  url: audioData?.url,
+                  channelSlug,
+                  topicSlug,
+                  assetType: "audio",
+                  sceneIndex: sNum,
+                }),
+              });
+            } catch (err) {
+              console.warn(`Could not delete scene ${sNum} audio from R2:`, err);
+            }
+          }
+        });
+
+        await Promise.allSettled(deletePromises);
+
+        setSceneAudios((prev) => {
+          const next = { ...prev };
+          sceneNumbers.forEach((sNum) => {
+            delete next[sNum];
+            delete next[String(sNum)];
+            delete next[Number(sNum)];
+          });
+          return next;
+        });
+
+        toast.success(`Deleted ${count} scene audio track${count > 1 ? "s" : ""}.`);
+      },
+    });
+  }
+
   async function handleGenerateSceneAudio(sceneNum) {
     let parsed = [];
     try {
@@ -785,7 +846,7 @@ export default function TopicStudioPage() {
   const [generatingSceneImages, setGeneratingSceneImages] = useState({});
   const [isExtractingZip, setIsExtractingZip] = useState(false);
 
-  async function handleUploadZipImages(file) {
+  async function handleUploadZipImages(file, onProgress) {
     if (!file) return;
     setIsExtractingZip(true);
     toast("Uploading ZIP to R2 and extracting scene images...", {
@@ -795,9 +856,17 @@ export default function TopicStudioPage() {
     try {
       let zipFileKey = null;
 
-      // 1. Direct-to-R2 presigned upload (essential for archives > 4MB)
+      // 1. Direct-to-R2 presigned upload with real-time byte tracking (essential for archives > 4MB)
       try {
         console.log(`[ZIP Upload] Requesting presigned URL for ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...`);
+        if (onProgress) {
+          onProgress({
+            percent: 0,
+            stage: "Requesting R2 presigned upload URL...",
+            status: "uploading",
+          });
+        }
+
         const presignRes = await fetch("/api/storage/presign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -820,17 +889,46 @@ export default function TopicStudioPage() {
           throw new Error("Invalid presigned URL received from server");
         }
 
-        console.log("[ZIP Upload] Uploading directly from browser to Cloudflare R2...");
-        const uploadRes = await fetch(presignData.uploadUrl, {
-          method: "PUT",
-          body: file,
-        });
+        console.log("[ZIP Upload] Uploading directly from browser to Cloudflare R2 with real-time progress...");
+        
+        // Upload using XMLHttpRequest to get actual real-time byte progress
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", presignData.uploadUrl, true);
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+              const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
+              const totalMB = (e.total / 1024 / 1024).toFixed(1);
+              if (onProgress) {
+                onProgress({
+                  percent,
+                  stage: `Uploading to Cloudflare R2: ${uploadedMB}MB / ${totalMB}MB (${percent}%)`,
+                  status: "uploading",
+                });
+              }
+            }
+          };
 
-        if (!uploadRes.ok) {
-          const errText = await uploadRes.text().catch(() => "");
-          console.error("[ZIP Upload] Direct R2 PUT failed:", uploadRes.status, errText);
-          throw new Error(`R2 direct upload failed (${uploadRes.status}): Please ensure Cloudflare R2 CORS allows PUT requests.`);
-        }
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`R2 direct upload failed (${xhr.status}). Check R2 CORS settings.`));
+            }
+          };
+
+          xhr.onerror = () => {
+            reject(new Error("R2 upload network error. Please ensure Cloudflare R2 CORS allows PUT requests."));
+          };
+
+          xhr.ontimeout = () => {
+            reject(new Error("R2 upload timed out."));
+          };
+
+          xhr.send(file);
+        });
 
         zipFileKey = presignData.key;
         console.log("[ZIP Upload] R2 upload successful, key:", zipFileKey);
@@ -842,6 +940,14 @@ export default function TopicStudioPage() {
             presignErr.message || "Failed to upload large ZIP to Cloudflare R2. Check your R2 bucket CORS settings."
           );
         }
+      }
+
+      if (onProgress) {
+        onProgress({
+          percent: 100,
+          stage: "Upload to R2 complete! Trigger.dev worker unpacking & mapping images...",
+          status: "processing",
+        });
       }
 
       let res;
@@ -1089,8 +1195,8 @@ export default function TopicStudioPage() {
     const imgData = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
     const audioData = sceneAudios[sceneNum] || sceneAudios[String(sceneNum)] || sceneAudios[Number(sceneNum)];
 
-    if (!imgData?.url) {
-      toast.error(`Scene ${sceneNum} has no image yet. Please generate or upload an image first.`);
+    if (!imgData?.url || !audioData?.url) {
+      toast.error(`Scene ${sceneNum} requires both an image and voice audio to render video.`);
       return;
     }
 
@@ -1104,7 +1210,7 @@ export default function TopicStudioPage() {
         body: JSON.stringify({
           sceneIndex: sceneNum,
           imageUrl: imgData.url,
-          audioUrl: audioData?.url || null,
+          audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.10 },
           transition: scene?.transition || "fade",
         }),
@@ -1146,27 +1252,42 @@ export default function TopicStudioPage() {
       return;
     }
 
-    // Filter out scenes that already have video generated
+    // Filter to only scenes that have BOTH image and audio, and do NOT have video yet
     const scenesToRender = parsed.filter((scene) => {
       const sNum = scene.scene_number;
       const existing = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
-      return !existing || !existing.url;
+      if (existing?.url) return false;
+      const img = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
+      const aud = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+      return !!img?.url && !!aud?.url;
     });
 
     if (scenesToRender.length === 0) {
-      toast("All scene videos have already been rendered.", {
-        icon: "✨",
-        style: {
-          background: "#f0fdf4",
-          color: "#166534",
-          border: "1px solid #bbf7d0",
-        },
+      const unrenderedScenes = parsed.filter((scene) => {
+        const sNum = scene.scene_number;
+        const existing = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+        return !existing?.url;
       });
+
+      if (unrenderedScenes.length > 0) {
+        toast.error(
+          `Cannot render: ${unrenderedScenes.length} remaining scene(s) are missing either an image or audio narration.`
+        );
+      } else {
+        toast("All scene videos have already been rendered.", {
+          icon: "✨",
+          style: {
+            background: "#f0fdf4",
+            color: "#166534",
+            border: "1px solid #bbf7d0",
+          },
+        });
+      }
       return;
     }
 
     setIsGeneratingAllVideos(true);
-    toast(`Rendering videos for ${scenesToRender.length} remaining scene(s)...`, { icon: "🎬" });
+    toast(`Rendering videos for ${scenesToRender.length} eligible scene(s)...`, { icon: "🎬" });
 
     try {
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scene-frames`, {
@@ -1199,7 +1320,7 @@ export default function TopicStudioPage() {
         });
         toast.success(`Rendered ${successCount} scene video(s) successfully!`);
       } else {
-        toast.error(data.error || "Failed to render all scene videos.");
+        toast.error(data.error || "Failed to render scene videos.");
       }
     } catch (err) {
       console.error("Error rendering remaining scene videos:", err);
@@ -1260,35 +1381,37 @@ export default function TopicStudioPage() {
       parsed = [];
     }
 
-    // Build scene videos array from current state
-    const videosPayload = [];
-    if (parsed && parsed.length > 0) {
-      parsed.forEach((scene) => {
-        const sNum = scene.scene_number;
-        const videoData = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
-        if (videoData?.url) {
-          videosPayload.push({
-            scene_number: Number(sNum),
-            video_url: videoData.url,
-          });
-        }
-      });
-    } else {
-      // Fallback: collect all sceneVideos entries
-      Object.entries(sceneVideos).forEach(([sNum, data]) => {
-        if (data?.url) {
-          videosPayload.push({
-            scene_number: Number(sNum),
-            video_url: data.url,
-          });
-        }
-      });
-    }
-
-    if (videosPayload.length === 0) {
-      toast.error("No rendered scene video clips available to merge. Please render scene video frames first.");
+    // Ensure all scene frames are rendered before merging
+    if (!parsed || parsed.length === 0) {
+      toast.error("No scenes defined in this topic.");
       return;
     }
+
+    const missingScenes = parsed.filter((scene) => {
+      const sNum = scene.scene_number;
+      const v = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+      return !v?.url;
+    });
+
+    if (missingScenes.length > 0) {
+      toast.error(
+        `Cannot merge: All ${parsed.length} scene frames must be rendered first (${parsed.length - missingScenes.length}/${parsed.length} ready).`
+      );
+      return;
+    }
+
+    // Build scene videos array from current state
+    const videosPayload = [];
+    parsed.forEach((scene) => {
+      const sNum = scene.scene_number;
+      const videoData = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+      if (videoData?.url) {
+        videosPayload.push({
+          scene_number: Number(sNum),
+          video_url: videoData.url,
+        });
+      }
+    });
 
     setIsRenderingMaster(true);
     setRenderProgress(15);
@@ -1521,6 +1644,7 @@ export default function TopicStudioPage() {
               generatingSceneAudios={generatingSceneAudios}
               handleUploadSceneAudio={handleUploadSceneAudio}
               handleDeleteSceneAudio={handleDeleteSceneAudio}
+              handleDeleteMultipleSceneAudios={handleDeleteMultipleSceneAudios}
               handleGenerateSceneAudio={handleGenerateSceneAudio}
               handleGenerateAllAudios={handleGenerateAllAudios}
             />
@@ -1563,7 +1687,9 @@ export default function TopicStudioPage() {
           {/* TAB 7: COMPLETED MASTER VIDEO */}
           {activeTab === "completed_video" && (
             <CompletedVideoTab
+              topicTitle={topicTitle}
               scenesJson={scenesJson}
+              sceneVideos={sceneVideos}
               completedMasterVideo={completedMasterVideo}
               isRenderingMaster={isRenderingMaster}
               renderProgress={renderProgress}

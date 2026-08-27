@@ -30,9 +30,10 @@ export async function GET() {
         personality,
         brand_positioning AS "brandPositioning",
         brand_promise AS "brandPromise",
-        image_theme AS "imageTheme",
-        thumbnail_theme AS "thumbnailTheme",
         audio_theme AS "audioTheme",
+        banner_url AS "bannerUrl",
+        avatar_url AS "avatarUrl",
+        default_voice AS "defaultVoice",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -117,6 +118,7 @@ export async function POST(request) {
         image_theme,
         thumbnail_theme,
         audio_theme,
+        default_voice,
         status
       ) VALUES (
         ${name},
@@ -137,6 +139,7 @@ export async function POST(request) {
         ${imageTheme},
         ${thumbnailTheme},
         ${audioTheme},
+        ${body.defaultVoice || 'af_heart'},
         ${status}
       )
       ON CONFLICT (slug) DO UPDATE SET
