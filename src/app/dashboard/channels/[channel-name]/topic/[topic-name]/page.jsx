@@ -788,18 +788,64 @@ export default function TopicStudioPage() {
   async function handleUploadZipImages(file) {
     if (!file) return;
     setIsExtractingZip(true);
-    toast("Unpacking ZIP and uploading scene images via Trigger.dev...", {
+    toast("Uploading ZIP to R2 and extracting scene images...", {
       icon: "📦",
     });
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      let zipFileKey = null;
 
-      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/extract-zip`, {
-        method: "POST",
-        body: formData,
-      });
+      // 1. Attempt direct-to-R2 presigned upload (bypasses Vercel 4.5MB request limit & Trigger.dev payload limit)
+      try {
+        const presignRes = await fetch("/api/storage/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || "application/zip",
+            channelSlug,
+            topicSlug,
+            assetType: "temp_zip",
+          }),
+        });
+
+        if (presignRes.ok) {
+          const presignData = await presignRes.json();
+          if (presignData.uploadUrl && presignData.key) {
+            const uploadRes = await fetch(presignData.uploadUrl, {
+              method: "PUT",
+              headers: {
+                "Content-Type": file.type || "application/zip",
+              },
+              body: file,
+            });
+
+            if (uploadRes.ok) {
+              zipFileKey = presignData.key;
+            }
+          }
+        }
+      } catch (presignErr) {
+        console.warn("Direct R2 presign upload failed, falling back to server relay:", presignErr);
+      }
+
+      let res;
+      if (zipFileKey) {
+        // Dispatch task passing lightweight R2 key (<200 bytes JSON)
+        res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/extract-zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zipFileKey }),
+        });
+      } else {
+        // Fallback: standard FormData
+        const formData = new FormData();
+        formData.append("file", file);
+        res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/extract-zip`, {
+          method: "POST",
+          body: formData,
+        });
+      }
 
       const data = await res.json();
       if (res.ok && Array.isArray(data.images)) {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { tasks, runs } from "@trigger.dev/sdk";
 
+export const maxDuration = 60; // Extend Vercel function timeout for ZIP processing
+
 export async function POST(req, context) {
   try {
     const params = await context.params;
@@ -14,25 +16,42 @@ export async function POST(req, context) {
       );
     }
 
-    const formData = await req.formData();
-    const file = formData.get("file");
+    let zipFileKey = null;
+    let zipBase64 = null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No ZIP file provided in upload" }, { status: 400 });
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      zipFileKey = body.zipFileKey;
+      zipBase64 = body.zipBase64;
+    } else {
+      const formData = await req.formData();
+      const file = formData.get("file");
+
+      if (file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        zipBase64 = buffer.toString("base64");
+      }
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const zipBase64 = buffer.toString("base64");
+    if (!zipFileKey && !zipBase64) {
+      return NextResponse.json(
+        { error: "No ZIP file key or data provided" },
+        { status: 400 }
+      );
+    }
 
     console.log(
-      `[ExtractZipRoute] Triggering Trigger.dev task "extract-zip-images" directly via base64 in memory (size: ${(buffer.length / 1024 / 1024).toFixed(2)} MB, zero R2 zip storage)...`
+      `[ExtractZipRoute] Triggering Trigger.dev task "extract-zip-images" (zipFileKey: ${zipFileKey || "none, using base64"})...`
     );
 
-    // Dispatch Trigger.dev task directly in-memory without storing the ZIP file in R2
+    // Dispatch Trigger.dev task with R2 temporary key (bypassing Vercel & Trigger payload limits)
     const handle = await tasks.trigger("extract-zip-images", {
       channelSlug,
       topicSlug,
+      zipFileKey,
       zipBase64,
     });
 

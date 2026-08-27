@@ -109,7 +109,7 @@ export default function ImagesTab({
     setZipProgress({
       active: true,
       percent: 15,
-      stage: "Reading ZIP archive in memory...",
+      stage: "Uploading ZIP archive directly to Cloudflare R2...",
       fileName: file.name,
     });
 
@@ -125,7 +125,7 @@ export default function ImagesTab({
       setZipProgress((prev) => ({
         ...prev,
         percent: 75,
-        stage: "Unpacking scene images & uploading directly to Cloudflare R2...",
+        stage: "Unpacking scene images & mapping to scenes...",
       }));
     }, 2200);
 
