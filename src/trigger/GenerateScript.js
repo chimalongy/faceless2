@@ -75,23 +75,28 @@ export const generateScriptTask = task({
     const pillarTone = pillar?.tone || channel.personality || null;
     const pillarContentLength = pillar?.contentLength || "15-20 minutes (~2500 words)";
     const pillarContentWordsCount = pillar?.contentWordsCount || "2,500 - 3,500 words";
-    const pillarUseMainCharacter = Boolean(pillar?.useMainCharacter);
-    const pillarMainCharacterDescription = pillar?.mainCharacterDescription || null;
+    
 
-    // 2. Fetch General Settings for Model Selection
+    // 2. Fetch General Settings for Default LLM Model
     const generalRows = await sql`
-      SELECT default_llm_model AS "defaultLlmModel", script_gen_model AS "scriptGenModel"
+      SELECT default_llm_model AS "defaultLlmModel"
       FROM general_settings
       ORDER BY id ASC
       LIMIT 1;
     `;
 
-    const rawModel = customModel || generalRows?.[0]?.scriptGenModel || generalRows?.[0]?.defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct";
+    const rawModel = generalRows?.[0]?.defaultLlmModel?.trim();
+
+    if (!rawModel) {
+      throw new Error(
+        "No Default LLM Model configured. Please go to Dashboard Settings -> General Settings and set your Default LLM Model."
+      );
+    }
     
     // Resolve to official Cloudflare Workers AI model URI
     function resolveCloudflareModel(modelStr) {
-      if (!modelStr || typeof modelStr !== "string") return "@cf/meta/llama-3.1-70b-instruct";
-      const m = modelStr.trim();
+      const m = (modelStr || "").trim();
+      if (!m) return "";
       if (m.startsWith("@cf/")) return m;
       if (m.startsWith("cf/")) return `@${m}`;
       if (m.startsWith("@")) return `@cf/${m.slice(1)}`;
@@ -102,18 +107,20 @@ export const generateScriptTask = task({
         "kimi-k2.7-code": "@cf/moonshotai/kimi-k2.7-code",
         "llama-3.1-70b": "@cf/meta/llama-3.1-70b-instruct",
         "llama-3.1-8b": "@cf/meta/llama-3.1-8b-instruct",
+        "llama-3.3-70b": "@cf/meta/llama-3.3-70b-instruct",
         "deepseek-r1": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
         "qwen-72b": "@cf/qwen/qwen2.5-72b-instruct",
+        "qwen-2.5-72b": "@cf/qwen/qwen2.5-72b-instruct",
         "mistral-7b": "@cf/mistral/mistral-7b-instruct-v0.2",
         "gpt-4o": "@cf/meta/llama-3.1-70b-instruct",
         "gpt-4o-mini": "@cf/meta/llama-3.1-8b-instruct",
       };
 
-      return aliasMap[m.toLowerCase()] || "@cf/meta/llama-3.1-70b-instruct";
+      return aliasMap[m.toLowerCase()] || `@cf/${m}`;
     }
 
     const configuredModel = resolveCloudflareModel(rawModel);
-    logger.log(`Using script generation model: ${configuredModel}`);
+    logger.log(`Using default LLM model: ${configuredModel}`);
 
     // 3. Fetch all LLM Accounts from DB (Ordered from top/first added)
     const llmAccounts = await sql`
@@ -144,8 +151,7 @@ export const generateScriptTask = task({
       contentPillarWordsCount: pillarContentWordsCount,
       contentPillarDescription: pillarDescription,
       topic: topicTitle,
-      useMainCharacter: pillarUseMainCharacter,
-      mainCharacterDescription: pillarMainCharacterDescription || "",
+      
     });
 
     const userPromptContent = customPrompt || `Generate the complete, engaging, long-form YouTube script for the topic: "${topicTitle}". Follow all instructions in the system prompt.`;

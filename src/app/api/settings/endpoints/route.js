@@ -91,9 +91,9 @@ export async function POST(request) {
 
     // 1. Sync General Settings
     if (defaultLlmModel !== undefined || scriptGenModel !== undefined || sceneGenModel !== undefined) {
-      const defModel = (defaultLlmModel || "gpt-4o").trim();
-      const scrModel = (scriptGenModel || "gpt-4o").trim();
-      const scnModel = (sceneGenModel || "gpt-4o").trim();
+      const defModel = (defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct").trim();
+      const scrModel = (scriptGenModel || defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct").trim();
+      const scnModel = (sceneGenModel || defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct").trim();
 
       const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
       if (existing && existing.length > 0) {

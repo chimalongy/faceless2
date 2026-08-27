@@ -432,8 +432,6 @@ export function getScriptGenerationSystemPrompt({
   wordCount = null,
   contentPillarDescription = "In-depth strategic insights and engaging narrative storytelling.",
   topic = "",
-  useMainCharacter = false,
-  mainCharacterDescription = "",
 }) {
   const resolvedLength = contentLength || content_length || contentPillarLength || "15-20 minutes (~2500 words)";
   const resolvedWordsCount = contentWordsCount || content_words_count || wordsCount || wordCount || contentPillarWordsCount || "2,500 - 3,500 words";
@@ -451,14 +449,6 @@ export function getScriptGenerationSystemPrompt({
     .replaceAll("{content_pillar_words_count}", resolvedWordsCount)
     .replaceAll("{content_pillar_description}", contentPillarDescription || "In-depth strategic insights and engaging narrative storytelling.")
     .replaceAll("{topic}", topic || "Topic Title");
-
-  if (useMainCharacter && mainCharacterDescription) {
-    const characterSection = `\n\n**Main Character Anchor:**\n${mainCharacterDescription}`;
-    prompt = prompt.replace(
-      `**Strategic Description:**\n${contentPillarDescription || "In-depth strategic insights and engaging narrative storytelling."}`,
-      `**Strategic Description:**\n${contentPillarDescription || "In-depth strategic insights and engaging narrative storytelling."}${characterSection}`
-    );
-  }
 
   return prompt;
 }
