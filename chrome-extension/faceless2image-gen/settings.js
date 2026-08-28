@@ -31,7 +31,16 @@ when generating images ensure that image follow this theme
   theme_instruction: `when generating images ensure that image follow this theme
 "{channel_image_generation_theme}"`,
 
-  missing_scenes_header: `Lets Focus on Generating for these scenes`
+  missing_scenes_header: `Lets Focus on Generating for these scenes`,
+
+  thumbnail_instruction: `Hi, I need you to assist me in generating a high-converting YouTube thumbnail for content titled "{topicTitle}".
+
+thumbnail_prompt: "{thumbnail_prompt}"
+
+Ensure only one Image is Generated. Name the image thumbnail.png.
+
+when generating images ensure that image follow this theme
+"{channel_thumbnail_generation_theme}"`
 };
 
 // Export for module/bundler compatibility if needed

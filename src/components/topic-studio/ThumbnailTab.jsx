@@ -19,6 +19,8 @@ export default function ThumbnailTab({
   isEditingThumbPrompt,
   setIsEditingThumbPrompt,
   thumbPromptNotice,
+  isGeneratingThumbPrompt,
+  handleGenerateThumbPrompt,
   handleClearThumbPrompt,
   handleUpdateThumbPrompt,
   triggerThumbPromptNotice,
@@ -57,6 +59,22 @@ export default function ThumbnailTab({
               </span>
             )}
 
+            {/* Generate Prompt with AI */}
+            <button
+              type="button"
+              onClick={handleGenerateThumbPrompt}
+              disabled={isGeneratingThumbPrompt}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-50"
+              title="Generate thumbnail prompt using channel thumbnail theme"
+            >
+              {isGeneratingThumbPrompt ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} />
+              )}
+              <span>{isGeneratingThumbPrompt ? "Generating..." : "Generate Prompt"}</span>
+            </button>
+
             {/* Clear Prompt Pill */}
             <button
               type="button"
@@ -65,7 +83,7 @@ export default function ThumbnailTab({
               title="Delete and clear thumbnail prompt"
             >
               <Trash2 size={13} />
-              <span>Delete Prompt</span>
+              <span>Delete</span>
             </button>
 
             {/* Edit / Read Mode Pill */}
@@ -86,15 +104,17 @@ export default function ThumbnailTab({
               title={isEditingThumbPrompt ? "Save & update prompt" : "Edit prompt"}
             >
               {isEditingThumbPrompt ? <Check size={13} /> : <Edit3 size={13} />}
-              <span>{isEditingThumbPrompt ? "Update Prompt" : "Edit Prompt"}</span>
+              <span>{isEditingThumbPrompt ? "Update" : "Edit"}</span>
             </button>
 
             {/* Copy Prompt Pill */}
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard.writeText(thumbnailPrompt);
-                triggerThumbPromptNotice("Thumbnail prompt copied.");
+                if (thumbnailPrompt) {
+                  navigator.clipboard.writeText(thumbnailPrompt);
+                }
+                triggerThumbPromptNotice?.("Thumbnail prompt copied.");
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-line bg-paper-card hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
               title="Copy prompt"

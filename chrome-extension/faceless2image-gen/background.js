@@ -360,10 +360,11 @@ async function downloadJob(tabId, job, beforeImg) {
       try { ok = await cdpDownloadTile(tabId, k, filename); } catch (e) { }
     }
 
+    const isThumb = sceneNumber === "thumbnail";
     if (ok) {
-      emit({ kind: "info", message: `✓ saved scene ${sceneNumber} → Downloads/${filename}` });
+      emit({ kind: "info", message: `✓ saved ${isThumb ? "thumbnail" : `scene ${sceneNumber}`} → Downloads/${filename}` });
     } else {
-      emit({ kind: "warn", message: `download failed for scene ${sceneNumber}` });
+      emit({ kind: "warn", message: `download failed for ${isThumb ? "thumbnail" : `scene ${sceneNumber}`}` });
     }
     await sleep(200);
   }

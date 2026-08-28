@@ -582,3 +582,60 @@ header h2 {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ─── THUMBNAIL SCREEN & NAVIGATION ─── */
+.thumbnail-nav-wrapper {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-thumbnail {
+  background: rgba(139, 106, 255, 0.1);
+  color: var(--accent-hover);
+  border: 1px solid var(--accent);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.btn-thumbnail:hover {
+  background: rgba(139, 106, 255, 0.2);
+  color: #fff;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.btn-back {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-back:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.thumb-topic-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  word-break: break-word;
+}
+

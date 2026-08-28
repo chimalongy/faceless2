@@ -46,7 +46,7 @@
     </div>
   </div>
 
-  <!-- ═══════ MAIN SCREEN ═══════ -->
+  <!-- ═══════ MAIN SCREEN (SCENES) ═══════ -->
   <div id="mainScreen" class="screen hidden">
     <header>
       <div class="header-left">
@@ -92,6 +92,13 @@
           <option value="">— Select topic —</option>
         </select>
       </div>
+
+      <!-- Navigation to Thumbnail View -->
+      <div id="thumbnailNavWrapper" class="thumbnail-nav-wrapper hidden">
+        <button id="openThumbnailBtn" type="button" class="btn-thumbnail">
+          🖼 Go to Generate Thumbnail
+        </button>
+      </div>
     </section>
 
     <!-- Scenes Preview -->
@@ -129,6 +136,56 @@
     <section class="card log-card">
       <h3>Activity Log</h3>
       <div id="log" class="log-area"></div>
+    </section>
+  </div>
+
+  <!-- ═══════ THUMBNAIL SCREEN ═══════ -->
+  <div id="thumbnailScreen" class="screen hidden">
+    <header>
+      <div class="header-left">
+        <button id="backToScenesBtn" type="button" class="btn-back" title="Back to Scenes">
+          ← Back to Scenes
+        </button>
+      </div>
+      <button id="logoutBtnThumb" class="link-btn" title="Logout">⏻</button>
+    </header>
+
+    <!-- Thumbnail Config Card -->
+    <section class="card">
+      <div class="card-header-row">
+        <h3>Thumbnail Generator</h3>
+        <span id="thumbTopicBadge" class="badge">Topic</span>
+      </div>
+      <div id="thumbTopicTitle" class="thumb-topic-title">—</div>
+
+      <div class="form-group" style="margin-top: 12px;">
+        <label for="thumbnailPromptInput">Thumbnail Prompt</label>
+        <textarea id="thumbnailPromptInput" rows="4" placeholder="Enter high-converting visual prompt for this thumbnail..."></textarea>
+      </div>
+
+      <div class="form-group" style="margin-top: 10px;">
+        <label for="thumbnailThemeInput">Thumbnail Theme</label>
+        <textarea id="thumbnailThemeInput" rows="3" placeholder="Channel thumbnail theme / aesthetic style..."></textarea>
+      </div>
+    </section>
+
+    <!-- Thumbnail Action Controls -->
+    <section class="actions">
+      <button id="generateThumbnailBtn" class="btn-primary">▶ Generate Thumbnail</button>
+    </section>
+
+    <!-- Thumbnail Progress Card -->
+    <section id="thumbProgressCard" class="card hidden">
+      <div class="progress-header">
+        <strong>Thumbnail Status</strong>
+      </div>
+      <div id="thumbStatusText" class="status-text">Idle</div>
+    </section>
+
+    <!-- Thumbnail Activity Log -->
+    <section class="card log-card">
+      <h3>Thumbnail Log</h3>
+      <div id="thumbLog" class="log-area"></div>
     </section>
   </div>
 

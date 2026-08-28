@@ -62,6 +62,7 @@ export default function TopicStudioPage() {
   const [thumbnailPrompt, setThumbnailPrompt] = useState("");
   const [isEditingThumbPrompt, setIsEditingThumbPrompt] = useState(false);
   const [thumbPromptNotice, setThumbPromptNotice] = useState("");
+  const [isGeneratingThumbPrompt, setIsGeneratingThumbPrompt] = useState(false);
   const [thumbnailImage, setThumbnailImage] = useState(null);
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
@@ -266,6 +267,33 @@ export default function TopicStudioPage() {
         triggerThumbPromptNotice("Thumbnail prompt cleared.");
       },
     });
+  }
+
+  async function handleGenerateThumbPrompt() {
+    setIsGeneratingThumbPrompt(true);
+    try {
+      const res = await fetch(
+        `/api/channels/${channelSlug}/topics/${topicSlug}/generate-thumbnail-prompt`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      const data = await res.json();
+      if (res.ok && data.thumbnailPrompt) {
+        setThumbnailPrompt(data.thumbnailPrompt);
+        toast.success("Thumbnail prompt generated successfully!");
+        triggerThumbPromptNotice("Thumbnail prompt generated.");
+      } else {
+        toast.error(data.error || "Failed to generate thumbnail prompt.");
+      }
+    } catch (err) {
+      console.error("Error generating thumbnail prompt:", err);
+      toast.error("Error generating prompt: " + err.message);
+    } finally {
+      setIsGeneratingThumbPrompt(false);
+    }
   }
 
   async function handleUpdateThumbPrompt() {
@@ -1581,6 +1609,9 @@ export default function TopicStudioPage() {
               isEditingThumbPrompt={isEditingThumbPrompt}
               setIsEditingThumbPrompt={setIsEditingThumbPrompt}
               thumbPromptNotice={thumbPromptNotice}
+              triggerThumbPromptNotice={triggerThumbPromptNotice}
+              isGeneratingThumbPrompt={isGeneratingThumbPrompt}
+              handleGenerateThumbPrompt={handleGenerateThumbPrompt}
               thumbnailImage={thumbnailImage}
               isGeneratingThumbnail={isGeneratingThumbnail}
               isUploadingThumbnail={isUploadingThumbnail}

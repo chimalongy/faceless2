@@ -1,6 +1,6 @@
 /* Faceless Studio — Sidepanel UI Logic
  * Handles login, cascading dropdowns (channel → pillar → topic),
- * scene preview, and generation queue control.
+ * scene preview, thumbnail generation, and queue control.
  */
 "use strict";
 
@@ -9,6 +9,8 @@ const $ = (id) => document.getElementById(id);
 
 const loginScreen = $("loginScreen");
 const mainScreen = $("mainScreen");
+const thumbnailScreen = $("thumbnailScreen");
+
 const emailInput = $("email");
 const passwordInput = $("password");
 const rememberBox = $("remember");
@@ -18,12 +20,24 @@ const settingsToggle = $("settingsToggle");
 const serverSettings = $("serverSettings");
 const baseUrlInput = $("baseUrlInput");
 const logoutBtn = $("logoutBtn");
+const logoutBtnThumb = $("logoutBtnThumb");
 
 const channelSelect = $("channelSelect");
 const pillarSelect = $("pillarSelect");
 const topicSelect = $("topicSelect");
 const startSceneInput = $("startSceneInput");
 const batchCountInput = $("batchCountInput");
+
+const thumbnailNavWrapper = $("thumbnailNavWrapper");
+const openThumbnailBtn = $("openThumbnailBtn");
+const backToScenesBtn = $("backToScenesBtn");
+const thumbTopicTitle = $("thumbTopicTitle");
+const thumbnailPromptInput = $("thumbnailPromptInput");
+const thumbnailThemeInput = $("thumbnailThemeInput");
+const generateThumbnailBtn = $("generateThumbnailBtn");
+const thumbProgressCard = $("thumbProgressCard");
+const thumbStatusText = $("thumbStatusText");
+const thumbLogArea = $("thumbLog");
 
 const scenesCard = $("scenesCard");
 const sceneCount = $("sceneCount");
@@ -50,8 +64,10 @@ let currentScenes = [];
 let selectedSceneNumbers = new Set();
 let selectedChannelSlug = "";
 let selectedChannelTheme = "";
+let selectedChannelThumbnailTheme = "";
 let selectedTopicSlug = "";
 let selectedTopicTitle = "";
+let selectedTopicThumbnailPrompt = "";
 
 // ── Helpers ──
 function bg(msg) {
@@ -80,8 +96,15 @@ function addLog(text, kind = "info") {
     second: "2-digit",
   });
   line.textContent = `[${time}] ${text}`;
-  logArea.appendChild(line);
-  logArea.scrollTop = logArea.scrollHeight;
+  
+  if (logArea) {
+    logArea.appendChild(line.cloneNode(true));
+    logArea.scrollTop = logArea.scrollHeight;
+  }
+  if (thumbLogArea) {
+    thumbLogArea.appendChild(line.cloneNode(true));
+    thumbLogArea.scrollTop = thumbLogArea.scrollHeight;
+  }
 }
 
 function setLoading(selectEl, loading) {
@@ -95,12 +118,27 @@ function setLoading(selectEl, loading) {
 function showLogin() {
   loginScreen.classList.remove("hidden");
   mainScreen.classList.add("hidden");
+  thumbnailScreen?.classList.add("hidden");
 }
 
 function showMain() {
   loginScreen.classList.add("hidden");
+  thumbnailScreen?.classList.add("hidden");
   mainScreen.classList.remove("hidden");
   loadChannels();
+}
+
+function showThumbnailScreen() {
+  mainScreen.classList.add("hidden");
+  thumbnailScreen.classList.remove("hidden");
+  
+  thumbTopicTitle.textContent = selectedTopicTitle || "Selected Topic";
+  
+  const promptVal = (selectedTopicThumbnailPrompt || "").trim();
+  thumbnailPromptInput.value = promptVal || `High-converting YouTube thumbnail for "${selectedTopicTitle}". Intense focal point, dramatic lighting, high contrast, clean separation between foreground subject and background environment.`;
+
+  const themeVal = (selectedChannelThumbnailTheme || selectedChannelTheme || "").trim();
+  thumbnailThemeInput.value = themeVal || "cinematic, high quality, consistent style";
 }
 
 // ── Init ──
@@ -190,28 +228,29 @@ loginBtn.addEventListener("click", async () => {
   if (res.ok) {
     showMain();
   } else {
-    showError(res.error || "Login failed");
+    showError(res.error || "Login failed.");
   }
-});
-
-// Enter key submits login
-passwordInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") loginBtn.click();
 });
 
 logoutBtn.addEventListener("click", async () => {
   await bg({ type: "logout" });
-  // Reset state
   channelSelect.innerHTML = '<option value="">— Select channel —</option>';
+  channelSelect.disabled = true;
   pillarSelect.innerHTML = '<option value="">— Select pillar —</option>';
   pillarSelect.disabled = true;
   topicSelect.innerHTML = '<option value="">— Select topic —</option>';
   topicSelect.disabled = true;
   scenesCard.classList.add("hidden");
+  thumbnailNavWrapper?.classList.add("hidden");
   progressCard.classList.add("hidden");
   currentScenes = [];
   selectedSceneNumbers.clear();
   updateSelectedScenesUI();
+  showLogin();
+});
+
+logoutBtnThumb?.addEventListener("click", async () => {
+  await bg({ type: "logout" });
   showLogin();
 });
 
@@ -242,11 +281,14 @@ channelSelect.addEventListener("change", async () => {
   const selectedChannel = currentChannels.find((c) => c.slug === slug);
   selectedChannelTheme =
     selectedChannel?.imageTheme || selectedChannel?.image_theme || "";
+  selectedChannelThumbnailTheme =
+    selectedChannel?.thumbnailTheme || selectedChannel?.thumbnail_theme || "";
 
   // Reset downstream
   topicSelect.innerHTML = '<option value="">— Select topic —</option>';
   topicSelect.disabled = true;
   scenesCard.classList.add("hidden");
+  thumbnailNavWrapper?.classList.add("hidden");
   currentScenes = [];
   selectedSceneNumbers.clear();
   updateSelectedScenesUI();
@@ -285,6 +327,7 @@ pillarSelect.addEventListener("change", async () => {
 
   // Reset downstream
   scenesCard.classList.add("hidden");
+  thumbnailNavWrapper?.classList.add("hidden");
   currentScenes = [];
   selectedSceneNumbers.clear();
   updateSelectedScenesUI();
@@ -321,12 +364,13 @@ topicSelect.addEventListener("change", async () => {
     topicSelect.options[topicSelect.selectedIndex]?.textContent || "";
 
   scenesCard.classList.add("hidden");
+  thumbnailNavWrapper?.classList.add("hidden");
   currentScenes = [];
   startBtn.disabled = true;
 
   if (!topicSlug || !channelSlug) return;
 
-  // Fetch topic detail to get scenes_json
+  // Fetch topic detail to get scenes_json and thumbnail prompt
   const res = await bg({
     type: "apiGet",
     path: `/api/channels/${channelSlug}/topics/${topicSlug}`,
@@ -336,8 +380,14 @@ topicSelect.addEventListener("change", async () => {
     if (topic.channelImageTheme) {
       selectedChannelTheme = topic.channelImageTheme;
     }
-    let scenes = [];
+    if (topic.channelThumbnailTheme) {
+      selectedChannelThumbnailTheme = topic.channelThumbnailTheme;
+    }
+    selectedTopicThumbnailPrompt = topic.thumbnailPrompt || topic.thumbnail_prompt || "";
 
+    thumbnailNavWrapper?.classList.remove("hidden");
+
+    let scenes = [];
     if (topic.scenesJson) {
       try {
         scenes =
@@ -378,58 +428,108 @@ topicSelect.addEventListener("change", async () => {
       renderScenes(scenes);
       scenesCard.classList.remove("hidden");
       startBtn.disabled = false;
-      addLog(`Loaded ${scenes.length} scenes for "${topic.title}"`, "info");
     } else {
-      addLog(`No scenes found for "${topic.title}"`, "warn");
+      addLog("No scenes found in this topic", "warn");
     }
   } else {
-    addLog("Failed to load topic: " + (res.error || "unknown"), "error");
+    addLog("Failed to load topic details: " + (res.error || "unknown"), "error");
   }
 });
 
-function updateSelectedScenesUI() {
-  const count = selectedSceneNumbers.size;
-  const maxBatch = Math.max(1, parseInt(batchCountInput?.value) || 3);
-  if (count > 0) {
-    selectedCountBadge.textContent = `${count}/${maxBatch} selected`;
-    selectedCountBadge.classList.remove("hidden");
-    genSelectedCount.textContent = count;
-    genSelectedBtn.classList.remove("hidden");
-  } else {
-    selectedCountBadge.classList.add("hidden");
-    genSelectedBtn.classList.add("hidden");
-  }
+// ── THUMBNAIL NAVIGATION & CONTROLS ──
+openThumbnailBtn?.addEventListener("click", () => {
+  showThumbnailScreen();
+});
 
-  document.querySelectorAll(".scene-item").forEach((item) => {
-    const sNum = parseInt(item.getAttribute("data-scene"));
-    const cb = item.querySelector(".scene-checkbox");
-    if (selectedSceneNumbers.has(sNum)) {
-      item.classList.add("selected");
-      if (cb) cb.checked = true;
-    } else {
-      item.classList.remove("selected");
-      if (cb) cb.checked = false;
-    }
-  });
+backToScenesBtn?.addEventListener("click", () => {
+  thumbnailScreen.classList.add("hidden");
+  mainScreen.classList.remove("hidden");
+});
+
+function buildThumbnailInstruction(topicTitle, thumbPrompt, thumbTheme) {
+  const template =
+    typeof setup !== "undefined" && setup.thumbnail_instruction
+      ? setup.thumbnail_instruction
+      : `Hi, I need you to assist me in generating a high-converting YouTube thumbnail for content titled "{topicTitle}".\n\nthumbnail_prompt: "{thumbnail_prompt}"\n\nEnsure only one Image is Generated. Name the image thumbnail.png.\n\nwhen generating images ensure that image follow this theme\n"{channel_thumbnail_generation_theme}"`;
+
+  const themeText = (thumbTheme || selectedChannelThumbnailTheme || selectedChannelTheme || "cinematic, high quality, consistent style").trim();
+  const promptText = (thumbPrompt || selectedTopicThumbnailPrompt || `High-converting YouTube thumbnail for "${topicTitle}"`).trim();
+
+  return template
+    .replace(/\{topicTitle\}/g, topicTitle)
+    .replace(/\{thumbnail_prompt\}/g, promptText)
+    .replace(/\{thumbnailPrompt\}/g, promptText)
+    .replace(/\{channel_thumbnail_generation_theme\}/g, themeText)
+    .replace(/\{channelThumbnailTheme\}/g, themeText);
 }
 
+generateThumbnailBtn?.addEventListener("click", async () => {
+  const prompt = thumbnailPromptInput.value.trim();
+  const theme = thumbnailThemeInput.value.trim();
+
+  if (!prompt) {
+    addLog("Please enter a thumbnail prompt", "warn");
+    return;
+  }
+
+  const instruction = buildThumbnailInstruction(selectedTopicTitle, prompt, theme);
+
+  const queue = [
+    {
+      prompt: instruction,
+      sceneNumbers: ["thumbnail"],
+      sceneNumber: "thumbnail",
+      downloadName: "thumbnail",
+      sceneCount: 1,
+      label: "Thumbnail",
+      batchIndex: 1,
+      totalBatches: 1,
+      isThumbnail: true,
+    },
+  ];
+
+  addLog(`▶ Generating thumbnail for "${selectedTopicTitle}"…`, "start");
+  thumbProgressCard?.classList.remove("hidden");
+  thumbStatusText.textContent = "Sending thumbnail instruction to Flow agent…";
+  generateThumbnailBtn.disabled = true;
+
+  const res = await bg({
+    type: "start",
+    queue,
+    totalScenes: 1,
+    channelSlug: selectedChannelSlug,
+    topicSlug: selectedTopicSlug,
+  });
+
+  if (res.ok) {
+    thumbStatusText.textContent = "Generating thumbnail…";
+  } else {
+    addLog("Thumbnail generation failed to start: " + res.error, "error");
+    generateThumbnailBtn.disabled = false;
+    thumbStatusText.textContent = "Failed";
+  }
+});
+
+// ── SCENES RENDERING ──
+
 function renderScenes(scenes) {
-  sceneCount.textContent = scenes.length;
   scenesList.innerHTML = "";
-  for (const scene of scenes) {
-    const isChecked = selectedSceneNumbers.has(scene.scene_number);
+  sceneCount.textContent = scenes.length;
+  selectedSceneNumbers.clear();
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    const num = scene.scene_number || i + 1;
+    const prompt = (scene.image_prompt || "").trim();
+
     const div = document.createElement("div");
-    div.className = "scene-item" + (isChecked ? " selected" : "");
-    div.setAttribute("data-scene", scene.scene_number);
+    div.className = "scene-item";
+    div.dataset.sceneNum = num;
     div.innerHTML = `
-      <div class="scene-checkbox-wrapper">
-        <input type="checkbox" class="scene-checkbox" data-scene="${scene.scene_number}" ${isChecked ? "checked" : ""} title="Select for generation" />
-      </div>
-      <div class="scene-num">${scene.scene_number}</div>
-      <div class="scene-body">
-        <div class="scene-prompt">${escapeHtml(scene.image_prompt || "No prompt")}</div>
-        <button class="btn-scene-gen" data-scene="${scene.scene_number}" title="Generate this scene">▶ Generate</button>
-      </div>
+      <input type="checkbox" class="scene-checkbox" data-scene-num="${num}" title="Select for generation" />
+      <span class="scene-num">${num}</span>
+      <span class="scene-prompt">${escapeHtml(prompt || "(no prompt)")}</span>
+      <button type="button" class="btn-scene-gen" title="Generate this scene image">▶</button>
     `;
 
     const cb = div.querySelector(".scene-checkbox");
@@ -460,6 +560,19 @@ function renderScenes(scenes) {
     scenesList.appendChild(div);
   }
   updateSelectedScenesUI();
+}
+
+function updateSelectedScenesUI() {
+  const count = selectedSceneNumbers.size;
+  if (count > 0) {
+    selectedCountBadge.textContent = `${count} selected`;
+    selectedCountBadge.classList.remove("hidden");
+    genSelectedCount.textContent = count;
+    genSelectedBtn.classList.remove("hidden");
+  } else {
+    selectedCountBadge.classList.add("hidden");
+    genSelectedBtn.classList.add("hidden");
+  }
 }
 
 function buildBatchPrompt(scenesChunk, channelTheme = "") {
@@ -735,6 +848,7 @@ stopBtn.addEventListener("click", async () => {
   await bg({ type: "stop" });
   setRunningUI(false, false);
   statusText.textContent = "Stopped";
+  if (generateThumbnailBtn) generateThumbnailBtn.disabled = false;
   addLog("Stopped by user", "warn");
 });
 
@@ -746,6 +860,8 @@ function setRunningUI(running, paused) {
   if (startSceneInput) startSceneInput.disabled = running;
   if (batchCountInput) batchCountInput.disabled = running;
   if (genSelectedBtn) genSelectedBtn.disabled = running;
+  if (openThumbnailBtn) openThumbnailBtn.disabled = running;
+  if (generateThumbnailBtn) generateThumbnailBtn.disabled = running;
   pauseBtn.disabled = !running;
   stopBtn.disabled = !running;
   pauseBtn.textContent = paused ? "Resume" : "Pause";
@@ -773,6 +889,9 @@ chrome.runtime.onMessage.addListener((msg) => {
       if (msg.job?.isInstruction) {
         statusText.textContent = "Sending instruction to agent…";
         addLog("📋 Sending instruction to agent…", "start");
+      } else if (msg.job?.isThumbnail) {
+        if (thumbStatusText) thumbStatusText.textContent = "Generating thumbnail image in Flow…";
+        addLog("▶ Thumbnail: sending prompt to agent…", "start");
       } else {
         const label =
           msg.job?.label ||
@@ -789,7 +908,11 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
 
     case "done":
-      if (!msg.job?.isInstruction) {
+      if (msg.job?.isThumbnail) {
+        if (thumbStatusText) thumbStatusText.textContent = "✓ Thumbnail complete!";
+        addLog("✓ Thumbnail generation complete!", "success");
+        if (generateThumbnailBtn) generateThumbnailBtn.disabled = false;
+      } else if (!msg.job?.isInstruction) {
         const completed =
           msg.completedScenes != null ? msg.completedScenes : msg.index + 1;
         const total =
@@ -816,14 +939,16 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     case "error":
       addLog(msg.message, "error");
+      if (generateThumbnailBtn) generateThumbnailBtn.disabled = false;
       break;
 
     case "finished":
       setRunningUI(false, false);
+      if (generateThumbnailBtn) generateThumbnailBtn.disabled = false;
       const finalTotal = msg.total || currentScenes.length;
       updateProgress(finalTotal, finalTotal);
-      statusText.textContent = "✓ All scenes complete!";
-      addLog(`✓ Finished! ${finalTotal} scenes generated.`, "success");
+      statusText.textContent = "✓ All complete!";
+      addLog(`✓ Finished! All tasks complete.`, "success");
       document
         .querySelectorAll(".btn-scene-gen")
         .forEach((b) => (b.disabled = false));
@@ -832,6 +957,8 @@ chrome.runtime.onMessage.addListener((msg) => {
     case "stopped":
       setRunningUI(false, false);
       statusText.textContent = "Stopped";
+      if (thumbStatusText) thumbStatusText.textContent = "Stopped";
+      if (generateThumbnailBtn) generateThumbnailBtn.disabled = false;
       break;
   }
 });
