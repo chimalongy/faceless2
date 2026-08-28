@@ -192,7 +192,7 @@ export const generateScenesTask = task({
             messages: [
               {
                 role: "system",
-                content: SCENE_GENERATION_SYSTEM_PROMPT,
+                content: "You are an expert cinematic storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, image_prompt, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
               },
               {
                 role: "user",
@@ -200,7 +200,7 @@ export const generateScenesTask = task({
               },
             ],
             max_tokens: 4096,
-            temperature: 0.5,
+            temperature: 0.4,
           }),
         });
 

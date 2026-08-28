@@ -511,6 +511,7 @@ Every image prompt must:
 3. Match the emotional TONE of the current narration.
 4. Visually communicate the meaning of the \`audio_text\`.
 5. Maintain continuity with surrounding scenes where appropriate.
+6. Be concise yet vivid (approx. 35 to 65 words per prompt) so all scenes fit completely into the output response without truncation.
 
 Do not include:
 

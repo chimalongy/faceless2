@@ -410,6 +410,7 @@ The final script must:
 * Be original.
 * Be intellectually responsible.
 * Fully fulfill the expectation created by the TITLE / TOPIC.
+* Must not contain any visual description. Just focus on the script itself.
 
 The viewer should finish the video with a deeper understanding of themselves, other people, society, behavior, or the subject being explored.`;
 
@@ -433,21 +434,52 @@ export function getScriptGenerationSystemPrompt({
   contentPillarDescription = "In-depth strategic insights and engaging narrative storytelling.",
   topic = "",
 }) {
-  const resolvedLength = contentLength || content_length || contentPillarLength || "15-20 minutes (~2500 words)";
-  const resolvedWordsCount = contentWordsCount || content_words_count || wordsCount || wordCount || contentPillarWordsCount || "2,500 - 3,500 words";
+  const resolvedLength =
+    contentLength ||
+    content_length ||
+    contentPillarLength ||
+    "15-20 minutes (~2500 words)";
+  const resolvedWordsCount =
+    contentWordsCount ||
+    content_words_count ||
+    wordsCount ||
+    wordCount ||
+    contentPillarWordsCount ||
+    "2,500 - 3,500 words";
 
-  let prompt = SCRIPT_GENERATION_SYSTEM_PROMPT
-    .replaceAll("{channel_name}", channelName || "YouTube Channel")
+  let prompt = SCRIPT_GENERATION_SYSTEM_PROMPT.replaceAll(
+    "{channel_name}",
+    channelName || "YouTube Channel",
+  )
     .replaceAll("{channel_niche}", channelNiche || "General")
-    .replaceAll("{channel_sub_niche}", channelSubNiche || channelNiche || "General")
-    .replaceAll("{channel_description}", channelDescription || "Educational and narrative documentaries.")
-    .replaceAll("{channel_mission}", channelMission || "Deliver high-value visual stories.")
+    .replaceAll(
+      "{channel_sub_niche}",
+      channelSubNiche || channelNiche || "General",
+    )
+    .replaceAll(
+      "{channel_description}",
+      channelDescription || "Educational and narrative documentaries.",
+    )
+    .replaceAll(
+      "{channel_mission}",
+      channelMission || "Deliver high-value visual stories.",
+    )
     .replaceAll("{content_pillar_name}", contentPillarName || "General Content")
-    .replaceAll("{content_pillar_category_tag}", contentPillarCategoryTag || "Documentary")
-    .replaceAll("{content_pillar_tone}", contentPillarTone || "Calm, analytical, insightful")
+    .replaceAll(
+      "{content_pillar_category_tag}",
+      contentPillarCategoryTag || "Documentary",
+    )
+    .replaceAll(
+      "{content_pillar_tone}",
+      contentPillarTone || "Calm, analytical, insightful",
+    )
     .replaceAll("{content_pillar_length}", resolvedLength)
     .replaceAll("{content_pillar_words_count}", resolvedWordsCount)
-    .replaceAll("{content_pillar_description}", contentPillarDescription || "In-depth strategic insights and engaging narrative storytelling.")
+    .replaceAll(
+      "{content_pillar_description}",
+      contentPillarDescription ||
+        "In-depth strategic insights and engaging narrative storytelling.",
+    )
     .replaceAll("{topic}", topic || "Topic Title");
 
   return prompt;
