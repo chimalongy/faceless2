@@ -333,6 +333,9 @@ topicSelect.addEventListener("change", async () => {
   });
   if (res.ok && res.data?.topic) {
     const topic = res.data.topic;
+    if (topic.channelImageTheme) {
+      selectedChannelTheme = topic.channelImageTheme;
+    }
     let scenes = [];
 
     if (topic.scenesJson) {

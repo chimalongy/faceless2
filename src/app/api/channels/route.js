@@ -30,6 +30,8 @@ export async function GET() {
         personality,
         brand_positioning AS "brandPositioning",
         brand_promise AS "brandPromise",
+        image_theme AS "imageTheme",
+        thumbnail_theme AS "thumbnailTheme",
         audio_theme AS "audioTheme",
         banner_url AS "bannerUrl",
         avatar_url AS "avatarUrl",

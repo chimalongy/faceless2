@@ -20,6 +20,8 @@ export async function GET(request, { params }) {
         t.id,
         t.channel_id AS "channelId",
         c.slug AS "channelSlug",
+        c.name AS "channelName",
+        c.image_theme AS "channelImageTheme",
         t.pillar_id AS "pillarId",
         cp.slug AS "pillarSlug",
         cp.name AS "pillarName",
