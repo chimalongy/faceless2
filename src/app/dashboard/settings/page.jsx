@@ -36,12 +36,24 @@ export default function SettingsPage() {
   const [isSavingDb, setIsSavingDb] = useState(false);
 
   // Tab 1: General Settings State
-  const [defaultLlmModel, setDefaultLlmModel] = useState("gpt-4o");
-  const [scriptGenModel, setScriptGenModel] = useState("gpt-4o");
-  const [sceneGenModel, setSceneGenModel] = useState("gpt-4o");
+  const [defaultLlmSource, setDefaultLlmSource] = useState("gemini");
+  const [defaultLlmModel, setDefaultLlmModel] = useState("gemini-2.5-flash");
+
+  const [scriptGenSource, setScriptGenSource] = useState("gemini");
+  const [scriptGenStrictSource, setScriptGenStrictSource] = useState(false);
+  const [scriptGenModel, setScriptGenModel] = useState("gemini-2.5-flash");
+  const [scriptGenStrictModel, setScriptGenStrictModel] = useState(false);
+
+  const [sceneGenSource, setSceneGenSource] = useState("gemini");
+  const [sceneGenStrictSource, setSceneGenStrictSource] = useState(false);
+  const [sceneGenModel, setSceneGenModel] = useState("gemini-2.5-flash");
+  const [sceneGenStrictModel, setSceneGenStrictModel] = useState(false);
+
+  const [gemmaBaseUrl, setGemmaBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta/openai/");
+  const [openRouterBaseUrl, setOpenRouterBaseUrl] = useState("https://openrouter.ai/api/v1");
   const [editingGeneral, setEditingGeneral] = useState(false);
 
-  // Tab 2: LLM Accounts State (Strictly: account_email, account_id, api_token, created, updated)
+  // Tab 2: LLM Accounts State (Strictly: account_email, source, account_id, api_token, created, updated)
   const [llmAccounts, setLlmAccounts] = useState([]);
   const [editingLlmIds, setEditingLlmIds] = useState({});
   const [showTokens, setShowTokens] = useState({});
@@ -62,20 +74,28 @@ export default function SettingsPage() {
         const res = await fetch("/api/settings/endpoints");
         if (res.ok) {
           const data = await res.json();
-          if (data.defaultLlmModel) {
-            setDefaultLlmModel(data.defaultLlmModel);
-          }
-          if (data.scriptGenModel) {
-            setScriptGenModel(data.scriptGenModel);
-          }
-          if (data.sceneGenModel) {
-            setSceneGenModel(data.sceneGenModel);
-          }
+          if (data.defaultLlmSource !== undefined) setDefaultLlmSource(data.defaultLlmSource);
+          if (data.defaultLlmModel) setDefaultLlmModel(data.defaultLlmModel);
+
+          if (data.scriptGenSource !== undefined) setScriptGenSource(data.scriptGenSource);
+          if (data.scriptGenStrictSource !== undefined) setScriptGenStrictSource(Boolean(data.scriptGenStrictSource));
+          if (data.scriptGenModel) setScriptGenModel(data.scriptGenModel);
+          if (data.scriptGenStrictModel !== undefined) setScriptGenStrictModel(Boolean(data.scriptGenStrictModel));
+
+          if (data.sceneGenSource !== undefined) setSceneGenSource(data.sceneGenSource);
+          if (data.sceneGenStrictSource !== undefined) setSceneGenStrictSource(Boolean(data.sceneGenStrictSource));
+          if (data.sceneGenModel) setSceneGenModel(data.sceneGenModel);
+          if (data.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(data.sceneGenStrictModel));
+
+          if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
+          if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
+
           if (Array.isArray(data.llmAccounts)) {
             setLlmAccounts(
               data.llmAccounts.map((item) => ({
                 id: item.id ? String(item.id) : `llm-${Date.now()}-${Math.random()}`,
                 accountEmail: item.accountEmail || item.account_email || "",
+                source: item.source || "gemini",
                 accountId: item.accountId || item.account_id || "",
                 apiToken: item.apiToken || item.api_token || "",
                 created: item.created || item.createdAt || null,
@@ -118,9 +138,18 @@ export default function SettingsPage() {
       const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (stored) {
         const p = JSON.parse(stored);
+        if (p.defaultLlmSource !== undefined) setDefaultLlmSource(p.defaultLlmSource);
         if (p.defaultLlmModel !== undefined) setDefaultLlmModel(p.defaultLlmModel);
+        if (p.scriptGenSource !== undefined) setScriptGenSource(p.scriptGenSource);
+        if (p.scriptGenStrictSource !== undefined) setScriptGenStrictSource(Boolean(p.scriptGenStrictSource));
         if (p.scriptGenModel !== undefined) setScriptGenModel(p.scriptGenModel);
+        if (p.scriptGenStrictModel !== undefined) setScriptGenStrictModel(Boolean(p.scriptGenStrictModel));
+        if (p.sceneGenSource !== undefined) setSceneGenSource(p.sceneGenSource);
+        if (p.sceneGenStrictSource !== undefined) setSceneGenStrictSource(Boolean(p.sceneGenStrictSource));
         if (p.sceneGenModel !== undefined) setSceneGenModel(p.sceneGenModel);
+        if (p.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(p.sceneGenStrictModel));
+        if (p.gemmaBaseUrl !== undefined) setGemmaBaseUrl(p.gemmaBaseUrl);
+        if (p.openRouterBaseUrl !== undefined) setOpenRouterBaseUrl(p.openRouterBaseUrl);
       }
     } catch {}
   }, []);
@@ -133,6 +162,7 @@ export default function SettingsPage() {
       {
         id: newId,
         accountEmail: "",
+        source: defaultLlmSource || "gemini",
         accountId: "",
         apiToken: "",
         created: new Date().toISOString(),
@@ -286,6 +316,7 @@ export default function SettingsPage() {
       "account-email": item.accountEmail.trim(),
       accountEmail: item.accountEmail.trim(),
       account_email: item.accountEmail.trim(),
+      source: (item.source || "gemini").trim(),
       "account-id": item.accountId.trim(),
       accountId: item.accountId.trim(),
       account_id: item.accountId.trim(),
@@ -313,9 +344,18 @@ export default function SettingsPage() {
     }));
 
     const payload = {
+      defaultLlmSource,
       defaultLlmModel,
+      scriptGenSource,
+      scriptGenStrictSource,
       scriptGenModel,
+      scriptGenStrictModel,
+      sceneGenSource,
+      sceneGenStrictSource,
       sceneGenModel,
+      sceneGenStrictModel,
+      gemmaBaseUrl,
+      openRouterBaseUrl,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
       audioEndpoints: formattedAudioEndpoints,
@@ -326,26 +366,25 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings/endpoints", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          defaultLlmModel,
-          scriptGenModel,
-          sceneGenModel,
-          llmAccounts: formattedLlmAccounts,
-          imageEndpoints: formattedImageEndpoints,
-          audioEndpoints: formattedAudioEndpoints,
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.defaultLlmModel) {
-          setDefaultLlmModel(data.defaultLlmModel);
-        }
-        if (data.scriptGenModel) {
-          setScriptGenModel(data.scriptGenModel);
-        }
-        if (data.sceneGenModel) {
-          setSceneGenModel(data.sceneGenModel);
-        }
+        if (data.defaultLlmSource !== undefined) setDefaultLlmSource(data.defaultLlmSource);
+        if (data.defaultLlmModel) setDefaultLlmModel(data.defaultLlmModel);
+
+        if (data.scriptGenSource !== undefined) setScriptGenSource(data.scriptGenSource);
+        if (data.scriptGenStrictSource !== undefined) setScriptGenStrictSource(Boolean(data.scriptGenStrictSource));
+        if (data.scriptGenModel) setScriptGenModel(data.scriptGenModel);
+        if (data.scriptGenStrictModel !== undefined) setScriptGenStrictModel(Boolean(data.scriptGenStrictModel));
+
+        if (data.sceneGenSource !== undefined) setSceneGenSource(data.sceneGenSource);
+        if (data.sceneGenStrictSource !== undefined) setSceneGenStrictSource(Boolean(data.sceneGenStrictSource));
+        if (data.sceneGenModel) setSceneGenModel(data.sceneGenModel);
+        if (data.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(data.sceneGenStrictModel));
+
+        if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
+        if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
         if (Array.isArray(data.llmAccounts)) {
           setLlmAccounts(
             data.llmAccounts.map((item) => ({
@@ -487,7 +526,7 @@ export default function SettingsPage() {
                   <span className="p-1.5 bg-signal/10 text-signal">
                     <Sliders size={16} />
                   </span>
-                  <span>General Model Configuration (general_settings)</span>
+                  <span>General Model & Provider Configuration (general_settings)</span>
                 </div>
 
                 <button
@@ -513,155 +552,308 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              <div className="space-y-5">
-                {/* 1. Default LLM Model */}
-                <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2.5">
-                  <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="default-llm-model">
-                    <span className="flex items-center gap-1.5">
-                      <Bot size={14} className="text-signal" />
-                      <span>Default LLM Model</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-ink-muted">general_settings.default_llm_model</span>
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      id="default-llm-model"
-                      type="text"
-                      readOnly={!editingGeneral}
-                      disabled={!editingGeneral}
-                      value={defaultLlmModel}
-                      onChange={(e) => setDefaultLlmModel(e.target.value)}
-                      placeholder="e.g. @cf/meta/llama-3.1-70b-instruct"
-                      className={`flex-1 h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
-                        editingGeneral
-                          ? "bg-white border-line-dark focus:border-signal"
-                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
-                      }`}
-                    />
-                    {editingGeneral && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {[
-                          "@cf/meta/llama-3.1-70b-instruct",
-                          "@cf/moonshotai/kimi-k2.7-code",
-                          "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                          "@cf/qwen/qwen2.5-72b-instruct",
-                          "@cf/meta/llama-3.1-8b-instruct",
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => setDefaultLlmModel(preset)}
-                            className="px-2 py-1 text-[10px] font-mono border border-line bg-paper hover:border-signal/50 text-ink-muted hover:text-signal transition-all cursor-pointer"
-                          >
-                            {preset.replace("@cf/", "")}
-                          </button>
-                        ))}
+              <div className="space-y-6">
+                {/* 1. Global Default LLM Fallback */}
+                <div className="p-5 border border-line/70 bg-paper/50 rounded-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-line pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Bot size={15} className="text-signal" />
+                      <span className="text-xs font-semibold text-ink">Global Default Fallback LLM</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-ink-muted">general_settings.default_llm</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <label className="block text-xs font-semibold text-ink">Default Provider</label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!editingGeneral}
+                          onClick={() => setDefaultLlmSource("gemini")}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-xs border transition-all cursor-pointer ${
+                            defaultLlmSource === "gemini"
+                              ? "bg-signal text-white border-signal shadow-xs"
+                              : "bg-white border-line text-ink-muted hover:text-ink"
+                          } ${!editingGeneral ? "opacity-80 cursor-not-allowed" : ""}`}
+                        >
+                          Google Gemini
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!editingGeneral}
+                          onClick={() => setDefaultLlmSource("openrouter")}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-xs border transition-all cursor-pointer ${
+                            defaultLlmSource === "openrouter"
+                              ? "bg-signal text-white border-signal shadow-xs"
+                              : "bg-white border-line text-ink-muted hover:text-ink"
+                          } ${!editingGeneral ? "opacity-80 cursor-not-allowed" : ""}`}
+                        >
+                          OpenRouter
+                        </button>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="sm:col-span-8 space-y-1.5">
+                      <label className="block text-xs font-semibold text-ink" htmlFor="default-llm-model">
+                        Default Fallback Model
+                      </label>
+                      <input
+                        id="default-llm-model"
+                        type="text"
+                        readOnly={!editingGeneral}
+                        disabled={!editingGeneral}
+                        value={defaultLlmModel}
+                        onChange={(e) => setDefaultLlmModel(e.target.value)}
+                        placeholder="e.g. gemini-2.5-flash"
+                        className={`w-full h-10 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                          editingGeneral
+                            ? "bg-white border-line-dark focus:border-signal"
+                            : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                        }`}
+                      />
+                    </div>
                   </div>
                   <p className="text-[10px] text-ink-muted font-mono">
-                    Fallback AI model used across channels and workflows when no specialized model is defined.
+                    Fallback AI provider and model used across workflows when no specialized pipeline configuration is defined.
                   </p>
                 </div>
 
-                {/* 2. Script Generation Model */}
-                <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2.5">
-                  <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="script-gen-model">
-                    <span className="flex items-center gap-1.5">
-                      <Bot size={14} className="text-signal" />
-                      <span>Script Generation Model</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-ink-muted">general_settings.script_gen_model</span>
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      id="script-gen-model"
-                      type="text"
-                      readOnly={!editingGeneral}
-                      disabled={!editingGeneral}
-                      value={scriptGenModel}
-                      onChange={(e) => setScriptGenModel(e.target.value)}
-                      placeholder="e.g. @cf/meta/llama-3.1-70b-instruct or @cf/moonshotai/kimi-k2.7-code"
-                      className={`flex-1 h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
-                        editingGeneral
-                          ? "bg-white border-line-dark focus:border-signal"
-                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
-                      }`}
-                    />
-                    {editingGeneral && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {[
-                          "@cf/meta/llama-3.1-70b-instruct",
-                          "@cf/moonshotai/kimi-k2.7-code",
-                          "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                          "@cf/qwen/qwen2.5-72b-instruct",
-                          "@cf/meta/llama-3.1-8b-instruct",
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => setScriptGenModel(preset)}
-                            className="px-2 py-1 text-[10px] font-mono border border-line bg-paper hover:border-signal/50 text-ink-muted hover:text-signal transition-all cursor-pointer"
-                          >
-                            {preset.replace("@cf/", "")}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                {/* 2. Script Generation Pipeline */}
+                <div className="p-5 border border-line/70 bg-paper/50 rounded-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-line pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Bot size={15} className="text-signal" />
+                      <span className="text-xs font-semibold text-ink">Script Generation Configuration</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-ink-muted">general_settings.script_gen</span>
                   </div>
-                  <p className="text-[10px] text-ink-muted font-mono">
-                    Dedicated model tailored for full-length narrative storytelling, pacing, and viral hook generation.
-                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                    {/* Source Provider & Strict Source */}
+                    <div className="sm:col-span-5 space-y-2">
+                      <label className="block text-xs font-semibold text-ink">Provider Source</label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!editingGeneral}
+                          onClick={() => setScriptGenSource("gemini")}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-xs border transition-all cursor-pointer ${
+                            scriptGenSource === "gemini"
+                              ? "bg-signal text-white border-signal shadow-xs"
+                              : "bg-white border-line text-ink-muted hover:text-ink"
+                          } ${!editingGeneral ? "opacity-80 cursor-not-allowed" : ""}`}
+                        >
+                          Google Gemini
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!editingGeneral}
+                          onClick={() => setScriptGenSource("openrouter")}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-xs border transition-all cursor-pointer ${
+                            scriptGenSource === "openrouter"
+                              ? "bg-signal text-white border-signal shadow-xs"
+                              : "bg-white border-line text-ink-muted hover:text-ink"
+                          } ${!editingGeneral ? "opacity-80 cursor-not-allowed" : ""}`}
+                        >
+                          OpenRouter
+                        </button>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                        <input
+                          type="checkbox"
+                          disabled={!editingGeneral}
+                          checked={scriptGenStrictSource}
+                          onChange={(e) => setScriptGenStrictSource(e.target.checked)}
+                          className="w-3.5 h-3.5 text-signal border-line rounded-xs focus:ring-signal"
+                        />
+                        <span className="text-[11px] font-medium text-ink">
+                          Strictly use API keys from this provider
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Model & Strict Model */}
+                    <div className="sm:col-span-7 space-y-2">
+                      <label className="block text-xs font-semibold text-ink" htmlFor="script-gen-model">
+                        Script Generation Model
+                      </label>
+                      <input
+                        id="script-gen-model"
+                        type="text"
+                        readOnly={!editingGeneral}
+                        disabled={!editingGeneral}
+                        value={scriptGenModel}
+                        onChange={(e) => setScriptGenModel(e.target.value)}
+                        placeholder="e.g. gemini-2.5-pro"
+                        className={`w-full h-10 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                          editingGeneral
+                            ? "bg-white border-line-dark focus:border-signal"
+                            : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                        }`}
+                      />
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                        <input
+                          type="checkbox"
+                          disabled={!editingGeneral}
+                          checked={scriptGenStrictModel}
+                          onChange={(e) => setScriptGenStrictModel(e.target.checked)}
+                          className="w-3.5 h-3.5 text-signal border-line rounded-xs focus:ring-signal"
+                        />
+                        <span className="text-[11px] font-medium text-ink">
+                          Strictly use this model for script generation
+                        </span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
-                {/* 3. Scene Breakdown & Prompt Model */}
-                <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2.5">
-                  <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="scene-gen-model">
-                    <span className="flex items-center gap-1.5">
-                      <Bot size={14} className="text-signal" />
-                      <span>Scene Breakdown & Prompt Model</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-ink-muted">general_settings.scene_gen_model</span>
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                {/* 3. Scene Breakdown & Generation Pipeline */}
+                <div className="p-5 border border-line/70 bg-paper/50 rounded-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-line pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Bot size={15} className="text-signal" />
+                      <span className="text-xs font-semibold text-ink">Scene Generation Configuration</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-ink-muted">general_settings.scene_gen</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                    {/* Source Provider & Strict Source */}
+                    <div className="sm:col-span-5 space-y-2">
+                      <label className="block text-xs font-semibold text-ink">Provider Source</label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!editingGeneral}
+                          onClick={() => setSceneGenSource("gemini")}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-xs border transition-all cursor-pointer ${
+                            sceneGenSource === "gemini"
+                              ? "bg-signal text-white border-signal shadow-xs"
+                              : "bg-white border-line text-ink-muted hover:text-ink"
+                          } ${!editingGeneral ? "opacity-80 cursor-not-allowed" : ""}`}
+                        >
+                          Google Gemini
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!editingGeneral}
+                          onClick={() => setSceneGenSource("openrouter")}
+                          className={`flex-1 py-2 text-xs font-semibold rounded-xs border transition-all cursor-pointer ${
+                            sceneGenSource === "openrouter"
+                              ? "bg-signal text-white border-signal shadow-xs"
+                              : "bg-white border-line text-ink-muted hover:text-ink"
+                          } ${!editingGeneral ? "opacity-80 cursor-not-allowed" : ""}`}
+                        >
+                          OpenRouter
+                        </button>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                        <input
+                          type="checkbox"
+                          disabled={!editingGeneral}
+                          checked={sceneGenStrictSource}
+                          onChange={(e) => setSceneGenStrictSource(e.target.checked)}
+                          className="w-3.5 h-3.5 text-signal border-line rounded-xs focus:ring-signal"
+                        />
+                        <span className="text-[11px] font-medium text-ink">
+                          Strictly use API keys from this provider
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Model & Strict Model */}
+                    <div className="sm:col-span-7 space-y-2">
+                      <label className="block text-xs font-semibold text-ink" htmlFor="scene-gen-model">
+                        Scene Generation Model
+                      </label>
+                      <input
+                        id="scene-gen-model"
+                        type="text"
+                        readOnly={!editingGeneral}
+                        disabled={!editingGeneral}
+                        value={sceneGenModel}
+                        onChange={(e) => setSceneGenModel(e.target.value)}
+                        placeholder="e.g. gemini-2.5-flash"
+                        className={`w-full h-10 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                          editingGeneral
+                            ? "bg-white border-line-dark focus:border-signal"
+                            : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                        }`}
+                      />
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                        <input
+                          type="checkbox"
+                          disabled={!editingGeneral}
+                          checked={sceneGenStrictModel}
+                          onChange={(e) => setSceneGenStrictModel(e.target.checked)}
+                          className="w-3.5 h-3.5 text-signal border-line rounded-xs focus:ring-signal"
+                        />
+                        <span className="text-[11px] font-medium text-ink">
+                          Strictly use this model for scene generation
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Base URLs Configuration */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="gemma-base-url">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound size={13} className="text-signal" />
+                        <span>Gemini / Gemma Base URL</span>
+                      </span>
+                    </label>
                     <input
-                      id="scene-gen-model"
+                      id="gemma-base-url"
                       type="text"
                       readOnly={!editingGeneral}
                       disabled={!editingGeneral}
-                      value={sceneGenModel}
-                      onChange={(e) => setSceneGenModel(e.target.value)}
-                      placeholder="e.g. @cf/meta/llama-3.1-70b-instruct or @cf/meta/llama-3.1-8b-instruct"
-                      className={`flex-1 h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                      value={gemmaBaseUrl}
+                      onChange={(e) => setGemmaBaseUrl(e.target.value)}
+                      placeholder="https://generativelanguage.googleapis.com/v1beta/openai/"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
                         editingGeneral
                           ? "bg-white border-line-dark focus:border-signal"
                           : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
                       }`}
                     />
-                    {editingGeneral && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {[
-                          "@cf/meta/llama-3.1-70b-instruct",
-                          "@cf/moonshotai/kimi-k2.7-code",
-                          "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                          "@cf/qwen/qwen2.5-72b-instruct",
-                          "@cf/meta/llama-3.1-8b-instruct",
-                        ].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => setSceneGenModel(preset)}
-                            className="px-2 py-1 text-[10px] font-mono border border-line bg-paper hover:border-signal/50 text-ink-muted hover:text-signal transition-all cursor-pointer"
-                          >
-                            {preset.replace("@cf/", "")}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      Google Generative Language OpenAI-compatible endpoint.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-ink-muted font-mono">
-                    Model utilized to split scripts into scene JSON blocks, visual camera directions, and generative image prompts.
-                  </p>
+
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="open-router-base-url">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound size={13} className="text-signal" />
+                        <span>OpenRouter Base URL</span>
+                      </span>
+                    </label>
+                    <input
+                      id="open-router-base-url"
+                      type="text"
+                      readOnly={!editingGeneral}
+                      disabled={!editingGeneral}
+                      value={openRouterBaseUrl}
+                      onChange={(e) => setOpenRouterBaseUrl(e.target.value)}
+                      placeholder="https://openrouter.ai/api/v1"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                        editingGeneral
+                          ? "bg-white border-line-dark focus:border-signal"
+                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                      }`}
+                    />
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      OpenRouter API Base URL for multi-model routing.
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>
@@ -669,7 +861,7 @@ export default function SettingsPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: LLM ACCOUNTS (account_email, account_id, api_token, created, updated) */}
+        {/* TAB 2: LLM ACCOUNTS (account_email, source, account_id, api_token, created, updated) */}
         {/* ========================================================================= */}
         {activeTab === "llm-accounts" && (
           <div className="space-y-6 animate-slide-in">
@@ -680,7 +872,7 @@ export default function SettingsPage() {
                   <span>LLM Accounts Pool ({llmAccounts.length})</span>
                 </h3>
                 <p className="text-[11px] text-ink-muted mt-0.5">
-                  Configure multiple LLM provider accounts with account email, account ID, and API tokens. Saved accounts are locked by default.
+                  Configure multiple Gemini & OpenRouter API accounts. Saved accounts are locked by default.
                 </p>
               </div>
 
@@ -708,7 +900,7 @@ export default function SettingsPage() {
                 <div className="space-y-1 max-w-md mx-auto">
                   <h4 className="text-sm font-semibold text-ink">No LLM Accounts in Database</h4>
                   <p className="text-xs text-ink-muted leading-relaxed">
-                    There are currently no LLM account records saved in the database. Add your first LLM provider account to begin.
+                    There are currently no LLM account records saved in the database. Add your first Gemini or OpenRouter account to begin.
                   </p>
                 </div>
                 <button
@@ -725,6 +917,7 @@ export default function SettingsPage() {
                 {llmAccounts.map((account, index) => {
                   const isEditing = !!editingLlmIds[account.id];
                   const showToken = !!showTokens[account.id];
+                  const sourceVal = account.source || "gemini";
                   return (
                     <section
                       key={account.id}
@@ -735,7 +928,7 @@ export default function SettingsPage() {
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-line pb-2.5">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                           <span className="w-5 h-5 rounded-full bg-signal/10 text-signal font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                             {index + 1}
                           </span>
@@ -745,11 +938,15 @@ export default function SettingsPage() {
                           >
                             {account.accountEmail || `LLM Account #${index + 1}`}
                           </span>
-                          {account.accountId && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-mono bg-paper-dark text-ink-muted border border-line truncate max-w-[120px]">
-                              ID: {account.accountId}
-                            </span>
-                          )}
+                          <span
+                            className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-xs border shrink-0 ${
+                              sourceVal === "openrouter"
+                                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }`}
+                          >
+                            {sourceVal === "openrouter" ? "OpenRouter" : "Gemini"}
+                          </span>
                           {isEditing ? (
                             <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                               Editing
@@ -798,7 +995,32 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                        {/* 1. account_email (4 cols) */}
+                        {/* 1. source (3 cols) */}
+                        <div className="sm:col-span-3">
+                          <label
+                            className="block text-xs font-semibold text-ink/80 mb-1.5 flex items-center gap-1.5"
+                            htmlFor={`llm-source-${account.id}`}
+                          >
+                            <Cpu size={13} className="text-signal" />
+                            <span>Source Provider</span>
+                          </label>
+                          <select
+                            id={`llm-source-${account.id}`}
+                            disabled={!isEditing}
+                            value={account.source || "gemini"}
+                            onChange={(e) => handleUpdateLlmAccount(account.id, "source", e.target.value)}
+                            className={`w-full h-10 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                              isEditing
+                                ? "bg-white border-line-dark focus:border-signal"
+                                : "bg-paper-dark/60 border-line text-ink/80 cursor-not-allowed"
+                            }`}
+                          >
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openrouter">OpenRouter</option>
+                          </select>
+                        </div>
+
+                        {/* 2. account_email (4 cols) */}
                         <div className="sm:col-span-4">
                           <label
                             className="block text-xs font-semibold text-ink/80 mb-1.5 flex items-center gap-1.5"
@@ -815,33 +1037,7 @@ export default function SettingsPage() {
                             disabled={!isEditing}
                             value={account.accountEmail}
                             onChange={(e) => handleUpdateLlmAccount(account.id, "accountEmail", e.target.value)}
-                            placeholder="e.g. account@domain.com"
-                            className={`w-full h-10 px-3.5 border text-xs font-mono text-ink outline-none transition-all ${
-                              isEditing
-                                ? "bg-white border-line-dark focus:border-signal"
-                                : "bg-paper-dark/60 border-line text-ink/80 cursor-not-allowed"
-                            }`}
-                          />
-                        </div>
-
-                        {/* 2. account_id (text) (3 cols) */}
-                        <div className="sm:col-span-3">
-                          <label
-                            className="block text-xs font-semibold text-ink/80 mb-1.5 flex items-center gap-1.5"
-                            htmlFor={`llm-account-id-${account.id}`}
-                          >
-                            <Cpu size={13} className="text-signal" />
-                            <span>account_id (text)</span>
-                          </label>
-                          <input
-                            id={`llm-account-id-${account.id}`}
-                            name="account_id"
-                            type="text"
-                            readOnly={!isEditing}
-                            disabled={!isEditing}
-                            value={account.accountId}
-                            onChange={(e) => handleUpdateLlmAccount(account.id, "accountId", e.target.value)}
-                            placeholder="e.g. org-12345 / account_id"
+                            placeholder="e.g. user@gmail.com"
                             className={`w-full h-10 px-3.5 border text-xs font-mono text-ink outline-none transition-all ${
                               isEditing
                                 ? "bg-white border-line-dark focus:border-signal"
@@ -858,7 +1054,7 @@ export default function SettingsPage() {
                           >
                             <span className="flex items-center gap-1.5">
                               <KeyRound size={13} className="text-signal" />
-                              <span>api_token (text)</span>
+                              <span>API Key / Token</span>
                             </span>
                             <button
                               type="button"
@@ -878,23 +1074,21 @@ export default function SettingsPage() {
                               )}
                             </button>
                           </label>
-                          <div className="relative">
-                            <input
-                              id={`llm-token-${account.id}`}
-                              name="api_token"
-                              type={showToken ? "text" : "password"}
-                              readOnly={!isEditing}
-                              disabled={!isEditing}
-                              value={account.apiToken}
-                              onChange={(e) => handleUpdateLlmAccount(account.id, "apiToken", e.target.value)}
-                              placeholder="sk-••••••••••••••••••••••••"
-                              className={`w-full h-10 px-3.5 border text-xs font-mono text-ink outline-none transition-all ${
-                                isEditing
-                                  ? "bg-white border-line-dark focus:border-signal"
-                                  : "bg-paper-dark/60 border-line text-ink/80 cursor-not-allowed"
-                              }`}
-                            />
-                          </div>
+                          <input
+                            id={`llm-token-${account.id}`}
+                            name="api_token"
+                            type={showToken ? "text" : "password"}
+                            readOnly={!isEditing}
+                            disabled={!isEditing}
+                            value={account.apiToken}
+                            onChange={(e) => handleUpdateLlmAccount(account.id, "apiToken", e.target.value)}
+                            placeholder="e.g. AIzaSy... or sk-or-v1-..."
+                            className={`w-full h-10 px-3.5 border text-xs font-mono text-ink outline-none transition-all ${
+                              isEditing
+                                ? "bg-white border-line-dark focus:border-signal"
+                                : "bg-paper-dark/60 border-line text-ink/80 cursor-not-allowed"
+                            }`}
+                          />
                         </div>
                       </div>
 

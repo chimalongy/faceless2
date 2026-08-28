@@ -109,10 +109,11 @@ CREATE TABLE IF NOT EXISTS audio_endpoints (
 );
 
 -- 7. LLM ACCOUNTS TABLE
--- Multiple LLM accounts with provider account ID, API token/key, and timestamps.
+-- Multiple LLM accounts with provider account ID, source ('gemini', 'openrouter'), API token/key, and timestamps.
 CREATE TABLE IF NOT EXISTS llm_accounts (
     id SERIAL PRIMARY KEY,
     account_email TEXT NOT NULL,
+    source TEXT DEFAULT 'gemini', -- 'gemini' or 'openrouter'
     account_id TEXT,
     api_token TEXT NOT NULL,
     created TIMESTAMPTZ DEFAULT NOW(),
@@ -120,12 +121,21 @@ CREATE TABLE IF NOT EXISTS llm_accounts (
 );
 
 -- 8. GENERAL SETTINGS TABLE
--- Stores global system configuration such as default LLM model, script gen model, and scene gen model.
+-- Stores global system configuration such as default LLM model, script gen model, scene gen model, sources, and base URLs.
 CREATE TABLE IF NOT EXISTS general_settings (
     id SERIAL PRIMARY KEY,
-    default_llm_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
-    script_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
-    scene_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
+    default_llm_source TEXT DEFAULT 'gemini',
+    default_llm_model TEXT DEFAULT 'gemini-2.5-flash',
+    script_gen_source TEXT DEFAULT 'gemini',
+    script_gen_strict_source BOOLEAN DEFAULT false,
+    script_gen_model TEXT DEFAULT 'gemini-2.5-flash',
+    script_gen_strict_model BOOLEAN DEFAULT false,
+    scene_gen_source TEXT DEFAULT 'gemini',
+    scene_gen_strict_source BOOLEAN DEFAULT false,
+    scene_gen_model TEXT DEFAULT 'gemini-2.5-flash',
+    scene_gen_strict_model BOOLEAN DEFAULT false,
+    gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

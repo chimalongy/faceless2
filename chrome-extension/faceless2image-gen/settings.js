@@ -9,12 +9,16 @@ I will provide the prompts for each scene in batches of "{batch_count}", and you
 each scene prompt would be mapped with a scene number
 eg 
 scene_1
-image_prompt:
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for scene 1>"
 
 scene_2
-image_prompt
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for scene 2>"
 
 scene_3
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for scene 3>"
 
 
 Ensure only one Image is Generated Per Prompt or Per Scene. and name each image by thier scene number

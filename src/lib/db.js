@@ -166,6 +166,7 @@ export async function initDbSchema() {
       CREATE TABLE IF NOT EXISTS llm_accounts (
         id SERIAL PRIMARY KEY,
         account_email TEXT NOT NULL,
+        source TEXT DEFAULT 'gemini',
         account_id TEXT,
         api_token TEXT NOT NULL,
         created TIMESTAMPTZ DEFAULT NOW(),
@@ -177,9 +178,18 @@ export async function initDbSchema() {
     await sql`
       CREATE TABLE IF NOT EXISTS general_settings (
         id SERIAL PRIMARY KEY,
-        default_llm_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
-        script_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
-        scene_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct',
+        default_llm_source TEXT DEFAULT 'gemini',
+        default_llm_model TEXT DEFAULT 'gemini-2.5-flash',
+        script_gen_source TEXT DEFAULT 'gemini',
+        script_gen_strict_source BOOLEAN DEFAULT false,
+        script_gen_model TEXT DEFAULT 'gemini-2.5-flash',
+        script_gen_strict_model BOOLEAN DEFAULT false,
+        scene_gen_source TEXT DEFAULT 'gemini',
+        scene_gen_strict_source BOOLEAN DEFAULT false,
+        scene_gen_model TEXT DEFAULT 'gemini-2.5-flash',
+        scene_gen_strict_model BOOLEAN DEFAULT false,
+        gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -188,8 +198,19 @@ export async function initDbSchema() {
     try {
       await sql`ALTER TABLE image_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
       await sql`ALTER TABLE audio_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
-      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct';`;
-      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_model TEXT DEFAULT '@cf/meta/llama-3.1-70b-instruct';`;
+      await sql`ALTER TABLE llm_accounts ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_llm_source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_llm_model TEXT DEFAULT 'gemini-2.5-flash';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_strict_source BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_model TEXT DEFAULT 'gemini-2.5-flash';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_strict_model BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_strict_source BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_model TEXT DEFAULT 'gemini-2.5-flash';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_strict_model BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1';`;
     } catch {}
 
     return true;

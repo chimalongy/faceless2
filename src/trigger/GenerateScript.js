@@ -1,4 +1,5 @@
 import { task, logger } from "@trigger.dev/sdk";
+import OpenAI from "openai";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import {
   getScriptGenerationSystemPrompt,
@@ -15,7 +16,11 @@ export const generateScriptTask = task({
       customPrompt = null,
     } = payload;
 
-    if (!channelSlug || typeof channelSlug !== "string" || !channelSlug.trim()) {
+    if (
+      !channelSlug ||
+      typeof channelSlug !== "string" ||
+      !channelSlug.trim()
+    ) {
       throw new Error("channelSlug is required for generate-script task.");
     }
 
@@ -32,9 +37,9 @@ export const generateScriptTask = task({
 
     await initDbSchema();
 
-    // 1. Fetch Channel, Pillar, and Topic records
+    // 1. Fetch Channel & Topic records
     const channelRows = await sql`
-      SELECT id, name, slug, niche, sub_niche, description, target_audience, mission, personality
+      SELECT id, name, slug, niche, sub_niche, description, mission, personality
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -53,7 +58,9 @@ export const generateScriptTask = task({
     `;
 
     if (!topicRows || topicRows.length === 0) {
-      throw new Error(`Topic not found with slug "${topicSlug}" for channel "${channelSlug}".`);
+      throw new Error(
+        `Topic not found with slug "${topicSlug}" for channel "${channelSlug}".`,
+      );
     }
     const topic = topicRows[0];
 
@@ -61,7 +68,7 @@ export const generateScriptTask = task({
     let pillar = null;
     if (topic.pillar_id) {
       const pillarRows = await sql`
-        SELECT id, name, slug, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount", use_main_character AS "useMainCharacter", main_character_description AS "mainCharacterDescription"
+        SELECT id, name, slug, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount"
         FROM content_pillars
         WHERE id = ${topic.pillar_id}
         LIMIT 1;
@@ -69,73 +76,130 @@ export const generateScriptTask = task({
       pillar = pillarRows?.[0] || null;
     }
 
-    const topicTitle = topic.title || topicSlug;
-    const pillarName = pillar?.name || channel.niche || "General Content";
-    const pillarDescription = pillar?.description || channel.description || "In-depth strategic insights and engaging narrative storytelling.";
-    const pillarTone = pillar?.tone || channel.personality || null;
-    const pillarContentLength = pillar?.contentLength || "15-20 minutes (~2500 words)";
-    const pillarContentWordsCount = pillar?.contentWordsCount || "2,500 - 3,500 words";
-    
+    const topicTitle = topic.title || "Untitled Topic";
+    const pillarName = pillar?.name || "General Content";
+    const pillarDescription =
+      pillar?.description ||
+      channel.description ||
+      "In-depth strategic insights and engaging narrative storytelling.";
+    const pillarTone =
+      pillar?.tone || channel.personality || "Calm, analytical, insightful";
+    const pillarContentLength =
+      pillar?.contentLength || "15-20 minutes (~2500 words)";
+    const pillarContentWordsCount =
+      pillar?.contentWordsCount || "2,500 - 3,500 words";
 
-    // 2. Fetch General Settings for Default LLM Model
+    // 2. Fetch General Settings for Script Generation Pipeline
     const generalRows = await sql`
-      SELECT default_llm_model AS "defaultLlmModel"
+      SELECT 
+        default_llm_source AS "defaultLlmSource",
+        default_llm_model AS "defaultLlmModel", 
+        script_gen_source AS "scriptGenSource",
+        script_gen_strict_source AS "scriptGenStrictSource",
+        script_gen_model AS "scriptGenModel", 
+        script_gen_strict_model AS "scriptGenStrictModel",
+        gemma_base_url AS "gemmaBaseUrl",
+        open_router_base_url AS "openRouterBaseUrl"
       FROM general_settings
       ORDER BY id ASC
       LIMIT 1;
     `;
 
-    const rawModel = generalRows?.[0]?.defaultLlmModel?.trim();
+    const genSettings = generalRows?.[0] || {};
+    const defaultLlmSource = (genSettings.defaultLlmSource || "gemini")
+      .trim()
+      .toLowerCase();
+    const defaultLlmModel = (genSettings.defaultLlmModel || "").trim();
 
-    if (!rawModel) {
-      throw new Error(
-        "No Default LLM Model configured. Please go to Dashboard Settings -> General Settings and set your Default LLM Model."
+    const scriptGenSource = (
+      genSettings.scriptGenSource ||
+      defaultLlmSource ||
+      "gemini"
+    )
+      .trim()
+      .toLowerCase();
+    const scriptGenStrictSource = Boolean(genSettings.scriptGenStrictSource);
+    const scriptGenModel = (genSettings.scriptGenModel || "").trim();
+    const scriptGenStrictModel = Boolean(genSettings.scriptGenStrictModel);
+
+    const gemmaBaseUrl = (
+      genSettings.gemmaBaseUrl ||
+      "https://generativelanguage.googleapis.com/v1beta/openai/"
+    ).trim();
+    const openRouterBaseUrl = (
+      genSettings.openRouterBaseUrl || "https://openrouter.ai/api/v1"
+    ).trim();
+
+    // Model Resolution Logic for Script Generation
+    let configuredModel = "";
+    if (scriptGenStrictModel) {
+      configuredModel = scriptGenModel || defaultLlmModel;
+      if (!configuredModel) {
+        throw new Error(
+          "Strict Model Mode is enabled for Script Generation, but no Script Generation Model or Default LLM Model is configured in Settings.",
+        );
+      }
+      logger.log(
+        `[GenerateScript] Strict Model Mode active. Enforcing model: ${configuredModel}`,
       );
-    }
-    
-    // Resolve to official Cloudflare Workers AI model URI
-    function resolveCloudflareModel(modelStr) {
-      const m = (modelStr || "").trim();
-      if (!m) return "";
-      if (m.startsWith("@cf/")) return m;
-      if (m.startsWith("cf/")) return `@${m}`;
-      if (m.startsWith("@")) return `@cf/${m.slice(1)}`;
-      if (m.includes("/")) return `@cf/${m.replace(/^\/+/, "")}`;
-
-      const aliasMap = {
-        "kimi": "@cf/moonshotai/kimi-k2.7-code",
-        "kimi-k2.7-code": "@cf/moonshotai/kimi-k2.7-code",
-        "llama-3.1-70b": "@cf/meta/llama-3.1-70b-instruct",
-        "llama-3.1-8b": "@cf/meta/llama-3.1-8b-instruct",
-        "llama-3.3-70b": "@cf/meta/llama-3.3-70b-instruct",
-        "deepseek-r1": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-        "qwen-72b": "@cf/qwen/qwen2.5-72b-instruct",
-        "qwen-2.5-72b": "@cf/qwen/qwen2.5-72b-instruct",
-        "mistral-7b": "@cf/mistral/mistral-7b-instruct-v0.2",
-        "gpt-4o": "@cf/meta/llama-3.1-70b-instruct",
-        "gpt-4o-mini": "@cf/meta/llama-3.1-8b-instruct",
-      };
-
-      return aliasMap[m.toLowerCase()] || `@cf/${m}`;
+    } else {
+      configuredModel = (
+        customModel ||
+        scriptGenModel ||
+        defaultLlmModel ||
+        ""
+      ).trim();
+      if (!configuredModel) {
+        throw new Error(
+          "No LLM Model configured for script generation. Please go to Dashboard Settings -> General Settings and configure your Script Generation Model or Default LLM Model.",
+        );
+      }
+      logger.log(`[GenerateScript] Using resolved model: ${configuredModel}`);
     }
 
-    const configuredModel = resolveCloudflareModel(rawModel);
-    logger.log(`Using default LLM model: ${configuredModel}`);
-
-    // 3. Fetch all LLM Accounts from DB (Ordered from top/first added)
-    const llmAccounts = await sql`
-      SELECT id, account_email AS "accountEmail", account_id AS "accountId", api_token AS "apiToken"
+    // 3. Fetch all LLM Accounts from DB
+    const rawLlmAccounts = await sql`
+      SELECT id, account_email AS "accountEmail", source, account_id AS "accountId", api_token AS "apiToken"
       FROM llm_accounts
       ORDER BY id ASC;
     `;
 
-    if (!llmAccounts || llmAccounts.length === 0) {
+    if (!rawLlmAccounts || rawLlmAccounts.length === 0) {
       throw new Error(
-        "No LLM accounts configured in database. Please go to Dashboard Settings -> LLMs Accounts tab and add at least one Cloudflare account (Account ID and API Token)."
+        "No LLM accounts configured in database. Please go to Dashboard Settings -> LLM Accounts tab and add your Gemini or OpenRouter API key.",
       );
     }
 
-    logger.log(`Loaded ${llmAccounts.length} LLM account(s) for execution pool.`);
+    // Source Resolution for Script Generation
+    let executionAccounts = [];
+    if (scriptGenStrictSource) {
+      executionAccounts = rawLlmAccounts.filter(
+        (acc) =>
+          (acc.source || "gemini").trim().toLowerCase() === scriptGenSource,
+      );
+
+      if (executionAccounts.length === 0) {
+        throw new Error(
+          `Strict Source Mode is active for Script Generation ('${scriptGenSource}'), but no ${scriptGenSource} accounts were found in Settings -> LLM Accounts. Please add a ${scriptGenSource} account or disable Strict Source Mode.`,
+        );
+      }
+      logger.log(
+        `[GenerateScript] Strict Source Mode active for '${scriptGenSource}'. Filtered to ${executionAccounts.length} account(s).`,
+      );
+    } else {
+      const matchingAccounts = rawLlmAccounts.filter(
+        (acc) =>
+          (acc.source || "gemini").trim().toLowerCase() === scriptGenSource,
+      );
+      const otherAccounts = rawLlmAccounts.filter(
+        (acc) =>
+          (acc.source || "gemini").trim().toLowerCase() !== scriptGenSource,
+      );
+      executionAccounts = [...matchingAccounts, ...otherAccounts];
+      logger.log(
+        `[GenerateScript] Prioritizing ${matchingAccounts.length} ${scriptGenSource} account(s), with ${otherAccounts.length} fallback account(s).`,
+      );
+    }
 
     // 4. Construct System & User Prompt
     const fullSystemPrompt = getScriptGenerationSystemPrompt({
@@ -151,178 +215,141 @@ export const generateScriptTask = task({
       contentPillarWordsCount: pillarContentWordsCount,
       contentPillarDescription: pillarDescription,
       topic: topicTitle,
-      
     });
 
-    const userPromptContent = customPrompt || `Generate the complete, engaging, long-form YouTube script for the topic: "${topicTitle}". Follow all instructions in the system prompt.`;
+    const userPromptContent =
+      customPrompt ||
+      `Generate the complete, engaging, long-form YouTube script for the topic: "${topicTitle}". Follow all instructions in the system prompt.`;
 
-    // 5. Fallback Loop Across LLM Accounts starting from the top
+    // 5. Fallback Loop Across Selected LLM Accounts
     let generatedScript = null;
     let successfulAccount = null;
     const errors = [];
 
-    for (let i = 0; i < llmAccounts.length; i++) {
-      const account = llmAccounts[i];
-      const accountId = (account.accountId || "").trim();
+    for (let i = 0; i < executionAccounts.length; i++) {
+      const account = executionAccounts[i];
+      const accountSource = (account.source || "gemini").trim().toLowerCase();
       const apiToken = (account.apiToken || "").trim();
-      const email = account.accountEmail || `Account #${i + 1}`;
+      const email =
+        account.accountEmail || `Account #${i + 1} (${accountSource})`;
 
-      if (!accountId || !apiToken) {
-        logger.warn(`[GenerateScript] Skipping account ${email} (${i + 1}/${llmAccounts.length}) because account_id or api_token is missing.`);
-        errors.push(`${email}: Missing account_id or api_token`);
+      if (!apiToken) {
+        logger.warn(
+          `[GenerateScript] Skipping account ${email} (${i + 1}/${executionAccounts.length}) because API token is missing.`,
+        );
+        errors.push(`${email}: Missing API token`);
         continue;
       }
 
-      logger.log(`[GenerateScript] Attempting generation with account ${email} (${i + 1}/${llmAccounts.length})...`);
+      const baseURL =
+        accountSource === "openrouter" ? openRouterBaseUrl : gemmaBaseUrl;
+      logger.log(
+        `[GenerateScript] Attempting generation with account ${email} via ${accountSource} [${baseURL}] using model ${configuredModel} (${i + 1}/${executionAccounts.length})...`,
+      );
 
       try {
-        const endpointUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${configuredModel}`;
-
-        const response = await fetch(endpointUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: fullSystemPrompt,
-              },
-              {
-                role: "user",
-                content: userPromptContent,
-              },
-            ],
-            max_tokens: 4096,
-            temperature: 0.7,
-          }),
+        const openai = new OpenAI({
+          apiKey: apiToken,
+          baseURL,
         });
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Cloudflare AI responded with HTTP ${response.status}: ${errText.slice(0, 300)}`);
+        const completion = await openai.chat.completions.create({
+          model: configuredModel,
+          messages: [
+            {
+              role: "system",
+              content: fullSystemPrompt,
+            },
+            {
+              role: "user",
+              content: userPromptContent,
+            },
+          ],
+          temperature: 0.8,
+        });
+
+        const rawText = completion.choices?.[0]?.message?.content?.trim();
+
+        if (!rawText) {
+          throw new Error(
+            `Empty script content returned from ${accountSource} for account ${email}`,
+          );
         }
 
-        const data = await response.json();
-
-        // Robust multi-schema text extraction for Cloudflare Workers AI models
-        function extractAiResponseText(payload) {
-          if (!payload) return null;
-          if (typeof payload === "string") return payload.trim();
-
-          // 1. Direct result string
-          if (typeof payload.result === "string" && payload.result.trim()) {
-            return payload.result.trim();
-          }
-
-          // 2. data.result object
-          if (payload.result && typeof payload.result === "object") {
-            if (typeof payload.result.response === "string" && payload.result.response.trim()) {
-              return payload.result.response.trim();
-            }
-            if (typeof payload.result.text === "string" && payload.result.text.trim()) {
-              return payload.result.text.trim();
-            }
-            if (typeof payload.result.generated_text === "string" && payload.result.generated_text.trim()) {
-              return payload.result.generated_text.trim();
-            }
-            if (typeof payload.result.content === "string" && payload.result.content.trim()) {
-              return payload.result.content.trim();
-            }
-            if (typeof payload.result.output === "string" && payload.result.output.trim()) {
-              return payload.result.output.trim();
-            }
-            if (payload.result.message && typeof payload.result.message.content === "string" && payload.result.message.content.trim()) {
-              return payload.result.message.content.trim();
-            }
-            if (Array.isArray(payload.result.choices) && payload.result.choices.length > 0) {
-              const choice = payload.result.choices[0];
-              if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
-                return choice.message.content.trim();
-              }
-              if (typeof choice?.text === "string" && choice.text.trim()) {
-                return choice.text.trim();
-              }
-            }
-            if (Array.isArray(payload.result) && payload.result.length > 0) {
-              const item = payload.result[0];
-              if (typeof item === "string" && item.trim()) return item.trim();
-              if (item?.response) return String(item.response).trim();
-              if (item?.generated_text) return String(item.generated_text).trim();
-              if (item?.text) return String(item.text).trim();
-              if (item?.message?.content) return String(item.message.content).trim();
-            }
-            if (typeof payload.result.reasoning_content === "string" && payload.result.reasoning_content.trim()) {
-              return payload.result.reasoning_content.trim();
-            }
-          }
-
-          // 3. Root-level standard OpenAI / Cloudflare format
-          if (typeof payload.response === "string" && payload.response.trim()) {
-            return payload.response.trim();
-          }
-          if (typeof payload.text === "string" && payload.text.trim()) {
-            return payload.text.trim();
-          }
-          if (typeof payload.generated_text === "string" && payload.generated_text.trim()) {
-            return payload.generated_text.trim();
-          }
-          if (Array.isArray(payload.choices) && payload.choices.length > 0) {
-            const choice = payload.choices[0];
-            if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
-              return choice.message.content.trim();
-            }
-            if (typeof choice?.text === "string" && choice.text.trim()) {
-              return choice.text.trim();
-            }
-          }
-
-          return null;
+        // Strip all thinking/reasoning tags (<thought>, <think>, <thinking>, <reasoning>, etc.)
+        function stripReasoningBlocks(text) {
+          if (!text) return "";
+          let str = text;
+          str = str.replace(/<thought>[\s\S]*?<\/thought>/gi, "");
+          str = str.replace(/<think>[\s\S]*?<\/think>/gi, "");
+          str = str.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+          str = str.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "");
+          str = str.replace(/<plan>[\s\S]*?<\/plan>/gi, "");
+          str = str.replace(/\[thinking\][\s\S]*?\[\/thinking\]/gi, "");
+          str = str.replace(
+            /<\/?(?:thought|think|thinking|reasoning|plan)>/gi,
+            "",
+          );
+          return str.trim();
         }
 
-        const textResult = extractAiResponseText(data);
+        const cleanedScript = stripReasoningBlocks(rawText);
 
-        if (!textResult) {
-          const preview = JSON.stringify(data).slice(0, 300);
-          throw new Error(`Empty script content returned from Cloudflare Workers AI for account ${email}. Raw response: ${preview}`);
+        if (!cleanedScript) {
+          throw new Error(
+            `Model returned only reasoning tags without script content for account ${email}`,
+          );
         }
 
-        generatedScript = textResult;
-        successfulAccount = email;
-        logger.log(`[GenerateScript] Successfully generated script using account ${email} (${generatedScript.split(/\s+/).length} words).`);
-        break; // Stop loop on success
+        generatedScript = cleanedScript;
+        successfulAccount = `${email} (${accountSource})`;
+        logger.log(
+          `[GenerateScript] Successfully generated script using account ${successfulAccount}!`,
+        );
+        break; // Exit loop on success
       } catch (err) {
-        logger.warn(`[GenerateScript] Error using account ${email}:`, { error: err.message });
-        errors.push(`${email}: ${err.message}`);
-        // Continue to the next account in the pool
+        logger.error(`[GenerateScript] Failed with account ${email}:`, {
+          error: err.message,
+          source: accountSource,
+          model: configuredModel,
+        });
+        errors.push(`${email} (${accountSource}): ${err.message}`);
       }
     }
 
     if (!generatedScript) {
-      const aggregateError = `All ${llmAccounts.length} LLM account(s) failed during script generation:\n${errors.join("\n")}`;
-      logger.error("[GenerateScript] Execution failed for all accounts.", { errors });
-      throw new Error(aggregateError);
+      const formattedErrors = errors.map((e) => `• ${e}`).join("\n");
+      throw new Error(
+        `All ${executionAccounts.length} LLM account(s) failed during script generation.\n\nErrors encountered:\n${formattedErrors}`,
+      );
     }
 
-    // 6. Save the generated script in the database
-    logger.log(`[GenerateScript] Saving generated script to Neon PostgreSQL for topic "${topicSlug}"...`);
+    // 6. Save generated script back to Neon DB topic record
+    logger.log(
+      `[GenerateScript] Saving generated script (${generatedScript.length} characters) to database...`,
+    );
     await sql`
       UPDATE topics
-      SET script_content = ${generatedScript}, updated_at = NOW()
+      SET 
+        script_content = ${generatedScript},
+        updated_at = NOW()
       WHERE id = ${topic.id};
     `;
 
+    logger.log(
+      `[GenerateScript] Script successfully saved for topic "${topicTitle}".`,
+    );
+
     return {
       success: true,
-      scriptContent: generatedScript,
-      wordCount: generatedScript.split(/\s+/).filter(Boolean).length,
-      accountUsed: successfulAccount,
-      modelUsed: configuredModel,
-      topicId: topic.id,
-      topicSlug,
       channelSlug,
+      topicSlug,
+      topicId: topic.id,
+      topicTitle,
+      modelUsed: configuredModel,
+      accountUsed: successfulAccount,
+      scriptLength: generatedScript.length,
+      scriptSnippet: generatedScript.slice(0, 300) + "...",
     };
   },
 });

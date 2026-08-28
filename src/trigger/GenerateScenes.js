@@ -1,4 +1,5 @@
 import { task, logger } from "@trigger.dev/sdk";
+import OpenAI from "openai";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import {
   getSceneGenerationPrompt,
@@ -82,65 +83,90 @@ export const generateScenesTask = task({
     const pillarUseMainCharacter = Boolean(pillar?.useMainCharacter);
     const pillarMainCharacterDescription = pillar?.mainCharacterDescription || null;
 
-    // 2. Fetch General Settings for Default LLM Model
+    // 2. Fetch General Settings for Scene Generation Pipeline
     const generalRows = await sql`
-      SELECT default_llm_model AS "defaultLlmModel"
+      SELECT 
+        default_llm_source AS "defaultLlmSource",
+        default_llm_model AS "defaultLlmModel", 
+        scene_gen_source AS "sceneGenSource",
+        scene_gen_strict_source AS "sceneGenStrictSource",
+        scene_gen_model AS "sceneGenModel", 
+        scene_gen_strict_model AS "sceneGenStrictModel",
+        gemma_base_url AS "gemmaBaseUrl",
+        open_router_base_url AS "openRouterBaseUrl"
       FROM general_settings
       ORDER BY id ASC
       LIMIT 1;
     `;
 
-    const rawModel = generalRows?.[0]?.defaultLlmModel?.trim();
+    const genSettings = generalRows?.[0] || {};
+    const defaultLlmSource = (genSettings.defaultLlmSource || "gemini").trim().toLowerCase();
+    const defaultLlmModel = (genSettings.defaultLlmModel || "").trim();
 
-    if (!rawModel) {
-      throw new Error(
-        "No Default LLM Model configured. Please go to Dashboard Settings -> General Settings and set your Default LLM Model."
-      );
+    const sceneGenSource = (genSettings.sceneGenSource || defaultLlmSource || "gemini").trim().toLowerCase();
+    const sceneGenStrictSource = Boolean(genSettings.sceneGenStrictSource);
+    const sceneGenModel = (genSettings.sceneGenModel || "").trim();
+    const sceneGenStrictModel = Boolean(genSettings.sceneGenStrictModel);
+
+    const gemmaBaseUrl = (genSettings.gemmaBaseUrl || "https://generativelanguage.googleapis.com/v1beta/openai/").trim();
+    const openRouterBaseUrl = (genSettings.openRouterBaseUrl || "https://openrouter.ai/api/v1").trim();
+
+    // Model Resolution Logic for Scene Generation
+    let configuredModel = "";
+    if (sceneGenStrictModel) {
+      configuredModel = sceneGenModel || defaultLlmModel;
+      if (!configuredModel) {
+        throw new Error(
+          "Strict Model Mode is enabled for Scene Generation, but no Scene Generation Model or Default LLM Model is configured in Settings."
+        );
+      }
+      logger.log(`[GenerateScenes] Strict Model Mode active. Enforcing model: ${configuredModel}`);
+    } else {
+      configuredModel = (customModel || sceneGenModel || defaultLlmModel || "").trim();
+      if (!configuredModel) {
+        throw new Error(
+          "No LLM Model configured for scene generation. Please go to Dashboard Settings -> General Settings and configure your Scene Generation Model or Default LLM Model."
+        );
+      }
+      logger.log(`[GenerateScenes] Using resolved model: ${configuredModel}`);
     }
 
-    // Resolve to official Cloudflare Workers AI model URI
-    function resolveCloudflareModel(modelStr) {
-      const m = (modelStr || "").trim();
-      if (!m) return "";
-      if (m.startsWith("@cf/")) return m;
-      if (m.startsWith("cf/")) return `@${m}`;
-      if (m.startsWith("@")) return `@cf/${m.slice(1)}`;
-      if (m.includes("/")) return `@cf/${m.replace(/^\/+/, "")}`;
-
-      const aliasMap = {
-        "kimi": "@cf/moonshotai/kimi-k2.7-code",
-        "kimi-k2.7-code": "@cf/moonshotai/kimi-k2.7-code",
-        "llama-3.1-70b": "@cf/meta/llama-3.1-70b-instruct",
-        "llama-3.1-8b": "@cf/meta/llama-3.1-8b-instruct",
-        "llama-3.3-70b": "@cf/meta/llama-3.3-70b-instruct",
-        "deepseek-r1": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-        "qwen-72b": "@cf/qwen/qwen2.5-72b-instruct",
-        "qwen-2.5-72b": "@cf/qwen/qwen2.5-72b-instruct",
-        "mistral-7b": "@cf/mistral/mistral-7b-instruct-v0.2",
-        "gpt-4o": "@cf/meta/llama-3.1-70b-instruct",
-        "gpt-4o-mini": "@cf/meta/llama-3.1-8b-instruct",
-      };
-
-      return aliasMap[m.toLowerCase()] || `@cf/${m}`;
-    }
-
-    const configuredModel = resolveCloudflareModel(rawModel);
-    logger.log(`Using default LLM model: ${configuredModel}`);
-
-    // 3. Fetch all LLM Accounts from DB (Ordered from top/first added)
-    const llmAccounts = await sql`
-      SELECT id, account_email AS "accountEmail", account_id AS "accountId", api_token AS "apiToken"
+    // 3. Fetch all LLM Accounts from DB
+    const rawLlmAccounts = await sql`
+      SELECT id, account_email AS "accountEmail", source, account_id AS "accountId", api_token AS "apiToken"
       FROM llm_accounts
       ORDER BY id ASC;
     `;
 
-    if (!llmAccounts || llmAccounts.length === 0) {
+    if (!rawLlmAccounts || rawLlmAccounts.length === 0) {
       throw new Error(
-        "No LLM accounts configured in database. Please go to Dashboard Settings -> LLMs Accounts tab and add at least one Cloudflare account (Account ID and API Token)."
+        "No LLM accounts configured in database. Please go to Dashboard Settings -> LLM Accounts tab and add your Gemini or OpenRouter API key."
       );
     }
 
-    logger.log(`Loaded ${llmAccounts.length} LLM account(s) for scene generation.`);
+    // Source Resolution for Scene Generation
+    let executionAccounts = [];
+    if (sceneGenStrictSource) {
+      executionAccounts = rawLlmAccounts.filter(
+        (acc) => (acc.source || "gemini").trim().toLowerCase() === sceneGenSource
+      );
+
+      if (executionAccounts.length === 0) {
+        throw new Error(
+          `Strict Source Mode is active for Scene Generation ('${sceneGenSource}'), but no ${sceneGenSource} accounts were found in Settings -> LLM Accounts. Please add a ${sceneGenSource} account or disable Strict Source Mode.`
+        );
+      }
+      logger.log(`[GenerateScenes] Strict Source Mode active for '${sceneGenSource}'. Filtered to ${executionAccounts.length} account(s).`);
+    } else {
+      const matchingAccounts = rawLlmAccounts.filter(
+        (acc) => (acc.source || "gemini").trim().toLowerCase() === sceneGenSource
+      );
+      const otherAccounts = rawLlmAccounts.filter(
+        (acc) => (acc.source || "gemini").trim().toLowerCase() !== sceneGenSource
+      );
+      executionAccounts = [...matchingAccounts, ...otherAccounts];
+      logger.log(`[GenerateScenes] Prioritizing ${matchingAccounts.length} ${sceneGenSource} account(s), with ${otherAccounts.length} fallback account(s).`);
+    }
 
     // 4. Construct Full Prompt using SceneGenerationPrompt module
     const fullPrompt = getSceneGenerationPrompt({
@@ -160,200 +186,106 @@ export const generateScenesTask = task({
       activeScript,
     });
 
-    // 5. Fallback Loop Across LLM Accounts starting from the top
+    // 5. Fallback Loop Across Selected LLM Accounts
     let parsedScenes = null;
     let successfulAccount = null;
     const errors = [];
 
-    for (let i = 0; i < llmAccounts.length; i++) {
-      const account = llmAccounts[i];
-      const accountId = (account.accountId || "").trim();
-      const apiToken = (account.apiToken || "").trim();
-      const email = account.accountEmail || `Account #${i + 1}`;
+    // Helper to parse and repair scene JSON
+    function parseScenesJson(rawStr) {
+      let str = (rawStr || "").trim();
 
-      if (!accountId || !apiToken) {
-        logger.warn(`[GenerateScenes] Skipping account ${email} (${i + 1}/${llmAccounts.length}) due to missing credentials.`);
-        errors.push(`${email}: Missing account_id or api_token`);
+      // Strip <think>...</think> if model output reasoning blocks
+      str = str.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+      // Strip markdown code fences
+      if (str.startsWith("```")) {
+        str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      } else if (str.includes("```")) {
+        const match = str.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (match && match[1]) {
+          str = match[1].trim();
+        }
+      }
+
+      // Locate JSON array boundaries
+      const firstBracket = str.indexOf("[");
+      if (firstBracket !== -1) {
+        const lastBracket = str.lastIndexOf("]");
+        if (lastBracket !== -1 && lastBracket > firstBracket) {
+          str = str.slice(firstBracket, lastBracket + 1);
+        } else {
+          str = str.slice(firstBracket);
+        }
+      }
+
+      // Direct parse attempt
+      try {
+        const res = JSON.parse(str);
+        if (Array.isArray(res) && res.length > 0) return res;
+      } catch (initialErr) {
+        // Repair truncated JSON by backing up to last closed scene object "}"
+        try {
+          const lastCloseBrace = str.lastIndexOf("}");
+          if (lastCloseBrace !== -1) {
+            const repaired = str.slice(0, lastCloseBrace + 1) + "\n]";
+            const sanitized = repaired.replace(/,\s*\]$/, "\n]");
+            const res = JSON.parse(sanitized);
+            if (Array.isArray(res) && res.length > 0) {
+              logger.warn(`[GenerateScenes] Recovered ${res.length} complete scenes from partially truncated response.`);
+              return res;
+            }
+          }
+        } catch (repairErr) {
+          // Ignore repair error and throw detailed message
+        }
+
+        throw new Error(`Failed to parse scene JSON (${initialErr.message}). First 200 chars: ${str.slice(0, 200)}`);
+      }
+
+      throw new Error("Model returned JSON that is not a non-empty array of scenes.");
+    }
+
+    for (let i = 0; i < executionAccounts.length; i++) {
+      const account = executionAccounts[i];
+      const accountSource = (account.source || "gemini").trim().toLowerCase();
+      const apiToken = (account.apiToken || "").trim();
+      const email = account.accountEmail || `Account #${i + 1} (${accountSource})`;
+
+      if (!apiToken) {
+        logger.warn(`[GenerateScenes] Skipping account ${email} (${i + 1}/${executionAccounts.length}) due to missing credentials.`);
+        errors.push(`${email}: Missing API token`);
         continue;
       }
 
-      logger.log(`[GenerateScenes] Attempting scene generation with account ${email} (${i + 1}/${llmAccounts.length})...`);
+      const baseURL = accountSource === "openrouter" ? openRouterBaseUrl : gemmaBaseUrl;
+      logger.log(`[GenerateScenes] Attempting scene generation with account ${email} via ${accountSource} [${baseURL}] using model ${configuredModel} (${i + 1}/${executionAccounts.length})...`);
 
       try {
-        const endpointUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${configuredModel}`;
-
-        const response = await fetch(endpointUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: "You are an expert cinematic storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, image_prompt, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
-              },
-              {
-                role: "user",
-                content: fullPrompt,
-              },
-            ],
-            max_tokens: 4096,
-            temperature: 0.4,
-          }),
+        const openai = new OpenAI({
+          apiKey: apiToken,
+          baseURL,
         });
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Cloudflare AI responded with HTTP ${response.status}: ${errText.slice(0, 300)}`);
-        }
+        const completion = await openai.chat.completions.create({
+          model: configuredModel,
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert cinematic storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, image_prompt, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
+            },
+            {
+              role: "user",
+              content: fullPrompt,
+            },
+          ],
+          temperature: 0.4,
+        });
 
-        const data = await response.json();
-
-        // 1. Check for token-exhaustion in reasoning models
-        const firstChoice = data?.result?.choices?.[0] || data?.choices?.[0];
-        if (firstChoice?.finish_reason === "length" && (!firstChoice.message?.content || !firstChoice.message.content.trim())) {
-          throw new Error(
-            `Cloudflare AI model ran out of tokens (finish_reason: length) in its reasoning phase before writing the scene JSON. Please switch your Default LLM Model to an instruction/chat model (e.g. @cf/meta/llama-3.1-70b-instruct or @cf/qwen/qwen2.5-72b-instruct) in General Settings.`
-          );
-        }
-
-        // Robust multi-schema text extraction for Cloudflare Workers AI models
-        function extractAiResponseText(payload) {
-          if (!payload) return null;
-          if (typeof payload === "string") return payload.trim();
-
-          // 1. Direct result string
-          if (typeof payload.result === "string" && payload.result.trim()) {
-            return payload.result.trim();
-          }
-
-          // 2. data.result object
-          if (payload.result && typeof payload.result === "object") {
-            if (Array.isArray(payload.result.choices) && payload.result.choices.length > 0) {
-              const choice = payload.result.choices[0];
-              if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
-                return choice.message.content.trim();
-              }
-              if (typeof choice?.text === "string" && choice.text.trim()) {
-                return choice.text.trim();
-              }
-            }
-            if (typeof payload.result.response === "string" && payload.result.response.trim()) {
-              return payload.result.response.trim();
-            }
-            if (typeof payload.result.text === "string" && payload.result.text.trim()) {
-              return payload.result.text.trim();
-            }
-            if (typeof payload.result.generated_text === "string" && payload.result.generated_text.trim()) {
-              return payload.result.generated_text.trim();
-            }
-            if (typeof payload.result.content === "string" && payload.result.content.trim()) {
-              return payload.result.content.trim();
-            }
-            if (typeof payload.result.output === "string" && payload.result.output.trim()) {
-              return payload.result.output.trim();
-            }
-            if (payload.result.message && typeof payload.result.message.content === "string" && payload.result.message.content.trim()) {
-              return payload.result.message.content.trim();
-            }
-            if (Array.isArray(payload.result) && payload.result.length > 0) {
-              const item = payload.result[0];
-              if (typeof item === "string" && item.trim()) return item.trim();
-              if (item?.response) return String(item.response).trim();
-              if (item?.generated_text) return String(item.generated_text).trim();
-              if (item?.text) return String(item.text).trim();
-              if (item?.message?.content) return String(item.message.content).trim();
-            }
-            if (typeof payload.result.reasoning_content === "string" && payload.result.reasoning_content.trim()) {
-              return payload.result.reasoning_content.trim();
-            }
-          }
-
-          // 3. Root-level standard OpenAI / Cloudflare format
-          if (Array.isArray(payload.choices) && payload.choices.length > 0) {
-            const choice = payload.choices[0];
-            if (typeof choice?.message?.content === "string" && choice.message.content.trim()) {
-              return choice.message.content.trim();
-            }
-            if (typeof choice?.text === "string" && choice.text.trim()) {
-              return choice.text.trim();
-            }
-          }
-          if (typeof payload.response === "string" && payload.response.trim()) {
-            return payload.response.trim();
-          }
-          if (typeof payload.text === "string" && payload.text.trim()) {
-            return payload.text.trim();
-          }
-          if (typeof payload.generated_text === "string" && payload.generated_text.trim()) {
-            return payload.generated_text.trim();
-          }
-
-          return null;
-        }
-
-        const textResult = extractAiResponseText(data);
+        const textResult = completion.choices?.[0]?.message?.content?.trim();
 
         if (!textResult) {
-          const preview = JSON.stringify(data).slice(0, 300);
-          throw new Error(`Empty response returned from Cloudflare Workers AI for account ${email}. Raw response: ${preview}`);
-        }
-
-        // Clean and parse JSON with automatic truncation repair
-        function parseScenesJson(rawStr) {
-          let str = rawStr.trim();
-
-          // Strip <think>...</think> if model output thinking blocks
-          str = str.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-
-          // Strip markdown code fences
-          if (str.startsWith("```")) {
-            str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-          } else if (str.includes("```")) {
-            const match = str.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-            if (match && match[1]) {
-              str = match[1].trim();
-            }
-          }
-
-          // Locate JSON array boundaries
-          const firstBracket = str.indexOf("[");
-          if (firstBracket !== -1) {
-            const lastBracket = str.lastIndexOf("]");
-            if (lastBracket !== -1 && lastBracket > firstBracket) {
-              str = str.slice(firstBracket, lastBracket + 1);
-            } else {
-              str = str.slice(firstBracket);
-            }
-          }
-
-          // Direct parse attempt
-          try {
-            const res = JSON.parse(str);
-            if (Array.isArray(res) && res.length > 0) return res;
-          } catch (initialErr) {
-            // Repair truncated JSON by backing up to last closed scene object "}"
-            try {
-              const lastCloseBrace = str.lastIndexOf("}");
-              if (lastCloseBrace !== -1) {
-                const repaired = str.slice(0, lastCloseBrace + 1) + "\n]";
-                const sanitized = repaired.replace(/,\s*\]$/, "\n]");
-                const res = JSON.parse(sanitized);
-                if (Array.isArray(res) && res.length > 0) {
-                  logger.warn(`[GenerateScenes] Recovered ${res.length} complete scenes from partially truncated response.`);
-                  return res;
-                }
-              }
-            } catch (repairErr) {
-              // Ignore repair error and throw detailed message
-            }
-
-            throw new Error(`Failed to parse scene JSON (${initialErr.message}). First 200 chars: ${str.slice(0, 200)}`);
-          }
-
-          throw new Error("Model returned JSON that is not a non-empty array of scenes.");
+          throw new Error(`Empty response returned from ${accountSource} for account ${email}.`);
         }
 
         const parsed = parseScenesJson(textResult);
@@ -363,24 +295,24 @@ export const generateScenesTask = task({
           scene_number: Number(sc.scene_number || sc.scene_index || idx + 1),
           audio_text: String(sc.audio_text || sc.narration || sc.text || "").trim(),
           image_prompt: String(sc.image_prompt || sc.prompt || sc.visual_prompt || "").trim(),
-          transition: sc.transition || "crossfade",
+          transition: String(sc.transition || sc.Transition || "fade").toLowerCase().trim(),
           ken_burns: {
             direction: sc.ken_burns?.direction || "zoom-in",
             intensity: sc.ken_burns?.intensity || 0.10,
           },
         }));
 
-        successfulAccount = email;
-        logger.log(`[GenerateScenes] Successfully generated and parsed ${parsedScenes.length} scenes using account ${email}.`);
+        successfulAccount = `${email} (${accountSource})`;
+        logger.log(`[GenerateScenes] Successfully generated and parsed ${parsedScenes.length} scenes using account ${successfulAccount}.`);
         break; // Success! Break out of fallback loop
       } catch (err) {
-        logger.warn(`[GenerateScenes] Error using account ${email}:`, { error: err.message });
-        errors.push(`${email}: ${err.message}`);
+        logger.warn(`[GenerateScenes] Error using account ${email} (${accountSource}):`, { error: err.message });
+        errors.push(`${email} (${accountSource}): ${err.message}`);
       }
     }
 
     if (!parsedScenes || parsedScenes.length === 0) {
-      const aggregateError = `All ${llmAccounts.length} LLM account(s) failed during scene generation:\n${errors.join("\n")}`;
+      const aggregateError = `All ${executionAccounts.length} LLM account(s) failed during scene generation:\n${errors.join("\n")}`;
       logger.error("[GenerateScenes] Execution failed for all accounts.", { errors });
       throw new Error(aggregateError);
     }
@@ -389,19 +321,25 @@ export const generateScenesTask = task({
     logger.log(`[GenerateScenes] Saving ${parsedScenes.length} scenes to Neon PostgreSQL for topic "${topicSlug}"...`);
     await sql`
       UPDATE topics
-      SET scenes_json = ${JSON.stringify(parsedScenes)}::jsonb, updated_at = NOW()
+      SET 
+        scenes_json = ${JSON.stringify(parsedScenes)},
+        updated_at = NOW()
       WHERE id = ${topic.id};
     `;
 
+    logger.log(`[GenerateScenes] Successfully saved scenes JSON for topic "${topicSlug}".`);
+
     return {
       success: true,
-      scenes: parsedScenes,
-      totalScenes: parsedScenes.length,
-      accountUsed: successfulAccount,
-      modelUsed: configuredModel,
-      topicId: topic.id,
-      topicSlug,
       channelSlug,
+      topicSlug,
+      topicId: topic.id,
+      topicTitle: topic.title,
+      modelUsed: configuredModel,
+      accountUsed: successfulAccount,
+      sceneCount: parsedScenes.length,
+      firstScene: parsedScenes[0] || null,
+      lastScene: parsedScenes[parsedScenes.length - 1] || null,
     };
   },
 });

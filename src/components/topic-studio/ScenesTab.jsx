@@ -351,7 +351,7 @@ export default function ScenesTab({
                       SCENE 0{sceneNum}
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-sm">
-                      <Move size={10} /> {kb.direction} ({kb.intensity})
+                      <Move size={10} /> {kb.direction || "zoom-in"}
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-purple-700 bg-purple-50 border border-purple-200 rounded-sm">
                       Transition: {scene.transition || "fade"}
@@ -426,20 +426,6 @@ export default function ScenesTab({
                       </select>
                     </div>
 
-                    {/* Intensity Input */}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-ink-muted font-mono">Intensity:</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.02"
-                        max="0.50"
-                        value={kb.intensity ?? 0.10}
-                        onChange={(e) => handleUpdateKenBurns(idx, "intensity", e.target.value)}
-                        className="h-7 w-16 px-2 border border-line bg-white text-xs text-ink font-mono outline-none focus:border-signal text-center"
-                      />
-                    </div>
-
                     {/* Transition Dropdown */}
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-ink-muted font-mono">Transition:</span>
@@ -453,6 +439,7 @@ export default function ScenesTab({
                         <option value="crossfade">Crossfade</option>
                         <option value="fade-in">Fade In</option>
                         <option value="fade-out">Fade Out</option>
+                        <option value="cut">Direct Cut</option>
                       </select>
                     </div>
                   </div>
@@ -532,7 +519,7 @@ export default function ScenesTab({
                     setPastedJsonText(e.target.value);
                     if (pasteError) setPasteError("");
                   }}
-                  placeholder={`[\n  {\n    "scene_number": 1,\n    "audio_text": "Why does being broke cost so much more than having wealth?",\n    "image_prompt": "Cinematic 2D narrative frame: a worn leather wallet on a kitchen table next to an unpaid bill.",\n    "ken_burns": {\n      "direction": "zoom-in",\n      "intensity": 0.12\n    }\n  },\n  {\n    "scene_number": 2,\n    "audio_text": "From overdraft fees to predatory loan interest, poverty carries a hidden tax.",\n    "image_prompt": "Cinematic visual breakdown: contrasting gold scales with floating interest percentages.",\n    "ken_burns": {\n      "direction": "pan-right",\n      "intensity": 0.2\n    }\n  }\n]`}
+                  placeholder={`[\n  {\n    "scene_number": 1,\n    "audio_text": "Why does being broke cost so much more than having wealth?",\n    "image_prompt": "Cinematic 2D narrative frame: a worn leather wallet on a kitchen table next to an unpaid bill.",\n    "transition": "fade",\n    "ken_burns": {\n      "direction": "zoom-in"\n    }\n  },\n  {\n    "scene_number": 2,\n    "audio_text": "From overdraft fees to predatory loan interest, poverty carries a hidden tax.",\n    "image_prompt": "Cinematic visual breakdown: contrasting gold scales with floating interest percentages.",\n    "transition": "crossfade",\n    "ken_burns": {\n      "direction": "pan-right"\n    }\n  }\n]`}
                   className="w-full flex-1 min-h-[220px] p-3.5 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
                 />
               </div>

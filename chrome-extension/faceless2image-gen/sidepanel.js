@@ -74,7 +74,11 @@ function hideError() {
 function addLog(text, kind = "info") {
   const line = document.createElement("div");
   line.className = "log-" + kind;
-  const time = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const time = new Date().toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   line.textContent = `[${time}] ${text}`;
   logArea.appendChild(line);
   logArea.scrollTop = logArea.scrollHeight;
@@ -109,14 +113,17 @@ async function init() {
 
   // Load saved start scene & batch count
   try {
-    const { startScene, batchCount } = await chrome.storage.local.get(["startScene", "batchCount"]);
+    const { startScene, batchCount } = await chrome.storage.local.get([
+      "startScene",
+      "batchCount",
+    ]);
     if (startScene && startSceneInput) {
       startSceneInput.value = startScene;
     }
     if (batchCount && batchCountInput) {
       batchCountInput.value = batchCount;
     }
-  } catch (_) { }
+  } catch (_) {}
 
   // Check if already logged in
   const auth = await bg({ type: "checkAuth" });
@@ -138,13 +145,13 @@ async function init() {
 startSceneInput?.addEventListener("change", () => {
   const val = Math.max(1, parseInt(startSceneInput.value) || 1);
   startSceneInput.value = val;
-  chrome.storage.local.set({ startScene: val }).catch(() => { });
+  chrome.storage.local.set({ startScene: val }).catch(() => {});
 });
 
 batchCountInput?.addEventListener("change", () => {
   const val = Math.max(1, parseInt(batchCountInput.value) || 3);
   batchCountInput.value = val;
-  chrome.storage.local.set({ batchCount: val }).catch(() => { });
+  chrome.storage.local.set({ batchCount: val }).catch(() => {});
 });
 
 // ── LOGIN ──
@@ -233,7 +240,8 @@ channelSelect.addEventListener("change", async () => {
   const slug = channelSelect.value;
   selectedChannelSlug = slug;
   const selectedChannel = currentChannels.find((c) => c.slug === slug);
-  selectedChannelTheme = selectedChannel?.imageTheme || selectedChannel?.image_theme || "";
+  selectedChannelTheme =
+    selectedChannel?.imageTheme || selectedChannel?.image_theme || "";
 
   // Reset downstream
   topicSelect.innerHTML = '<option value="">— Select topic —</option>';
@@ -251,7 +259,10 @@ channelSelect.addEventListener("change", async () => {
   }
 
   setLoading(pillarSelect, true);
-  const res = await bg({ type: "apiGet", path: `/api/channels/${slug}/pillars` });
+  const res = await bg({
+    type: "apiGet",
+    path: `/api/channels/${slug}/pillars`,
+  });
   if (res.ok && res.data?.pillars) {
     currentPillars = res.data.pillars;
     pillarSelect.innerHTML = '<option value="">— All pillars —</option>';
@@ -306,7 +317,8 @@ topicSelect.addEventListener("change", async () => {
   const topicSlug = topicSelect.value;
   const channelSlug = selectedChannelSlug;
   selectedTopicSlug = topicSlug;
-  selectedTopicTitle = topicSelect.options[topicSelect.selectedIndex]?.textContent || "";
+  selectedTopicTitle =
+    topicSelect.options[topicSelect.selectedIndex]?.textContent || "";
 
   scenesCard.classList.add("hidden");
   currentScenes = [];
@@ -315,14 +327,20 @@ topicSelect.addEventListener("change", async () => {
   if (!topicSlug || !channelSlug) return;
 
   // Fetch topic detail to get scenes_json
-  const res = await bg({ type: "apiGet", path: `/api/channels/${channelSlug}/topics/${topicSlug}` });
+  const res = await bg({
+    type: "apiGet",
+    path: `/api/channels/${channelSlug}/topics/${topicSlug}`,
+  });
   if (res.ok && res.data?.topic) {
     const topic = res.data.topic;
     let scenes = [];
 
     if (topic.scenesJson) {
       try {
-        scenes = typeof topic.scenesJson === "string" ? JSON.parse(topic.scenesJson) : topic.scenesJson;
+        scenes =
+          typeof topic.scenesJson === "string"
+            ? JSON.parse(topic.scenesJson)
+            : topic.scenesJson;
       } catch (e) {
         addLog("Failed to parse scenes_json", "error");
       }
@@ -333,13 +351,25 @@ topicSelect.addEventListener("change", async () => {
 
       // Send context instruction to Flow agent immediately with batch_count and channel theme
       const batchCount = Math.max(1, parseInt(batchCountInput?.value) || 3);
-      const instruction = buildInstruction(topic.title, batchCount, selectedChannelTheme);
-      addLog(`📋 Sending context instruction to Flow agent (batch size: ${batchCount})…`, "start");
+      const instruction = buildInstruction(
+        topic.title,
+        batchCount,
+        selectedChannelTheme,
+      );
+      addLog(
+        `📋 Sending context instruction to Flow agent (batch size: ${batchCount})…`,
+        "start",
+      );
       const instrRes = await bg({ type: "sendInstruction", instruction });
       if (instrRes.ok) {
         addLog(`✓ Context instruction sent: "${topic.title}"`, "success");
       } else {
-        addLog("⚠ Could not send instruction: " + (instrRes.error || "Flow tab not found") + " — you can still generate manually", "warn");
+        addLog(
+          "⚠ Could not send instruction: " +
+            (instrRes.error || "Flow tab not found") +
+            " — you can still generate manually",
+          "warn",
+        );
       }
 
       renderScenes(scenes);
@@ -406,7 +436,10 @@ function renderScenes(scenes) {
       if (cb.checked) {
         if (selectedSceneNumbers.size >= maxBatch) {
           cb.checked = false;
-          addLog(`Cannot select more than ${maxBatch} scene(s) (batch count limit: ${maxBatch})`, "warn");
+          addLog(
+            `Cannot select more than ${maxBatch} scene(s) (batch count limit: ${maxBatch})`,
+            "warn",
+          );
           return;
         }
         selectedSceneNumbers.add(scene.scene_number);
@@ -428,20 +461,28 @@ function renderScenes(scenes) {
 
 function buildBatchPrompt(scenesChunk, channelTheme = "") {
   const scenesText = scenesChunk
-    .map((s) => `scene_${s.scene_number}\nimage_prompt: "${(s.image_prompt || "").trim()}"`)
+    .map((s) => {
+      const audioLine = s.audio_text
+        ? `audio_text: "${s.audio_text.trim()}"\n`
+        : "";
+      return `scene_${s.scene_number}\n${audioLine}image_prompt: "${(s.image_prompt || "").trim()}"`;
+    })
     .join("\n\n");
 
-  const themeText = (channelTheme || selectedChannelTheme || "").trim();
-  if (!themeText) {
-    return scenesText;
-  }
-
+  const themeText = (
+    channelTheme ||
+    selectedChannelTheme ||
+    "cinematic, high quality, consistent style"
+  ).trim();
   const themeTemplate =
     typeof setup !== "undefined" && setup.theme_instruction
       ? setup.theme_instruction
       : `when generating images ensure that image follow this theme\n"{channel_image_generation_theme}"`;
 
-  const formattedTheme = themeTemplate.replace(/\{channel_image_generation_theme\}/g, themeText);
+  const formattedTheme = themeTemplate
+    .replace(/\{channel_image_generation_theme\}/g, themeText)
+    .replace(/\{channelImageTheme\}/g, themeText);
+
   return `${scenesText}\n\n${formattedTheme}`;
 }
 
@@ -449,21 +490,32 @@ function buildMissingScenesPrompt(scenesList, channelTheme = "") {
   const headerTemplate =
     typeof setup !== "undefined" && setup.missing_scenes_header
       ? setup.missing_scenes_header
-      : "it seems you missed to generate for these scenes";
+      : "Lets Focus on Generating for these scenes";
 
   const scenesText = scenesList
-    .map((s) => `scene_${s.scene_number}\nimage_prompt: "${(s.image_prompt || "").trim()}"`)
+    .map((s) => {
+      const audioLine = s.audio_text
+        ? `audio_text: "${s.audio_text.trim()}"\n`
+        : "";
+      return `scene_${s.scene_number}\n${audioLine}image_prompt: "${(s.image_prompt || "").trim()}"`;
+    })
     .join("\n\n");
 
-  const themeText = (channelTheme || selectedChannelTheme || "").trim();
+  const themeText = (
+    channelTheme ||
+    selectedChannelTheme ||
+    "cinematic, high quality, consistent style"
+  ).trim();
   const themeTemplate =
     typeof setup !== "undefined" && setup.theme_instruction
       ? setup.theme_instruction
       : `when generating images ensure that image follow this theme\n"{channel_image_generation_theme}"`;
 
-  const formattedTheme = themeText ? `\n\n${themeTemplate.replace(/\{channel_image_generation_theme\}/g, themeText)}` : "";
+  const formattedTheme = themeTemplate
+    .replace(/\{channel_image_generation_theme\}/g, themeText)
+    .replace(/\{channelImageTheme\}/g, themeText);
 
-  return `${headerTemplate}\n\n${scenesText}${formattedTheme}`;
+  return `${headerTemplate}\n\n${scenesText}\n\n${formattedTheme}`;
 }
 
 async function generateSingleScene(scene) {
@@ -472,21 +524,25 @@ async function generateSingleScene(scene) {
     return;
   }
 
-  const queue = [{
-    prompt: buildBatchPrompt([scene], selectedChannelTheme),
-    sceneNumbers: [scene.scene_number],
-    sceneNumber: scene.scene_number,
-    sceneCount: 1,
-    label: `Scene ${scene.scene_number}`,
-    batchIndex: 1,
-    totalBatches: 1,
-  }];
+  const queue = [
+    {
+      prompt: buildBatchPrompt([scene], selectedChannelTheme),
+      sceneNumbers: [scene.scene_number],
+      sceneNumber: scene.scene_number,
+      sceneCount: 1,
+      label: `Scene ${scene.scene_number}`,
+      batchIndex: 1,
+      totalBatches: 1,
+    },
+  ];
 
   addLog(`▶ Generating scene ${scene.scene_number}…`, "start");
   progressCard.classList.remove("hidden");
   updateProgress(0, 1);
 
-  document.querySelectorAll(".btn-scene-gen").forEach((b) => (b.disabled = true));
+  document
+    .querySelectorAll(".btn-scene-gen")
+    .forEach((b) => (b.disabled = true));
 
   const res = await bg({
     type: "start",
@@ -501,7 +557,9 @@ async function generateSingleScene(scene) {
     statusText.textContent = `Generating scene ${scene.scene_number}…`;
   } else {
     addLog("Start failed: " + res.error, "error");
-    document.querySelectorAll(".btn-scene-gen").forEach((b) => (b.disabled = false));
+    document
+      .querySelectorAll(".btn-scene-gen")
+      .forEach((b) => (b.disabled = false));
   }
 }
 
@@ -524,17 +582,22 @@ genSelectedBtn.addEventListener("click", async () => {
       ? `Scene ${sceneNumbers[0]}`
       : `Scenes ${sceneNumbers.join(", ")}`;
 
-  const queue = [{
-    prompt: buildMissingScenesPrompt(selectedScenes, selectedChannelTheme),
-    sceneNumbers,
-    sceneNumber: sceneNumbers[0],
-    sceneCount: selectedScenes.length,
-    label,
-    batchIndex: 1,
-    totalBatches: 1,
-  }];
+  const queue = [
+    {
+      prompt: buildMissingScenesPrompt(selectedScenes, selectedChannelTheme),
+      sceneNumbers,
+      sceneNumber: sceneNumbers[0],
+      sceneCount: selectedScenes.length,
+      label,
+      batchIndex: 1,
+      totalBatches: 1,
+    },
+  ];
 
-  addLog(`▶ Generating for ${selectedScenes.length} selected scene(s): ${label}…`, "start");
+  addLog(
+    `▶ Generating for ${selectedScenes.length} selected scene(s): ${label}…`,
+    "start",
+  );
   progressCard.classList.remove("hidden");
   updateProgress(0, selectedScenes.length);
 
@@ -567,7 +630,7 @@ function buildInstruction(topicTitle, batchCount = 3, channelTheme = "") {
   const template =
     typeof setup !== "undefined" && setup.start_up_instruction
       ? setup.start_up_instruction
-      : `Hi, I need you to assist me in generating images for content titled "{topicTitle}".\n\nI will provide the prompts for each scene in batches of "{batch_count}", and you would generate the image.\neach scene prompt would be mapped with a scene number\neg \nscene_1\nimage_prompt:\n\nscene_2\nimage_prompt\n\nscene_3\n\n\nEnsure only one Image is Generated Per Prompt or Per Scene. and name each image by thier scene number\n\nfor exampe 1.png, 2.png, 3.png continuously\n\nwhen generating images ensure that image follow this theme\n"{channel_image_generation_theme}"`;
+      : `Hi, I need you to assist me in generating images for content titled "{topicTitle}".\n\nI will provide the prompts for each scene in batches of "{batch_count}", and you would generate the image.\neach scene prompt would be mapped with a scene number\neg \nscene_1\naudio_text: "the words that would be spoken"\nimage_prompt: "<image prompt text for scene 1>"\n\nscene_2\naudio_text: "the words that would be spoken"\nimage_prompt: "<image prompt text for scene 2>"\n\nscene_3\naudio_text: "the words that would be spoken"\nimage_prompt: "<image prompt text for scene 3>"\n\n\nEnsure only one Image is Generated Per Prompt or Per Scene. and name each image by thier scene number\n\nfor exampe 1.png, 2.png, 3.png continuously\n\nwhen generating images ensure that image follow this theme\n"{channel_image_generation_theme}"`;
 
   const themeText = (channelTheme || selectedChannelTheme || "").trim();
 
@@ -575,8 +638,14 @@ function buildInstruction(topicTitle, batchCount = 3, channelTheme = "") {
     .replace(/\{topicTitle\}/g, topicTitle)
     .replace(/\{batch_count\}/g, String(batchCount))
     .replace(/\{batchCount\}/g, String(batchCount))
-    .replace(/\{channel_image_generation_theme\}/g, themeText || "cinematic, high quality, consistent style")
-    .replace(/\{channelImageTheme\}/g, themeText || "cinematic, high quality, consistent style");
+    .replace(
+      /\{channel_image_generation_theme\}/g,
+      themeText || "cinematic, high quality, consistent style",
+    )
+    .replace(
+      /\{channelImageTheme\}/g,
+      themeText || "cinematic, high quality, consistent style",
+    );
 }
 
 // ── GENERATION CONTROLS ──
@@ -592,7 +661,10 @@ startBtn.addEventListener("click", async () => {
     .sort((a, b) => a.scene_number - b.scene_number);
 
   if (validScenes.length === 0) {
-    addLog(`No image prompts in scenes (from Scene ${startSceneNum} onward)`, "error");
+    addLog(
+      `No image prompts in scenes (from Scene ${startSceneNum} onward)`,
+      "error",
+    );
     return;
   }
 
@@ -620,7 +692,7 @@ startBtn.addEventListener("click", async () => {
 
   addLog(
     `Starting generation: ${validScenes.length} scenes (starting from Scene ${startSceneNum}) in ${queue.length} batch${queue.length === 1 ? "" : "es"} (batch size: ${batchCount})`,
-    "start"
+    "start",
   );
   progressCard.classList.remove("hidden");
   updateProgress(0, validScenes.length);
@@ -675,8 +747,12 @@ function setRunningUI(running, paused) {
   stopBtn.disabled = !running;
   pauseBtn.textContent = paused ? "Resume" : "Pause";
   // Toggle per-scene generate buttons and checkboxes
-  document.querySelectorAll(".btn-scene-gen").forEach((b) => (b.disabled = running));
-  document.querySelectorAll(".scene-checkbox").forEach((b) => (b.disabled = running));
+  document
+    .querySelectorAll(".btn-scene-gen")
+    .forEach((b) => (b.disabled = running));
+  document
+    .querySelectorAll(".scene-checkbox")
+    .forEach((b) => (b.disabled = running));
 }
 
 function updateProgress(current, total) {
@@ -695,8 +771,15 @@ chrome.runtime.onMessage.addListener((msg) => {
         statusText.textContent = "Sending instruction to agent…";
         addLog("📋 Sending instruction to agent…", "start");
       } else {
-        const label = msg.job?.label || (msg.job?.sceneNumbers ? `Scenes ${msg.job.sceneNumbers.join(", ")}` : `Scene ${msg.job?.sceneNumber || msg.index + 1}`);
-        const batchInfo = msg.job?.totalBatches > 1 ? ` [Batch ${msg.job.batchIndex}/${msg.job.totalBatches}]` : "";
+        const label =
+          msg.job?.label ||
+          (msg.job?.sceneNumbers
+            ? `Scenes ${msg.job.sceneNumbers.join(", ")}`
+            : `Scene ${msg.job?.sceneNumber || msg.index + 1}`);
+        const batchInfo =
+          msg.job?.totalBatches > 1
+            ? ` [Batch ${msg.job.batchIndex}/${msg.job.totalBatches}]`
+            : "";
         statusText.textContent = `Generating ${label}${batchInfo}…`;
         addLog(`▶ ${label}${batchInfo}: sending prompt…`, "start");
       }
@@ -704,9 +787,17 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     case "done":
       if (!msg.job?.isInstruction) {
-        const completed = msg.completedScenes != null ? msg.completedScenes : (msg.index + 1);
-        const total = msg.totalScenes != null ? msg.totalScenes : (msg.total || currentScenes.length);
-        const label = msg.job?.label || (msg.job?.sceneNumbers ? `Scenes ${msg.job.sceneNumbers.join(", ")}` : `Scene ${msg.job?.sceneNumber || msg.index + 1}`);
+        const completed =
+          msg.completedScenes != null ? msg.completedScenes : msg.index + 1;
+        const total =
+          msg.totalScenes != null
+            ? msg.totalScenes
+            : msg.total || currentScenes.length;
+        const label =
+          msg.job?.label ||
+          (msg.job?.sceneNumbers
+            ? `Scenes ${msg.job.sceneNumbers.join(", ")}`
+            : `Scene ${msg.job?.sceneNumber || msg.index + 1}`);
         updateProgress(completed, total);
         addLog(`✓ ${label} complete (${completed}/${total} scenes)`, "success");
       }
@@ -730,7 +821,9 @@ chrome.runtime.onMessage.addListener((msg) => {
       updateProgress(finalTotal, finalTotal);
       statusText.textContent = "✓ All scenes complete!";
       addLog(`✓ Finished! ${finalTotal} scenes generated.`, "success");
-      document.querySelectorAll(".btn-scene-gen").forEach((b) => (b.disabled = false));
+      document
+        .querySelectorAll(".btn-scene-gen")
+        .forEach((b) => (b.disabled = false));
       break;
 
     case "stopped":

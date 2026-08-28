@@ -7,9 +7,18 @@ export async function GET() {
     const sql = getDbSql();
     if (!sql) {
       return NextResponse.json({
-        defaultLlmModel: "@cf/meta/llama-3.1-70b-instruct",
-        scriptGenModel: "@cf/meta/llama-3.1-70b-instruct",
-        sceneGenModel: "@cf/meta/llama-3.1-70b-instruct",
+        defaultLlmSource: "gemini",
+        defaultLlmModel: "gemini-2.5-flash",
+        scriptGenSource: "gemini",
+        scriptGenStrictSource: false,
+        scriptGenModel: "gemini-2.5-flash",
+        scriptGenStrictModel: false,
+        sceneGenSource: "gemini",
+        sceneGenStrictSource: false,
+        sceneGenModel: "gemini-2.5-flash",
+        sceneGenStrictModel: false,
+        gemmaBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+        openRouterBaseUrl: "https://openrouter.ai/api/v1",
         imageEndpoints: [],
         audioEndpoints: [],
         llmAccounts: [],
@@ -22,9 +31,18 @@ export async function GET() {
     const generalRows = await sql`
       SELECT 
         id, 
+        default_llm_source AS "defaultLlmSource",
         default_llm_model AS "defaultLlmModel", 
+        script_gen_source AS "scriptGenSource",
+        script_gen_strict_source AS "scriptGenStrictSource",
         script_gen_model AS "scriptGenModel", 
+        script_gen_strict_model AS "scriptGenStrictModel",
+        scene_gen_source AS "sceneGenSource",
+        scene_gen_strict_source AS "sceneGenStrictSource",
         scene_gen_model AS "sceneGenModel", 
+        scene_gen_strict_model AS "sceneGenStrictModel",
+        gemma_base_url AS "gemmaBaseUrl",
+        open_router_base_url AS "openRouterBaseUrl",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
       FROM general_settings
@@ -45,22 +63,44 @@ export async function GET() {
     `;
 
     const llmRows = await sql`
-      SELECT id, account_email AS "accountEmail", account_id AS "accountId", api_token AS "apiToken", created, updated
+      SELECT id, account_email AS "accountEmail", source, account_id AS "accountId", api_token AS "apiToken", created, updated
       FROM llm_accounts
       ORDER BY id ASC;
     `;
 
-    const defaultLlmModel = generalRows && generalRows[0] ? (generalRows[0].defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct") : "@cf/meta/llama-3.1-70b-instruct";
-    const scriptGenModel = generalRows && generalRows[0] ? (generalRows[0].scriptGenModel || "@cf/meta/llama-3.1-70b-instruct") : "@cf/meta/llama-3.1-70b-instruct";
-    const sceneGenModel = generalRows && generalRows[0] ? (generalRows[0].sceneGenModel || "@cf/meta/llama-3.1-70b-instruct") : "@cf/meta/llama-3.1-70b-instruct";
+    const generalData = generalRows?.[0] || {};
+    const defaultLlmSource = generalData.defaultLlmSource || "gemini";
+    const defaultLlmModel = generalData.defaultLlmModel || "gemini-2.5-flash";
+
+    const scriptGenSource = generalData.scriptGenSource || defaultLlmSource;
+    const scriptGenStrictSource = Boolean(generalData.scriptGenStrictSource);
+    const scriptGenModel = generalData.scriptGenModel || defaultLlmModel;
+    const scriptGenStrictModel = Boolean(generalData.scriptGenStrictModel);
+
+    const sceneGenSource = generalData.sceneGenSource || defaultLlmSource;
+    const sceneGenStrictSource = Boolean(generalData.sceneGenStrictSource);
+    const sceneGenModel = generalData.sceneGenModel || defaultLlmModel;
+    const sceneGenStrictModel = Boolean(generalData.sceneGenStrictModel);
+
+    const gemmaBaseUrl = generalData.gemmaBaseUrl || "https://generativelanguage.googleapis.com/v1beta/openai/";
+    const openRouterBaseUrl = generalData.openRouterBaseUrl || "https://openrouter.ai/api/v1";
 
     return NextResponse.json({
       success: true,
       dbConnected: true,
+      defaultLlmSource,
       defaultLlmModel,
+      scriptGenSource,
+      scriptGenStrictSource,
       scriptGenModel,
+      scriptGenStrictModel,
+      sceneGenSource,
+      sceneGenStrictSource,
       sceneGenModel,
-      generalSettings: generalRows && generalRows[0] ? generalRows[0] : { defaultLlmModel: "gpt-4o", scriptGenModel: "gpt-4o", sceneGenModel: "gpt-4o" },
+      sceneGenStrictModel,
+      gemmaBaseUrl,
+      openRouterBaseUrl,
+      generalSettings: generalData,
       imageEndpoints: imageRows || [],
       audioEndpoints: audioRows || [],
       llmAccounts: llmRows || [],
@@ -87,31 +127,96 @@ export async function POST(request) {
 
     await initDbSchema();
     const body = await request.json();
-    const { imageEndpoints = [], audioEndpoints = [], llmAccounts = [], defaultLlmModel, scriptGenModel, sceneGenModel } = body;
+    const {
+      imageEndpoints = [],
+      audioEndpoints = [],
+      llmAccounts = [],
+      defaultLlmSource = "gemini",
+      defaultLlmModel = "gemini-2.5-flash",
+      scriptGenSource = "gemini",
+      scriptGenStrictSource = false,
+      scriptGenModel = "gemini-2.5-flash",
+      scriptGenStrictModel = false,
+      sceneGenSource = "gemini",
+      sceneGenStrictSource = false,
+      sceneGenModel = "gemini-2.5-flash",
+      sceneGenStrictModel = false,
+      gemmaBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/",
+      openRouterBaseUrl = "https://openrouter.ai/api/v1",
+    } = body;
 
     // 1. Sync General Settings
-    if (defaultLlmModel !== undefined || scriptGenModel !== undefined || sceneGenModel !== undefined) {
-      const defModel = (defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct").trim();
-      const scrModel = (scriptGenModel || defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct").trim();
-      const scnModel = (sceneGenModel || defaultLlmModel || "@cf/meta/llama-3.1-70b-instruct").trim();
+    const defSource = (defaultLlmSource || "gemini").trim();
+    const defModel = (defaultLlmModel || "gemini-2.5-flash").trim();
 
-      const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
-      if (existing && existing.length > 0) {
-        await sql`
-          UPDATE general_settings 
-          SET 
-            default_llm_model = ${defModel}, 
-            script_gen_model = ${scrModel}, 
-            scene_gen_model = ${scnModel}, 
-            updated_at = NOW()
-          WHERE id = ${existing[0].id};
-        `;
-      } else {
-        await sql`
-          INSERT INTO general_settings (default_llm_model, script_gen_model, scene_gen_model, created_at, updated_at)
-          VALUES (${defModel}, ${scrModel}, ${scnModel}, NOW(), NOW());
-        `;
-      }
+    const scrSource = (scriptGenSource || defSource).trim();
+    const isScrStrictSource = Boolean(scriptGenStrictSource);
+    const scrModel = (scriptGenModel || defModel).trim();
+    const isScrStrictModel = Boolean(scriptGenStrictModel);
+
+    const scnSource = (sceneGenSource || defSource).trim();
+    const isScnStrictSource = Boolean(sceneGenStrictSource);
+    const scnModel = (sceneGenModel || defModel).trim();
+    const isScnStrictModel = Boolean(sceneGenStrictModel);
+
+    const gemmaUrl = (gemmaBaseUrl || "https://generativelanguage.googleapis.com/v1beta/openai/").trim();
+    const openRouterUrl = (openRouterBaseUrl || "https://openrouter.ai/api/v1").trim();
+
+    const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
+    if (existing && existing.length > 0) {
+      await sql`
+        UPDATE general_settings 
+        SET 
+          default_llm_source = ${defSource},
+          default_llm_model = ${defModel}, 
+          script_gen_source = ${scrSource},
+          script_gen_strict_source = ${isScrStrictSource},
+          script_gen_model = ${scrModel}, 
+          script_gen_strict_model = ${isScrStrictModel},
+          scene_gen_source = ${scnSource},
+          scene_gen_strict_source = ${isScnStrictSource},
+          scene_gen_model = ${scnModel}, 
+          scene_gen_strict_model = ${isScnStrictModel},
+          gemma_base_url = ${gemmaUrl},
+          open_router_base_url = ${openRouterUrl},
+          updated_at = NOW()
+        WHERE id = ${existing[0].id};
+      `;
+    } else {
+      await sql`
+        INSERT INTO general_settings (
+          default_llm_source,
+          default_llm_model,
+          script_gen_source,
+          script_gen_strict_source,
+          script_gen_model,
+          script_gen_strict_model,
+          scene_gen_source,
+          scene_gen_strict_source,
+          scene_gen_model,
+          scene_gen_strict_model,
+          gemma_base_url,
+          open_router_base_url,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${defSource},
+          ${defModel},
+          ${scrSource},
+          ${isScrStrictSource},
+          ${scrModel},
+          ${isScrStrictModel},
+          ${scnSource},
+          ${isScnStrictSource},
+          ${scnModel},
+          ${isScnStrictModel},
+          ${gemmaUrl},
+          ${openRouterUrl},
+          NOW(),
+          NOW()
+        );
+      `;
     }
 
     const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
@@ -150,18 +255,19 @@ export async function POST(request) {
       }
     }
 
-    // 4. Sync LLM Accounts: Delete current and re-insert or upsert
+    // 4. Sync LLM Accounts: Delete current and re-insert
     await sql`DELETE FROM llm_accounts;`;
     if (Array.isArray(llmAccounts) && llmAccounts.length > 0) {
       for (const acc of llmAccounts) {
         const email = (acc.accountEmail || acc["account-email"] || acc.account_email || "").trim();
+        const source = (acc.source || "gemini").trim();
         const accountId = (acc.accountId || acc["account-id"] || acc.account_id || "").trim();
         const apiToken = (acc.apiToken || acc["api-token"] || acc.api_token || "").trim();
 
-        if (email || accountId || apiToken) {
+        if (email || apiToken) {
           await sql`
-            INSERT INTO llm_accounts (account_email, account_id, api_token, created, updated)
-            VALUES (${email}, ${accountId}, ${apiToken}, NOW(), NOW());
+            INSERT INTO llm_accounts (account_email, source, account_id, api_token, created, updated)
+            VALUES (${email}, ${source}, ${accountId}, ${apiToken}, NOW(), NOW());
           `;
         }
       }
@@ -171,9 +277,18 @@ export async function POST(request) {
     const refreshedGeneralRows = await sql`
       SELECT 
         id, 
+        default_llm_source AS "defaultLlmSource",
         default_llm_model AS "defaultLlmModel", 
+        script_gen_source AS "scriptGenSource",
+        script_gen_strict_source AS "scriptGenStrictSource",
         script_gen_model AS "scriptGenModel", 
+        script_gen_strict_model AS "scriptGenStrictModel",
+        scene_gen_source AS "sceneGenSource",
+        scene_gen_strict_source AS "sceneGenStrictSource",
         scene_gen_model AS "sceneGenModel", 
+        scene_gen_strict_model AS "sceneGenStrictModel",
+        gemma_base_url AS "gemmaBaseUrl",
+        open_router_base_url AS "openRouterBaseUrl",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
       FROM general_settings
@@ -194,17 +309,28 @@ export async function POST(request) {
     `;
 
     const refreshedLlmRows = await sql`
-      SELECT id, account_email AS "accountEmail", account_id AS "accountId", api_token AS "apiToken", created, updated
+      SELECT id, account_email AS "accountEmail", source, account_id AS "accountId", api_token AS "apiToken", created, updated
       FROM llm_accounts
       ORDER BY id ASC;
     `;
 
+    const refreshedGen = refreshedGeneralRows?.[0] || {};
+
     return NextResponse.json({
       success: true,
-      defaultLlmModel: refreshedGeneralRows && refreshedGeneralRows[0] ? refreshedGeneralRows[0].defaultLlmModel : (defaultLlmModel || "gpt-4o"),
-      scriptGenModel: refreshedGeneralRows && refreshedGeneralRows[0] ? refreshedGeneralRows[0].scriptGenModel : (scriptGenModel || "gpt-4o"),
-      sceneGenModel: refreshedGeneralRows && refreshedGeneralRows[0] ? refreshedGeneralRows[0].sceneGenModel : (sceneGenModel || "gpt-4o"),
-      generalSettings: refreshedGeneralRows && refreshedGeneralRows[0] ? refreshedGeneralRows[0] : null,
+      defaultLlmSource: refreshedGen.defaultLlmSource || defSource,
+      defaultLlmModel: refreshedGen.defaultLlmModel || defModel,
+      scriptGenSource: refreshedGen.scriptGenSource || scrSource,
+      scriptGenStrictSource: Boolean(refreshedGen.scriptGenStrictSource),
+      scriptGenModel: refreshedGen.scriptGenModel || scrModel,
+      scriptGenStrictModel: Boolean(refreshedGen.scriptGenStrictModel),
+      sceneGenSource: refreshedGen.sceneGenSource || scnSource,
+      sceneGenStrictSource: Boolean(refreshedGen.sceneGenStrictSource),
+      sceneGenModel: refreshedGen.sceneGenModel || scnModel,
+      sceneGenStrictModel: Boolean(refreshedGen.sceneGenStrictModel),
+      gemmaBaseUrl: refreshedGen.gemmaBaseUrl || gemmaUrl,
+      openRouterBaseUrl: refreshedGen.openRouterBaseUrl || openRouterUrl,
+      generalSettings: refreshedGen,
       imageEndpoints: refreshedImageRows || [],
       audioEndpoints: refreshedAudioRows || [],
       llmAccounts: refreshedLlmRows || [],
