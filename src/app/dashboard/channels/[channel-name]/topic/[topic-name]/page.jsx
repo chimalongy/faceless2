@@ -57,6 +57,7 @@ export default function TopicStudioPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [topicData, setTopicData] = useState(null);
 
   // 1. Thumbnail State
   const [thumbnailPrompt, setThumbnailPrompt] = useState("");
@@ -166,6 +167,7 @@ export default function TopicStudioPage() {
           const data = await res.json();
           if (data.topic) {
             const t = data.topic;
+            setTopicData(t);
             if (t.thumbnailPrompt) setThumbnailPrompt(t.thumbnailPrompt);
             if (t.thumbnailUrl) {
               setThumbnailImage(t.thumbnailUrl);
@@ -1641,6 +1643,8 @@ export default function TopicStudioPage() {
           {activeTab === "script" && (
             <ScriptTab
               topicTitle={topicTitle}
+              topicData={topicData}
+              channelName={channelTitle}
               scriptContent={scriptContent}
               setScriptContent={setScriptContent}
               isEditingScript={isEditingScript}
@@ -1658,6 +1662,9 @@ export default function TopicStudioPage() {
           {/* TAB 3: SCENES (JSON) */}
           {activeTab === "scenes" && (
             <ScenesTab
+              topicData={topicData}
+              channelName={channelTitle}
+              scriptContent={scriptContent}
               scenesJson={scenesJson}
               setScenesJson={setScenesJson}
               isEditingScenes={isEditingScenes}

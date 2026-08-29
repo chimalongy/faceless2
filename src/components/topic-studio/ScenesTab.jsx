@@ -17,9 +17,12 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { SCENE_GENERATION_SYSTEM_PROMPT } from "@/lib/LLMPrompts/SceneGenerationPrompt";
+import { getSceneGenerationPrompt } from "@/lib/LLMPrompts/SceneGenerationPrompt";
 
 export default function ScenesTab({
+  topicData = null,
+  channelName = "",
+  scriptContent = "",
   scenesJson,
   setScenesJson,
   scenesNotice,
@@ -257,11 +260,27 @@ export default function ScenesTab({
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard.writeText(SCENE_GENERATION_SYSTEM_PROMPT);
-                triggerScenesNotice("Scene generation system prompt copied to clipboard.");
+                const fullPrompt = getSceneGenerationPrompt({
+                  channelName: topicData?.channelName || channelName || "YouTube Channel",
+                  channelNiche: topicData?.channelNiche || "General",
+                  channelSubNiche: topicData?.channelSubNiche || topicData?.channelNiche || "General",
+                  channelDescription: topicData?.channelDescription || "Educational and narrative visual documentaries.",
+                  channelMission: topicData?.channelMission || "Deliver high-value visual stories.",
+                  channelImageTheme: topicData?.channelImageTheme || "Cinematic, moody psychological documentary style with realistic dramatic lighting and film grain texture.",
+                  contentPillarName: topicData?.pillarName || "General Content",
+                  contentPillarCategoryTag: topicData?.pillarTag || "General",
+                  contentPillarTone: topicData?.pillarTone || "Calm, analytical, insightful",
+                  contentPillarDescription: topicData?.pillarDescription || "In-depth strategic insights and engaging narrative storytelling.",
+                  tone: topicData?.pillarTone || "Calm, analytical, insightful",
+                  useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
+                  mainCharacterDescription: topicData?.pillarMainCharacterDescription || "None",
+                  activeScript: scriptContent || topicData?.scriptContent || "",
+                });
+                navigator.clipboard.writeText(fullPrompt);
+                triggerScenesNotice("Full scene system prompt copied to clipboard with populated variables.");
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
-              title="Copy scene generation system prompt"
+              title="Copy scene generation system prompt with all populated variables"
             >
               <Copy size={13} />
               <span>Copy System Prompt</span>

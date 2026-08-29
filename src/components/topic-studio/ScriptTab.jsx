@@ -16,9 +16,12 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { SCRIPT_GENERATION_SYSTEM_PROMPT } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
+import { getScriptGenerationPrompt } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
 
 export default function ScriptTab({
+  topicTitle = "",
+  topicData = null,
+  channelName = "",
   scriptContent,
   setScriptContent,
   isEditingScript,
@@ -169,13 +172,27 @@ export default function ScriptTab({
           <button
             type="button"
             onClick={() => {
-              navigator.clipboard.writeText(SCRIPT_GENERATION_SYSTEM_PROMPT);
+              const fullPrompt = getScriptGenerationPrompt({
+                channelName: topicData?.channelName || channelName || "YouTube Channel",
+                channelNiche: topicData?.channelNiche || "General",
+                channelSubNiche: topicData?.channelSubNiche || topicData?.channelNiche || "General",
+                channelDescription: topicData?.channelDescription || "Educational and narrative documentaries.",
+                channelMission: topicData?.channelMission || "Deliver high-value visual stories.",
+                contentPillarName: topicData?.pillarName || "General Content",
+                contentPillarCategoryTag: topicData?.pillarTag || "Documentary",
+                contentPillarTone: topicData?.pillarTone || "Calm, analytical, insightful",
+                contentPillarLength: topicData?.pillarContentLength || "15-20 minutes (~2500 words)",
+                contentPillarWordsCount: topicData?.pillarContentWordsCount || "2,500 - 3,500 words",
+                contentPillarDescription: topicData?.pillarDescription || "In-depth strategic insights and engaging narrative storytelling.",
+                topic: topicTitle || topicData?.title || "Topic Title",
+              });
+              navigator.clipboard.writeText(fullPrompt);
               if (typeof triggerScriptNotice === "function") {
-                triggerScriptNotice("Script system prompt copied to clipboard.");
+                triggerScriptNotice("Full script system prompt copied to clipboard with populated variables.");
               }
             }}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
-            title="Copy script generation system prompt"
+            title="Copy script generation system prompt with all populated variables"
           >
             <Copy size={13} />
             <span>Copy System Prompt</span>

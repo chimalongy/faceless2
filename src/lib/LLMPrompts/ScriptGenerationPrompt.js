@@ -165,3 +165,5 @@ export function getScriptGenerationSystemPrompt({
 
   return prompt;
 }
+
+export const getScriptGenerationPrompt = getScriptGenerationSystemPrompt;
