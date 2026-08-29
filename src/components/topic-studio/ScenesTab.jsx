@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { SCENE_GENERATION_SYSTEM_PROMPT } from "@/lib/LLMPrompts/SceneGenerationPrompt";
 
 export default function ScenesTab({
   scenesJson,
@@ -250,6 +251,20 @@ export default function ScenesTab({
             >
               <Copy size={13} />
               <span>Copy JSON</span>
+            </button>
+
+            {/* Copy Scene Generation System Prompt */}
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(SCENE_GENERATION_SYSTEM_PROMPT);
+                triggerScenesNotice("Scene generation system prompt copied to clipboard.");
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
+              title="Copy scene generation system prompt"
+            >
+              <Copy size={13} />
+              <span>Copy System Prompt</span>
             </button>
 
             {/* Delete All Scenes */}

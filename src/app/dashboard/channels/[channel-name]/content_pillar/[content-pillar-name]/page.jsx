@@ -177,46 +177,6 @@ export default function ContentPillarDetail() {
             <h1 className="text-2xl sm:text-3xl font-display font-semibold text-ink tracking-tight">
               {pillarName}
             </h1>
-            <p className="text-xs sm:text-sm text-ink-muted mt-1 max-w-2xl">
-              {pillar?.description || "Curated editorial pillar and thesis cluster for this channel."}
-            </p>
-
-            {(pillar?.tone || pillar?.contentLength || pillar?.content_length || pillar?.contentWordsCount || pillar?.content_words_count || pillar?.useMainCharacter) && (
-              <div className="flex flex-wrap items-center gap-3 mt-3 pt-2 border-t border-line/40 text-xs">
-                {pillar?.tone && (
-                  <div className="flex items-center gap-1.5 text-ink-muted">
-                    <span className="font-semibold text-ink">Tone:</span>
-                    <span className="bg-ink/5 px-2 py-0.5 border border-line text-ink font-mono text-[11px]">
-                      {pillar.tone}
-                    </span>
-                  </div>
-                )}
-                {(pillar?.contentLength || pillar?.content_length) && (
-                  <div className="flex items-center gap-1.5 text-ink-muted">
-                    <span className="font-semibold text-ink">Target Length:</span>
-                    <span className="bg-ink/5 px-2 py-0.5 border border-line text-ink font-mono text-[11px]">
-                      {pillar.contentLength || pillar.content_length}
-                    </span>
-                  </div>
-                )}
-                {(pillar?.contentWordsCount || pillar?.content_words_count) && (
-                  <div className="flex items-center gap-1.5 text-ink-muted">
-                    <span className="font-semibold text-ink">Target Words:</span>
-                    <span className="bg-ink/5 px-2 py-0.5 border border-line text-ink font-mono text-[11px]">
-                      {pillar.contentWordsCount || pillar.content_words_count}
-                    </span>
-                  </div>
-                )}
-                {pillar?.useMainCharacter && (
-                  <div className="flex items-center gap-1.5 text-ink-muted">
-                    <span className="font-semibold text-signal">Main Character:</span>
-                    <span className="bg-signal/10 px-2 py-0.5 border border-signal/20 text-signal font-mono text-[11px] max-w-md truncate" title={pillar.mainCharacterDescription}>
-                      {pillar.mainCharacterDescription || "Active Anchor"}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">

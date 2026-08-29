@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { SCRIPT_GENERATION_SYSTEM_PROMPT } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
 
 export default function ScriptTab({
   scriptContent,
@@ -162,6 +163,22 @@ export default function ScriptTab({
           >
             <Copy size={13} />
             <span>Copy</span>
+          </button>
+
+          {/* Copy Script System Prompt Pill */}
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(SCRIPT_GENERATION_SYSTEM_PROMPT);
+              if (typeof triggerScriptNotice === "function") {
+                triggerScriptNotice("Script system prompt copied to clipboard.");
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
+            title="Copy script generation system prompt"
+          >
+            <Copy size={13} />
+            <span>Copy System Prompt</span>
           </button>
 
           {/* Update / Save Pill */}
