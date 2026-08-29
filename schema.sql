@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS channels (
     banner_url TEXT,
     avatar_url TEXT,
     default_voice TEXT DEFAULT 'af_heart',
+    postershive_api TEXT,
     status TEXT DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -64,7 +65,11 @@ CREATE TABLE IF NOT EXISTS topics (
     scenes_json JSONB,
     thumbnail_url TEXT,
     thumbnail_prompt TEXT,
+    story_description TEXT,
     master_video_url TEXT,
+    youtube_video_id TEXT,
+    youtube_url TEXT,
+    youtube_published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT uq_channel_topic UNIQUE (channel_id, slug)

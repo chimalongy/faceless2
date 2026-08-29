@@ -34,7 +34,8 @@ import {
   AlertCircle,
   Upload,
   Camera,
-  Download
+  Download,
+  Share2
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -84,6 +85,7 @@ export default function EditChannelPage() {
   const [thumbnailTheme, setThumbnailTheme] = useState("");
   const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
+  const [postershiveApi, setPostershiveApi] = useState("");
   const [status, setStatus] = useState("Active");
 
   // Artwork & Branding Images
@@ -122,6 +124,7 @@ export default function EditChannelPage() {
             setThumbnailTheme(c.thumbnailTheme || "");
             setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
+            setPostershiveApi(c.postershiveApi || "");
             setBannerUrl(c.bannerUrl || "");
             setAvatarUrl(c.avatarUrl || "");
             setStatus(c.status || "Active");
@@ -158,6 +161,7 @@ export default function EditChannelPage() {
             setThumbnailTheme(found.thumbnailTheme || "");
             setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
+            setPostershiveApi(found.postershiveApi || "");
             setBannerUrl(found.bannerUrl || "");
             setAvatarUrl(found.avatarUrl || "");
             setStatus(found.status || "Active");
@@ -239,6 +243,7 @@ export default function EditChannelPage() {
     setField(setThumbnailTheme, "thumbnailTheme", "thumbnail_theme", "thumbnailsTheme");
     setField(setAudioTheme, "audioTheme", "audio_theme", "soundTheme", "voiceoverTheme");
     setField(setDefaultVoice, "defaultVoice", "default_voice", "voice_id", "narrator_voice");
+    setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
     setField(setStatus, "status");
 
     if (count === 0) {
@@ -311,6 +316,9 @@ export default function EditChannelPage() {
         audio_theme: audioTheme.trim(),
         default_voice: defaultVoice,
       },
+      integrations: {
+        postershive_api: postershiveApi.trim(),
+      },
     };
 
     try {
@@ -348,6 +356,7 @@ export default function EditChannelPage() {
       thumbnailTheme: thumbnailTheme.trim(),
       audioTheme: audioTheme.trim(),
       defaultVoice,
+      postershiveApi: postershiveApi.trim(),
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
       status,
@@ -1249,7 +1258,43 @@ export default function EditChannelPage() {
           </div>
         </section>
 
-        {/* SECTION 5: SAVE BAR & DANGER ZONE */}
+        {/* SECTION 5: CHANNEL INTEGRATIONS & AUTOMATION */}
+        <section className="p-6 border border-line bg-paper-card space-y-6">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Share2 size={16} />
+              </span>
+              <span>Channel Integrations & Social Automation</span>
+            </div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5">
+              PostersHive
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-postershive-api">
+                <Share2 size={13} className="text-signal" />
+                <span>PostersHive API Key / Endpoint</span>
+              </label>
+              <span className="text-[10px] font-mono text-ink-muted uppercase">PostersHive Integration</span>
+            </div>
+            <input
+              type="text"
+              id="field-postershive-api"
+              value={postershiveApi}
+              onChange={(e) => setPostershiveApi(e.target.value)}
+              placeholder="e.g. ph_live_abc123... or your PostersHive API Key / Endpoint"
+              className="w-full h-10 px-3.5 border border-line bg-white text-xs font-mono text-ink outline-none focus:border-signal"
+            />
+            <p className="text-[11px] text-ink-muted mt-1.5 leading-relaxed">
+              Used for automated social media scheduling, video uploads, community post dispatch, and multi-platform distribution managed through PostersHive.
+            </p>
+          </div>
+        </section>
+
+        {/* SECTION 6: SAVE BAR & DANGER ZONE */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-line">
           <button
             type="button"

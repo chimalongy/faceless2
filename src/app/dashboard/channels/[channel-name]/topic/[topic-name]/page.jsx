@@ -98,10 +98,15 @@ export default function TopicStudioPage() {
   const [isGeneratingAllVideos, setIsGeneratingAllVideos] = useState(false);
   const [generatingSceneVideos, setGeneratingSceneVideos] = useState({});
 
-  // 7. Completed Master Video State
+  // 7. Completed Master Video & YouTube Publishing State
   const [completedMasterVideo, setCompletedMasterVideo] = useState(null);
   const [isRenderingMaster, setIsRenderingMaster] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
+  const [storyDescription, setStoryDescription] = useState("");
+  const [postershiveApi, setPostershiveApi] = useState("");
+  const [youtubeVideoId, setYoutubeVideoId] = useState(null);
+  const [youtubeUrl, setYoutubeUrl] = useState(null);
+  const [youtubePublishedAt, setYoutubePublishedAt] = useState(null);
 
   // Generic Delete Confirmation Modal State
   const [deleteModalState, setDeleteModalState] = useState({
@@ -180,6 +185,12 @@ export default function TopicStudioPage() {
               });
             }
 
+            if (t.storyDescription) setStoryDescription(t.storyDescription);
+            if (t.postershiveApi) setPostershiveApi(t.postershiveApi);
+            if (t.youtubeVideoId) setYoutubeVideoId(t.youtubeVideoId);
+            if (t.youtubeUrl) setYoutubeUrl(t.youtubeUrl);
+            if (t.youtubePublishedAt) setYoutubePublishedAt(t.youtubePublishedAt);
+
             // Populate assets from database
             if (Array.isArray(t.assets)) {
               const audios = {};
@@ -222,13 +233,16 @@ export default function TopicStudioPage() {
           }
         }
 
-        // Fetch channel default voice and apply as default selected voice in Audio tab
+        // Fetch channel default voice & postershive API key
         try {
           const channelRes = await fetch(`/api/channels/${channelSlug}`);
           if (channelRes.ok) {
             const cData = await channelRes.json();
             if (cData?.channel?.defaultVoice) {
               setSelectedVoice(cData.channel.defaultVoice);
+            }
+            if (cData?.channel?.postershiveApi) {
+              setPostershiveApi(cData.channel.postershiveApi);
             }
           }
         } catch (cErr) {
@@ -1719,14 +1733,33 @@ export default function TopicStudioPage() {
           {activeTab === "completed_video" && (
             <CompletedVideoTab
               topicTitle={topicTitle}
+              topicSlug={topicSlug}
+              channelSlug={channelSlug}
+              channelName={channelTitle}
+              postershiveApi={postershiveApi}
+              scriptContent={scriptContent}
+              storyDescription={storyDescription}
+              setStoryDescription={setStoryDescription}
               scenesJson={scenesJson}
               sceneVideos={sceneVideos}
+              sceneImages={sceneImages}
+              sceneAudios={sceneAudios}
+              thumbnailImage={thumbnailImage}
               completedMasterVideo={completedMasterVideo}
+              setCompletedMasterVideo={setCompletedMasterVideo}
               isRenderingMaster={isRenderingMaster}
               renderProgress={renderProgress}
               handleUploadMasterVideo={handleUploadMasterVideo}
               handleDeleteMasterVideo={handleDeleteMasterVideo}
               handleRenderMasterVideo={handleRenderMasterVideo}
+              youtubeVideoId={youtubeVideoId}
+              youtubeUrl={youtubeUrl}
+              youtubePublishedAt={youtubePublishedAt}
+              onYoutubePublished={({ youtubeVideoId, youtubeUrl, youtubePublishedAt }) => {
+                setYoutubeVideoId(youtubeVideoId);
+                setYoutubeUrl(youtubeUrl);
+                setYoutubePublishedAt(youtubePublishedAt);
+              }}
             />
           )}
         </>

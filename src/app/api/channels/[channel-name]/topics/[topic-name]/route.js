@@ -23,6 +23,7 @@ export async function GET(request, { params }) {
         c.name AS "channelName",
         c.image_theme AS "channelImageTheme",
         c.thumbnail_theme AS "channelThumbnailTheme",
+        c.postershive_api AS "postershiveApi",
         t.pillar_id AS "pillarId",
         cp.slug AS "pillarSlug",
         cp.name AS "pillarName",
@@ -36,7 +37,11 @@ export async function GET(request, { params }) {
         t.scenes_json AS "scenesJson",
         t.thumbnail_url AS "thumbnailUrl",
         t.thumbnail_prompt AS "thumbnailPrompt",
+        t.story_description AS "storyDescription",
         t.master_video_url AS "masterVideoUrl",
+        t.youtube_video_id AS "youtubeVideoId",
+        t.youtube_url AS "youtubeUrl",
+        t.youtube_published_at AS "youtubePublishedAt",
         t.created_at AS "createdAt",
         t.updated_at AS "updatedAt"
       FROM topics t
@@ -110,6 +115,7 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     const title = body.title?.trim();
     const scenesJson = body.scenesJson ? JSON.stringify(body.scenesJson) : null;
+    const storyDesc = body.storyDescription !== undefined ? body.storyDescription : (body.story_description !== undefined ? body.story_description : (body.story_discription !== undefined ? body.story_discription : null));
 
     let pillarId = undefined;
     if (body.pillarSlug || body.pillar) {
@@ -133,7 +139,11 @@ export async function PUT(request, { params }) {
         scenes_json = COALESCE(${scenesJson}::jsonb, scenes_json),
         thumbnail_url = COALESCE(${body.thumbnailUrl}, thumbnail_url),
         thumbnail_prompt = COALESCE(${body.thumbnailPrompt}, thumbnail_prompt),
+        story_description = COALESCE(${storyDesc}, story_description),
         master_video_url = COALESCE(${body.masterVideoUrl}, master_video_url),
+        youtube_video_id = COALESCE(${body.youtubeVideoId !== undefined ? body.youtubeVideoId : null}, youtube_video_id),
+        youtube_url = COALESCE(${body.youtubeUrl !== undefined ? body.youtubeUrl : null}, youtube_url),
+        youtube_published_at = COALESCE(${body.youtubePublishedAt !== undefined ? body.youtubePublishedAt : null}, youtube_published_at),
         updated_at = NOW()
       WHERE channel_id = ${channelId} AND slug = ${topicSlug}
       RETURNING *;

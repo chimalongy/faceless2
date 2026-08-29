@@ -59,6 +59,7 @@ export async function initDbSchema() {
         banner_url TEXT,
         avatar_url TEXT,
         default_voice TEXT DEFAULT 'af_heart',
+        postershive_api TEXT,
         status TEXT DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -69,6 +70,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS banner_url TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
     } catch {}
 
     // 2. Content Pillars Table
@@ -111,12 +113,24 @@ export async function initDbSchema() {
         scenes_json JSONB,
         thumbnail_url TEXT,
         thumbnail_prompt TEXT,
+        story_description TEXT,
         master_video_url TEXT,
+        youtube_video_id TEXT,
+        youtube_url TEXT,
+        youtube_published_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(channel_id, slug)
       );
     `;
+
+    try {
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_description TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_discription TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_video_id TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_url TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_published_at TIMESTAMPTZ;`;
+    } catch {}
 
     // 4. Topic Assets Table (Cloudflare R2 media links)
     await sql`

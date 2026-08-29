@@ -38,6 +38,7 @@ export async function GET(request, { params }) {
         banner_url AS "bannerUrl",
         avatar_url AS "avatarUrl",
         default_voice AS "defaultVoice",
+        postershive_api AS "postershiveApi",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -108,6 +109,7 @@ export async function PUT(request, { params }) {
         banner_url = ${body.bannerUrl !== undefined ? body.bannerUrl : null},
         avatar_url = ${body.avatarUrl !== undefined ? body.avatarUrl : null},
         default_voice = ${body.defaultVoice || 'af_heart'},
+        postershive_api = ${body.postershiveApi !== undefined ? body.postershiveApi : (body.postershive_api !== undefined ? body.postershive_api : null)},
         status = ${body.status || 'Active'},
         updated_at = NOW()
       WHERE slug = ${channelSlug}

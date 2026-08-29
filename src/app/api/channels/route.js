@@ -36,6 +36,7 @@ export async function GET() {
         banner_url AS "bannerUrl",
         avatar_url AS "avatarUrl",
         default_voice AS "defaultVoice",
+        postershive_api AS "postershiveApi",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -98,6 +99,7 @@ export async function POST(request) {
     const imageTheme = body.imageTheme?.trim() || "";
     const thumbnailTheme = body.thumbnailTheme?.trim() || "";
     const audioTheme = body.audioTheme?.trim() || "";
+    const postershiveApi = body.postershiveApi?.trim() || body.postershive_api?.trim() || null;
     const status = body.status || "Active";
 
     const inserted = await sql`
@@ -121,6 +123,7 @@ export async function POST(request) {
         thumbnail_theme,
         audio_theme,
         default_voice,
+        postershive_api,
         status
       ) VALUES (
         ${name},
@@ -142,6 +145,7 @@ export async function POST(request) {
         ${thumbnailTheme},
         ${audioTheme},
         ${body.defaultVoice || 'af_heart'},
+        ${postershiveApi},
         ${status}
       )
       ON CONFLICT (slug) DO UPDATE SET
@@ -162,6 +166,8 @@ export async function POST(request) {
         image_theme = EXCLUDED.image_theme,
         thumbnail_theme = EXCLUDED.thumbnail_theme,
         audio_theme = EXCLUDED.audio_theme,
+        default_voice = EXCLUDED.default_voice,
+        postershive_api = EXCLUDED.postershive_api,
         status = EXCLUDED.status,
         updated_at = NOW()
       RETURNING *;
