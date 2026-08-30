@@ -95,7 +95,7 @@ Create a new scene when there is a meaningful change in:
 - concept
 - perspective
 
-As a guideline, use roughly 2–3 short sentences per scene, but prioritize natural visual pacing over rigid sentence counts.
+As a guideline, use roughly 1–3 short sentences per scene, but prioritize natural visual pacing over rigid sentence counts.
 
 Create visual variety through shot scale, angle, perspective, environment, composition, depth, subject placement, and scene type.
 
