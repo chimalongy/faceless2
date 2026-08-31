@@ -464,6 +464,31 @@ header h2 {
   background: rgba(139, 106, 255, 0.08);
 }
 
+.scenes-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-text-action {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-text-action:hover {
+  color: var(--danger);
+  border-color: rgba(255, 77, 106, 0.4);
+  background: rgba(255, 77, 106, 0.08);
+}
+
 .selected-badge {
   background: rgba(139, 106, 255, 0.2);
   color: var(--accent-hover);

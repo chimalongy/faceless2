@@ -18,7 +18,7 @@ export const extractZipImagesTask = task({
       throw new Error("channelSlug and topicSlug are required for extract-zip-images task.");
     }
 
-    logger.log("Starting ZIP extraction task for scene images...", {
+    logger.log("Starting ZIP extraction task for scene images and thumbnail...", {
       channelSlug,
       topicSlug,
       hasBase64: !!zipBase64,
@@ -87,7 +87,7 @@ export const extractZipImagesTask = task({
 
       logger.log(`Found ${imageFiles.length} image candidate(s) in ZIP archive.`);
 
-      // 3. Process each image, extract scene number, and upload to R2
+      // 3. Process each image, extract scene number or thumbnail, and upload to R2
       const sql = getDbSql();
       let channelId = null;
       let topicId = null;
@@ -101,23 +101,10 @@ export const extractZipImagesTask = task({
       }
 
       const results = [];
+      let thumbnailResult = null;
 
       for (const item of imageFiles) {
         const fullFileName = item.path.split("/").pop() || item.path;
-        
-        // Filenames in ZIP can be e.g. "1.jfif", "2.jfif", "1.png_202608210053", "2.jpg_timestamp", "scene_3.png"
-        // Step A: Strip extension to extract the basename
-        const nameWithoutExt = fullFileName.replace(/\.[^/.]+$/, "");
-        const primaryPart = nameWithoutExt.split("_")[0];
-        
-        // Step B: Extract scene number from primary part or full filename
-        const numberMatch = primaryPart.match(/(\d+)/) || nameWithoutExt.match(/(\d+)/) || fullFileName.match(/(\d+)/);
-        if (!numberMatch) {
-          logger.warn(`Could not extract scene number from filename: ${fullFileName}. Skipping.`);
-          continue;
-        }
-
-        const sceneIndex = parseInt(numberMatch[1], 10);
         const lowerFull = fullFileName.toLowerCase();
 
         // Determine extension and MIME type
@@ -138,6 +125,113 @@ export const extractZipImagesTask = task({
         }
 
         const imgBuffer = await item.file.async("nodebuffer");
+
+        // ── THUMBNAIL DETECTION: Any image containing "thumbnail" in its filename ──
+        if (lowerFull.includes("thumbnail")) {
+          logger.log(`Found thumbnail image in ZIP: ${fullFileName}`);
+
+          // Clean up any previous thumbnail asset from R2 and DB
+          if (sql && channelId && topicId) {
+            try {
+              const oldRows = await sql`
+                SELECT file_key FROM topic_assets
+                WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'thumbnail';
+              `;
+              if (oldRows && oldRows.length > 0) {
+                for (const row of oldRows) {
+                  if (row.file_key) {
+                    await deleteFromR2(row.file_key).catch(() => {});
+                  }
+                }
+                await sql`
+                  DELETE FROM topic_assets
+                  WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'thumbnail';
+                `;
+              }
+            } catch (cleanErr) {
+              logger.warn("Old thumbnail asset cleanup error:", cleanErr.message);
+            }
+          }
+
+          // Upload thumbnail directly to Cloudflare R2
+          const timestamp = Date.now();
+          const randomSuffix = Math.random().toString(36).substring(2, 7);
+          const key = `channels/${channelSlug}/topics/${topicSlug}/thumbnail/thumbnail-${timestamp}-${randomSuffix}.${ext}`;
+
+          const uploadResult = await uploadToR2({
+            key,
+            buffer: imgBuffer,
+            mimeType,
+            metadata: {
+              channelSlug,
+              topicSlug,
+              assetType: "thumbnail",
+              source: "zip_upload",
+              originalName: fullFileName,
+            },
+          });
+
+          // Record in Neon database and update topics.thumbnail_url
+          if (sql && channelId && topicId) {
+            try {
+              await sql`
+                INSERT INTO topic_assets (
+                  topic_id,
+                  channel_id,
+                  asset_type,
+                  file_url,
+                  file_key,
+                  file_name,
+                  mime_type,
+                  size_bytes
+                ) VALUES (
+                  ${topicId},
+                  ${channelId},
+                  'thumbnail',
+                  ${uploadResult.publicUrl},
+                  ${uploadResult.key},
+                  ${`thumbnail.${ext}`},
+                  ${mimeType},
+                  ${imgBuffer.length}
+                );
+              `;
+
+              await sql`
+                UPDATE topics
+                SET thumbnail_url = ${uploadResult.publicUrl}, updated_at = NOW()
+                WHERE id = ${topicId};
+              `;
+            } catch (dbErr) {
+              logger.warn("Could not save thumbnail DB record:", dbErr.message);
+            }
+          }
+
+          logger.log(`Mapped Thumbnail (${fullFileName}) -> ${uploadResult.publicUrl}`);
+
+          thumbnailResult = {
+            fileName: `thumbnail.${ext}`,
+            publicUrl: uploadResult.publicUrl,
+            key: uploadResult.key,
+            mimeType,
+            size: imgBuffer.length,
+          };
+          continue;
+        }
+
+        // ── SCENE IMAGE DETECTION ──
+        // Filenames in ZIP can be e.g. "1.jfif", "2.jfif", "1.png_202608210053", "2.jpg_timestamp", "scene_3.png"
+        // Step A: Strip extension to extract the basename
+        const nameWithoutExt = fullFileName.replace(/\.[^/.]+$/, "");
+        const primaryPart = nameWithoutExt.split("_")[0];
+        
+        // Step B: Extract scene number from primary part or full filename
+        const numberMatch = primaryPart.match(/(\d+)/) || nameWithoutExt.match(/(\d+)/) || fullFileName.match(/(\d+)/);
+        if (!numberMatch) {
+          logger.warn(`Could not extract scene number or thumbnail identifier from filename: ${fullFileName}. Skipping.`);
+          continue;
+        }
+
+        const sceneIndex = parseInt(numberMatch[1], 10);
 
         // Clean up any previous image asset for this scene from R2 and DB
         if (sql && channelId && topicId && sceneIndex) {
@@ -228,6 +322,8 @@ export const extractZipImagesTask = task({
         channelSlug,
         topicSlug,
         extractedCount: results.length,
+        hasThumbnail: !!thumbnailResult,
+        thumbnail: thumbnailResult,
         images: results,
       };
     } finally {

@@ -42,6 +42,7 @@ const thumbLogArea = $("thumbLog");
 const scenesCard = $("scenesCard");
 const sceneCount = $("sceneCount");
 const scenesList = $("scenesList");
+const unselectAllBtn = $("unselectAllBtn");
 const selectedCountBadge = $("selectedCountBadge");
 const genSelectedBtn = $("genSelectedBtn");
 const genSelectedCount = $("genSelectedCount");
@@ -539,6 +540,7 @@ function renderScenes(scenes) {
       if (cb.checked) {
         if (selectedSceneNumbers.size >= maxBatch) {
           cb.checked = false;
+          div.classList.remove("selected");
           addLog(
             `Cannot select more than ${maxBatch} scene(s) (batch count limit: ${maxBatch})`,
             "warn",
@@ -546,8 +548,10 @@ function renderScenes(scenes) {
           return;
         }
         selectedSceneNumbers.add(scene.scene_number);
+        div.classList.add("selected");
       } else {
         selectedSceneNumbers.delete(scene.scene_number);
+        div.classList.remove("selected");
       }
       updateSelectedScenesUI();
     });
@@ -565,15 +569,30 @@ function renderScenes(scenes) {
 function updateSelectedScenesUI() {
   const count = selectedSceneNumbers.size;
   if (count > 0) {
+    unselectAllBtn?.classList.remove("hidden");
     selectedCountBadge.textContent = `${count} selected`;
     selectedCountBadge.classList.remove("hidden");
     genSelectedCount.textContent = count;
     genSelectedBtn.classList.remove("hidden");
   } else {
+    unselectAllBtn?.classList.add("hidden");
     selectedCountBadge.classList.add("hidden");
     genSelectedBtn.classList.add("hidden");
   }
 }
+
+unselectAllBtn?.addEventListener("click", () => {
+  selectedSceneNumbers.clear();
+  const checkboxes = scenesList?.querySelectorAll(".scene-checkbox") || [];
+  checkboxes.forEach((cb) => {
+    cb.checked = false;
+  });
+  const items = scenesList?.querySelectorAll(".scene-item") || [];
+  items.forEach((item) => {
+    item.classList.remove("selected");
+  });
+  updateSelectedScenesUI();
+});
 
 function buildBatchPrompt(scenesChunk, channelTheme = "") {
   const scenesText = scenesChunk

@@ -105,7 +105,10 @@
     <section id="scenesCard" class="card hidden">
       <div class="card-header-row">
         <h3>Scenes <span id="sceneCount" class="badge">0</span></h3>
-        <div id="selectedCountBadge" class="selected-badge hidden">0 selected</div>
+        <div class="scenes-header-actions">
+          <button id="unselectAllBtn" type="button" class="btn-text-action hidden" title="Unselect all selected scenes">Unselect All</button>
+          <div id="selectedCountBadge" class="selected-badge hidden">0 selected</div>
+        </div>
       </div>
       <div id="scenesList" class="scenes-list"></div>
       <button id="genSelectedBtn" class="btn-selected hidden">▶ Generate Selected (<span id="genSelectedCount">0</span>)</button>

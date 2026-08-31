@@ -69,6 +69,8 @@ export async function POST(req, context) {
     return NextResponse.json({
       success: true,
       extractedCount: output.extractedCount,
+      hasThumbnail: output.hasThumbnail,
+      thumbnail: output.thumbnail,
       images: output.images,
     });
   } catch (error) {

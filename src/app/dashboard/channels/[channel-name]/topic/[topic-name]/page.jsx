@@ -1015,19 +1015,25 @@ export default function TopicStudioPage() {
       }
 
       const data = await res.json();
-      if (res.ok && Array.isArray(data.images)) {
-        setSceneImages((prev) => {
-          const next = { ...prev };
-          data.images.forEach((img) => {
-            next[img.sceneIndex] = {
-              url: img.publicUrl,
-              key: img.key,
-              name: img.fileName || `Scene ${img.sceneIndex} Image`,
-            };
+      if (res.ok && (Array.isArray(data.images) || data.thumbnail)) {
+        if (Array.isArray(data.images) && data.images.length > 0) {
+          setSceneImages((prev) => {
+            const next = { ...prev };
+            data.images.forEach((img) => {
+              next[img.sceneIndex] = {
+                url: img.publicUrl,
+                key: img.key,
+                name: img.fileName || `Scene ${img.sceneIndex} Image`,
+              };
+            });
+            return next;
           });
-          return next;
-        });
-        toast.success(`Successfully unpacked & mapped ${data.extractedCount} scene image(s)!`);
+        }
+        if (data.thumbnail?.publicUrl) {
+          setThumbnailImage(data.thumbnail.publicUrl);
+        }
+        const thumbMsg = data.thumbnail ? " and thumbnail" : "";
+        toast.success(`Successfully unpacked & mapped ${data.extractedCount || data.images?.length || 0} scene image(s)${thumbMsg}!`);
       } else {
         toast.error(data.error || "Failed to extract images from ZIP.");
       }
