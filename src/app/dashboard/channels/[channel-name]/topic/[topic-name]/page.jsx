@@ -98,6 +98,8 @@ export default function TopicStudioPage() {
   const [sceneVideos, setSceneVideos] = useState({});
   const [isGeneratingAllVideos, setIsGeneratingAllVideos] = useState(false);
   const [generatingSceneVideos, setGeneratingSceneVideos] = useState({});
+  const [isGeneratingAllVideosModal, setIsGeneratingAllVideosModal] = useState(false);
+  const [generatingSceneVideosModal, setGeneratingSceneVideosModal] = useState({});
 
   // 7. Completed Master Video & YouTube Publishing State
   const [completedMasterVideo, setCompletedMasterVideo] = useState(null);
@@ -1380,6 +1382,150 @@ export default function TopicStudioPage() {
     }
   }
 
+  // Modal Video Handlers (Testing)
+  async function handleGenerateSceneVideoModal(sceneNum) {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+    const scene = parsed.find((s) => Number(s.scene_number) === Number(sceneNum));
+    const imgData = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
+    const audioData = sceneAudios[sceneNum] || sceneAudios[String(sceneNum)] || sceneAudios[Number(sceneNum)];
+
+    if (!imgData?.url || !audioData?.url) {
+      toast.error(`Scene ${sceneNum} requires both an image and voice audio to render video on Modal.`);
+      return;
+    }
+
+    setGeneratingSceneVideosModal((prev) => ({ ...prev, [sceneNum]: true }));
+    toast(`[Modal Test] Rendering Scene ${sceneNum} video clip via Modal GPU...`, { icon: "⚡" });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/test-modal-scene-render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneIndex: sceneNum,
+          imageUrl: imgData.url,
+          audioUrl: audioData.url,
+          kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
+          transition: scene?.transition || "fade",
+        }),
+      });
+
+      const data = await res.json();
+      const outputVideo = data.videoUrl ? data : (Array.isArray(data.videos) && data.videos[0]) ? data.videos[0] : null;
+
+      if (res.ok && outputVideo?.videoUrl) {
+        setSceneVideos((prev) => ({
+          ...prev,
+          [sceneNum]: {
+            url: outputVideo.videoUrl || outputVideo.publicUrl,
+            key: outputVideo.key,
+            name: outputVideo.fileName || `Scene ${sceneNum} Video`,
+            duration: outputVideo.duration,
+          },
+        }));
+        toast.success(`[Modal Test] Scene ${sceneNum} video rendered successfully on Modal!`);
+      } else {
+        toast.error(data.error || `Failed to render Scene ${sceneNum} on Modal.`);
+      }
+    } catch (err) {
+      console.error(`[Modal Test] Error rendering Scene ${sceneNum}:`, err);
+      toast.error("[Modal Test] Error: " + err.message);
+    } finally {
+      setGeneratingSceneVideosModal((prev) => ({ ...prev, [sceneNum]: false }));
+    }
+  }
+
+  async function handleGenerateAllVideosModal() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+
+    if (!parsed || parsed.length === 0) {
+      toast.error("No scenes defined in this topic.");
+      return;
+    }
+
+    // Filter to only scenes that have BOTH image and audio, and do NOT have video yet
+    const scenesToRender = parsed.filter((scene) => {
+      const sNum = scene.scene_number;
+      const existing = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+      if (existing?.url) return false;
+      const img = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
+      const aud = sceneAudios[sNum] || sceneAudios[String(sNum)] || sceneAudios[Number(sNum)];
+      return !!img?.url && !!aud?.url;
+    });
+
+    if (scenesToRender.length === 0) {
+      const unrenderedScenes = parsed.filter((scene) => {
+        const sNum = scene.scene_number;
+        const existing = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+        return !existing?.url;
+      });
+
+      if (unrenderedScenes.length > 0) {
+        toast.error(
+          `Cannot render: ${unrenderedScenes.length} remaining scene(s) are missing either an image or audio narration.`
+        );
+      } else {
+        toast("All scene videos have already been rendered.", {
+          icon: "✨",
+        });
+      }
+      return;
+    }
+
+    setIsGeneratingAllVideosModal(true);
+    toast(`[Modal Test] Dispatching ${scenesToRender.length} scene(s) to Modal GPU renderer...`, { icon: "⚡" });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/test-modal-scene-render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenes: scenesToRender,
+          sceneImages,
+          sceneAudios,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.videos)) {
+        let successCount = 0;
+        setSceneVideos((prev) => {
+          const next = { ...prev };
+          data.videos.forEach((v) => {
+            if (v.success && (v.videoUrl || v.publicUrl)) {
+              successCount++;
+              next[v.sceneIndex] = {
+                url: v.videoUrl || v.publicUrl,
+                key: v.key,
+                name: v.fileName || `Scene ${v.sceneIndex} Video`,
+                duration: v.duration,
+              };
+            }
+          });
+          return next;
+        });
+        toast.success(`[Modal Test] Rendered ${successCount} scene video(s) on Modal successfully!`);
+      } else {
+        toast.error(data.error || "Failed to render scenes on Modal.");
+      }
+    } catch (err) {
+      console.error("[Modal Test] Error rendering scene videos on Modal:", err);
+      toast.error("[Modal Test] Error: " + err.message);
+    } finally {
+      setIsGeneratingAllVideosModal(false);
+    }
+  }
+
   // Master Video Handlers
   async function handleUploadMasterVideo(e) {
     const file = e.target.files?.[0];
@@ -1735,10 +1881,14 @@ export default function TopicStudioPage() {
               sceneAudios={sceneAudios}
               isGeneratingAllVideos={isGeneratingAllVideos}
               generatingSceneVideos={generatingSceneVideos}
+              isGeneratingAllVideosModal={isGeneratingAllVideosModal}
+              generatingSceneVideosModal={generatingSceneVideosModal}
               handleUploadSceneVideo={handleUploadSceneVideo}
               handleDeleteSceneVideo={handleDeleteSceneVideo}
               handleGenerateSceneVideo={handleGenerateSceneVideo}
               handleGenerateAllVideos={handleGenerateAllVideos}
+              handleGenerateSceneVideoModal={handleGenerateSceneVideoModal}
+              handleGenerateAllVideosModal={handleGenerateAllVideosModal}
             />
           )}
 

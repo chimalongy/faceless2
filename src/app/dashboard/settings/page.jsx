@@ -51,6 +51,7 @@ export default function SettingsPage() {
 
   const [gemmaBaseUrl, setGemmaBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta/openai/");
   const [openRouterBaseUrl, setOpenRouterBaseUrl] = useState("https://openrouter.ai/api/v1");
+  const [modalVideoRenderUrl, setModalVideoRenderUrl] = useState("https://me-chimaobi--faceless-video-renderer-api.modal.run");
   const [editingGeneral, setEditingGeneral] = useState(false);
 
   // Tab 2: LLM Accounts State (Strictly: account_email, source, account_id, api_token, created, updated)
@@ -89,6 +90,7 @@ export default function SettingsPage() {
 
           if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
           if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
+          if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
 
           if (Array.isArray(data.llmAccounts)) {
             setLlmAccounts(
@@ -150,6 +152,7 @@ export default function SettingsPage() {
         if (p.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(p.sceneGenStrictModel));
         if (p.gemmaBaseUrl !== undefined) setGemmaBaseUrl(p.gemmaBaseUrl);
         if (p.openRouterBaseUrl !== undefined) setOpenRouterBaseUrl(p.openRouterBaseUrl);
+        if (p.modalVideoRenderUrl !== undefined) setModalVideoRenderUrl(p.modalVideoRenderUrl);
       }
     } catch {}
   }, []);
@@ -356,6 +359,7 @@ export default function SettingsPage() {
       sceneGenStrictModel,
       gemmaBaseUrl,
       openRouterBaseUrl,
+      modalVideoRenderUrl,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
       audioEndpoints: formattedAudioEndpoints,
@@ -385,6 +389,7 @@ export default function SettingsPage() {
 
         if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
         if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
+        if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
         if (Array.isArray(data.llmAccounts)) {
           setLlmAccounts(
             data.llmAccounts.map((item) => ({
@@ -852,6 +857,32 @@ export default function SettingsPage() {
                     />
                     <p className="text-[10px] text-ink-muted font-mono">
                       OpenRouter API Base URL for multi-model routing.
+                    </p>
+                  </div>
+
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2 md:col-span-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="modal-video-render-url">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound size={13} className="text-signal" />
+                        <span>Modal Video Render Endpoint</span>
+                      </span>
+                    </label>
+                    <input
+                      id="modal-video-render-url"
+                      type="text"
+                      readOnly={!editingGeneral}
+                      disabled={!editingGeneral}
+                      value={modalVideoRenderUrl}
+                      onChange={(e) => setModalVideoRenderUrl(e.target.value)}
+                      placeholder="https://me-chimaobi--faceless-video-renderer-api.modal.run"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                        editingGeneral
+                          ? "bg-white border-line-dark focus:border-signal"
+                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                      }`}
+                    />
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      Modal FastAPI video renderer base URL for GPU-accelerated Ken Burns scene rendering.
                     </p>
                   </div>
                 </div>

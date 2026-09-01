@@ -13,7 +13,8 @@ import {
   Download,
   CheckCircle2,
   Clapperboard,
-  Compass
+  Compass,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -25,10 +26,14 @@ export default function SceneFramesTab({
   sceneAudios = {},
   isGeneratingAllVideos = false,
   generatingSceneVideos = {},
+  isGeneratingAllVideosModal = false,
+  generatingSceneVideosModal = {},
   handleUploadSceneVideo,
   handleDeleteSceneVideo,
   handleGenerateSceneVideo,
   handleGenerateAllVideos,
+  handleGenerateSceneVideoModal,
+  handleGenerateAllVideosModal,
 }) {
   const [downloadingVideos, setDownloadingVideos] = useState({});
 
@@ -91,29 +96,67 @@ export default function SceneFramesTab({
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled={isGeneratingAllVideos || parsedScenes.length === 0 || eligibleScenesCount === 0}
-            onClick={handleGenerateAllVideos}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            title={
-              eligibleScenesCount > 0
-                ? `Render remaining ${eligibleScenesCount} scene(s) with image and audio`
-                : "No unrendered scenes with both image and audio ready"
-            }
-          >
-            {isGeneratingAllVideos ? (
-              <>
-                <Loader2 size={13} className="animate-spin" />
-                <span>Rendering Remaining Videos...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={13} />
-                <span>Generate All Videos {eligibleScenesCount > 0 ? `(${eligibleScenesCount})` : ""}</span>
-              </>
-            )}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {/* Test on Modal button */}
+            <button
+              type="button"
+              disabled={
+                isGeneratingAllVideos ||
+                isGeneratingAllVideosModal ||
+                parsedScenes.length === 0 ||
+                eligibleScenesCount === 0
+              }
+              onClick={handleGenerateAllVideosModal}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs shadow-purple-600/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              title={
+                eligibleScenesCount > 0
+                  ? `Test rendering ${eligibleScenesCount} scene(s) with Modal GPU renderer`
+                  : "No unrendered scenes with both image and audio ready"
+              }
+            >
+              {isGeneratingAllVideosModal ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Modal Rendering...</span>
+                </>
+              ) : (
+                <>
+                  <Zap size={13} />
+                  <span>Test on Modal {eligibleScenesCount > 0 ? `(${eligibleScenesCount})` : ""}</span>
+                </>
+              )}
+            </button>
+
+            {/* Standard Generate All Videos button */}
+            <button
+              type="button"
+              disabled={
+                isGeneratingAllVideos ||
+                isGeneratingAllVideosModal ||
+                parsedScenes.length === 0 ||
+                eligibleScenesCount === 0
+              }
+              onClick={handleGenerateAllVideos}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              title={
+                eligibleScenesCount > 0
+                  ? `Render remaining ${eligibleScenesCount} scene(s) with image and audio`
+                  : "No unrendered scenes with both image and audio ready"
+              }
+            >
+              {isGeneratingAllVideos ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Rendering Remaining Videos...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={13} />
+                  <span>Generate All Videos {eligibleScenesCount > 0 ? `(${eligibleScenesCount})` : ""}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -146,6 +189,7 @@ export default function SceneFramesTab({
               const hasAudio = !!audioData?.url;
 
               const isGeneratingThis = !!generatingSceneVideos[sceneNum] || isGeneratingAllVideos;
+              const isGeneratingThisModal = !!generatingSceneVideosModal[sceneNum] || isGeneratingAllVideosModal;
               const isDownloading = !!downloadingVideos[sceneNum];
 
               const kb = scene.ken_burns || { direction: "zoom-in", intensity: 0.12 };
@@ -189,12 +233,14 @@ export default function SceneFramesTab({
 
                   {/* 16:9 Video Player Box */}
                   <div className="relative aspect-video w-full bg-ink text-white overflow-hidden flex items-center justify-center">
-                    {generatingSceneVideos[sceneNum] || (isGeneratingAllVideos && !hasVideo) ? (
+                    {generatingSceneVideos[sceneNum] || generatingSceneVideosModal[sceneNum] || (isGeneratingAllVideos && !hasVideo) || (isGeneratingAllVideosModal && !hasVideo) ? (
                       <div className="relative w-full h-full flex items-center justify-center bg-slate-900 text-center p-3 space-y-1.5">
                         <div className="space-y-1.5">
                           <Loader2 size={26} className="animate-spin text-signal mx-auto" />
                           <p className="text-[11px] font-mono text-white/90 font-semibold">
-                            Rendering Scene 0{sceneNum} MP4...
+                            {generatingSceneVideosModal[sceneNum] || isGeneratingAllVideosModal
+                              ? `Rendering Scene 0${sceneNum} on Modal...`
+                              : `Rendering Scene 0${sceneNum} MP4...`}
                           </p>
                           <p className="text-[10px] font-mono text-ink-muted">
                             Applying Ken Burns & Audio Muxing
@@ -274,36 +320,59 @@ export default function SceneFramesTab({
                       )}
                     </div>
 
-                    {/* Generate Button for Individual Scene Video */}
-                    <button
-                      type="button"
-                      disabled={isGeneratingThis || !hasImage || !hasAudio}
-                      onClick={() => handleGenerateSceneVideo(sceneNum)}
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-sm border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={
-                        !hasImage && !hasAudio
-                          ? "Generate or upload image and voice audio first"
-                          : !hasImage
-                          ? "Generate or upload an image first"
-                          : !hasAudio
-                          ? "Generate or upload voice audio first"
-                          : hasVideo
-                          ? "Regenerate MP4 for this scene"
-                          : "Render MP4 for this scene"
-                      }
-                    >
-                      {generatingSceneVideos[sceneNum] ? (
-                        <>
-                          <Loader2 size={11} className="animate-spin" />
-                          <span>Rendering...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={11} />
-                          <span>{hasVideo ? "Regenerate" : "Generate"}</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {/* Generate with Modal Button */}
+                      <button
+                        type="button"
+                        disabled={isGeneratingThis || isGeneratingThisModal || !hasImage || !hasAudio}
+                        onClick={() => handleGenerateSceneVideoModal && handleGenerateSceneVideoModal(sceneNum)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-purple-300 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-700 text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Test render this scene on Modal"
+                      >
+                        {generatingSceneVideosModal[sceneNum] ? (
+                          <>
+                            <Loader2 size={11} className="animate-spin" />
+                            <span>Modal...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap size={11} />
+                            <span>Generate with Modal</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Standard Generate Button for Individual Scene Video */}
+                      <button
+                        type="button"
+                        disabled={isGeneratingThis || isGeneratingThisModal || !hasImage || !hasAudio}
+                        onClick={() => handleGenerateSceneVideo(sceneNum)}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-sm border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={
+                          !hasImage && !hasAudio
+                            ? "Generate or upload image and voice audio first"
+                            : !hasImage
+                            ? "Generate or upload an image first"
+                            : !hasAudio
+                            ? "Generate or upload voice audio first"
+                            : hasVideo
+                            ? "Regenerate MP4 for this scene"
+                            : "Render MP4 for this scene"
+                        }
+                      >
+                        {generatingSceneVideos[sceneNum] ? (
+                          <>
+                            <Loader2 size={11} className="animate-spin" />
+                            <span>Rendering...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={11} />
+                            <span>{hasVideo ? "Regenerate" : "Generate"}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS general_settings (
     scene_gen_strict_model BOOLEAN DEFAULT false,
     gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/',
     open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1',
+    modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

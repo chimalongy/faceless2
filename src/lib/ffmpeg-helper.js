@@ -239,8 +239,8 @@ export function buildKenBurnsFilter(
   kenBurns = {},
   fps = 60,
   totalFrames = 300,
-  width = 1280,
-  height = 720
+  width = 1376,
+  height = 768
 ) {
   const direction =
     normalizeKenBurnsDirection(

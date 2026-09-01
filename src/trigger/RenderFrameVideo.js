@@ -39,8 +39,8 @@ async function renderSingleScene({
   imageUrl,
   audioUrl = null,
   fps = 60,
-  width = 1280,
-  height = 720,
+  width = 1376,
+  height = 768,
   kenBurns = {
     direction: "zoom-in",
     intensity: 0.1,
@@ -346,8 +346,8 @@ export const renderSceneFrameTask = task({
       imageUrl,
       audioUrl,
       fps = 60,
-      width = 1280,
-      height = 720,
+      width = 1376,
+      height = 768,
       kenBurns = {
         direction: "zoom-in",
         intensity: 0.1,
@@ -393,8 +393,8 @@ export const renderAllSceneFramesTask = task({
       sceneImages = {},
       sceneAudios = {},
       fps = 60,
-      width = 1280,
-      height = 720,
+      width = 1376,
+      height = 768,
     } = payload;
 
     if (!channelSlug || !topicSlug) {
