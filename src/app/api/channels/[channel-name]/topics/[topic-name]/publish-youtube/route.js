@@ -102,13 +102,14 @@ export async function POST(request, { params }) {
     const scheduledAt = body.scheduledAt || body.scheduled_at || null;
 
     // 6. Determine PostHive API base URL & Auth Token
-    // Support either raw API Key (e.g. ph_live_...) or custom Endpoint URL + Key
-    let posthiveBaseUrl =
+    const envPosthiveUrl = (
       process.env.POSTHIVE_API_URL ||
       process.env.POSTERSHIVE_API_URL ||
       process.env.NEXT_PUBLIC_POSTHIVE_URL ||
-      "http://localhost:3000";
+      ""
+    ).trim();
 
+    let posthiveBaseUrl = envPosthiveUrl;
     let apiKey = rawApiKey;
 
     // Check if the user entered "https://custom-domain.com|ph_live_..."
@@ -121,6 +122,16 @@ export async function POST(request, { params }) {
     } else if (rawApiKey.startsWith("http://") || rawApiKey.startsWith("https://")) {
       // If user provided direct endpoint URL
       posthiveBaseUrl = rawApiKey;
+    }
+
+    if (!posthiveBaseUrl) {
+      return NextResponse.json(
+        {
+          error: "You must add Postershive Environment Variables",
+          code: "MISSING_POSTHIVE_ENV",
+        },
+        { status: 400 }
+      );
     }
 
     // Clean publish URL
