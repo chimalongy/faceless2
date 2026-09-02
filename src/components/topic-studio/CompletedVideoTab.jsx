@@ -30,7 +30,8 @@ import {
   Calendar,
   FileText,
   Save,
-  RotateCcw
+  RotateCcw,
+  Zap
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -56,7 +57,9 @@ export default function CompletedVideoTab({
   handleUploadMasterVideo,
   handleDeleteMasterVideo,
   handleRenderMasterVideo,
+  handleMergeMasterVideoModal,
   isRenderingMaster,
+  isMergingMasterModal = false,
   renderProgress,
   youtubeVideoId: initialYoutubeVideoId,
   youtubeUrl: initialYoutubeUrl,
@@ -345,10 +348,37 @@ export default function CompletedVideoTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Render / Merge Button */}
+            {/* Merge with Modal Button */}
             <button
               type="button"
-              disabled={isRenderingMaster || !allScenesRendered}
+              disabled={isRenderingMaster || isMergingMasterModal || !allScenesRendered}
+              onClick={handleMergeMasterVideoModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-purple-900/20 transition-all cursor-pointer"
+              title={
+                totalScenes === 0
+                  ? "No scenes defined"
+                  : !allScenesRendered
+                  ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
+                  : "Merge all scene frames into master video using Modal merger"
+              }
+            >
+              {isMergingMasterModal ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Merging with Modal...</span>
+                </>
+              ) : (
+                <>
+                  <Zap size={13} className="text-yellow-300" />
+                  <span>Merge with Modal {totalScenes > 0 ? `(${renderedVideoCount}/${totalScenes})` : ""}</span>
+                </>
+              )}
+            </button>
+
+            {/* Render / Merge Trigger.dev Button */}
+            <button
+              type="button"
+              disabled={isRenderingMaster || isMergingMasterModal || !allScenesRendered}
               onClick={handleRenderMasterVideo}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
               title={
@@ -356,7 +386,7 @@ export default function CompletedVideoTab({
                   ? "No scenes defined"
                   : !allScenesRendered
                   ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
-                  : "Merge all scene frames into master video"
+                  : "Merge all scene frames into master video via Trigger.dev"
               }
             >
               {isRenderingMaster ? (
@@ -414,24 +444,51 @@ export default function CompletedVideoTab({
                     <p className="text-xs text-white/50 max-w-sm mx-auto">
                       {!allScenesRendered && totalScenes > 0
                         ? `Render all scene frames first in the SceneFrames tab (${renderedVideoCount}/${totalScenes} rendered).`
-                        : 'Click "Merge Scene Frames" above to automatically compile your scene frames into a master video.'}
+                        : 'Click "Merge with Modal" or "Merge Scene Frames" above to automatically compile your scene frames into a master video.'}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={isRenderingMaster || !allScenesRendered}
-                    onClick={handleRenderMasterVideo}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/30 transition-all cursor-pointer"
-                    title={
-                      totalScenes === 0
-                        ? "No scenes defined"
-                        : !allScenesRendered
-                        ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
-                        : "Merge all scene frames into master video"
-                    }
-                  >
-                    <Sparkles size={13} /> Merge Scene Frames {totalScenes > 0 ? `(${renderedVideoCount}/${totalScenes})` : ""}
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={isRenderingMaster || isMergingMasterModal || !allScenesRendered}
+                      onClick={handleMergeMasterVideoModal}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-purple-900/30 transition-all cursor-pointer"
+                      title={
+                        totalScenes === 0
+                          ? "No scenes defined"
+                          : !allScenesRendered
+                          ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
+                          : "Merge all scene frames into master video using Modal"
+                      }
+                    >
+                      {isMergingMasterModal ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          <span>Merging with Modal...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap size={13} className="text-yellow-300" />
+                          <span>Merge with Modal {totalScenes > 0 ? `(${renderedVideoCount}/${totalScenes})` : ""}</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isRenderingMaster || isMergingMasterModal || !allScenesRendered}
+                      onClick={handleRenderMasterVideo}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/30 transition-all cursor-pointer"
+                      title={
+                        totalScenes === 0
+                          ? "No scenes defined"
+                          : !allScenesRendered
+                          ? `Render all scene frames first (${renderedVideoCount}/${totalScenes} rendered)`
+                          : "Merge all scene frames into master video"
+                      }
+                    >
+                      <Sparkles size={13} /> Merge Scene Frames {totalScenes > 0 ? `(${renderedVideoCount}/${totalScenes})` : ""}
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -17,11 +17,12 @@ export async function POST(req, context) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { sceneVideos = [], resolution = "1080p" } = body;
+    const { sceneVideos = [], resolution = "1080p", useModal = false } = body;
 
-    console.log(`[MergeSceneFramesRoute] Triggering Trigger.dev task "merge-scene-frames" for ${channelSlug}/${topicSlug}...`);
+    const taskId = useModal ? "merge-scene-frames-modal" : "merge-scene-frames";
+    console.log(`[MergeSceneFramesRoute] Triggering Trigger.dev task "${taskId}" for ${channelSlug}/${topicSlug}...`);
 
-    const handle = await tasks.trigger("merge-scene-frames", {
+    const handle = await tasks.trigger(taskId, {
       channelSlug,
       topicSlug,
       sceneVideos,

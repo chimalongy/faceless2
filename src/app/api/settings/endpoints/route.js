@@ -44,6 +44,7 @@ export async function GET() {
         gemma_base_url AS "gemmaBaseUrl",
         open_router_base_url AS "openRouterBaseUrl",
         modal_video_render_url AS "modalVideoRenderUrl",
+        modal_scene_merger_url AS "modalSceneMergerUrl",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
       FROM general_settings
@@ -86,6 +87,7 @@ export async function GET() {
     const gemmaBaseUrl = generalData.gemmaBaseUrl || "https://generativelanguage.googleapis.com/v1beta/openai/";
     const openRouterBaseUrl = generalData.openRouterBaseUrl || "https://openrouter.ai/api/v1";
     const modalVideoRenderUrl = generalData.modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run";
+    const modalSceneMergerUrl = generalData.modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run";
 
     return NextResponse.json({
       success: true,
@@ -103,6 +105,7 @@ export async function GET() {
       gemmaBaseUrl,
       openRouterBaseUrl,
       modalVideoRenderUrl,
+      modalSceneMergerUrl,
       generalSettings: generalData,
       imageEndpoints: imageRows || [],
       audioEndpoints: audioRows || [],
@@ -147,6 +150,7 @@ export async function POST(request) {
       gemmaBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/",
       openRouterBaseUrl = "https://openrouter.ai/api/v1",
       modalVideoRenderUrl = "https://me-chimaobi--faceless-video-renderer-api.modal.run",
+      modalSceneMergerUrl = "https://chima-geniusdomains--faceless-scene-merger-api.modal.run",
     } = body;
 
     // 1. Sync General Settings
@@ -166,6 +170,7 @@ export async function POST(request) {
     const gemmaUrl = (gemmaBaseUrl || "https://generativelanguage.googleapis.com/v1beta/openai/").trim();
     const openRouterUrl = (openRouterBaseUrl || "https://openrouter.ai/api/v1").trim();
     const modalRenderUrl = (modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run").trim();
+    const modalMergerUrl = (modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {
@@ -185,6 +190,7 @@ export async function POST(request) {
           gemma_base_url = ${gemmaUrl},
           open_router_base_url = ${openRouterUrl},
           modal_video_render_url = ${modalRenderUrl},
+          modal_scene_merger_url = ${modalMergerUrl},
           updated_at = NOW()
         WHERE id = ${existing[0].id};
       `;
@@ -204,6 +210,7 @@ export async function POST(request) {
           gemma_base_url,
           open_router_base_url,
           modal_video_render_url,
+          modal_scene_merger_url,
           created_at,
           updated_at
         )
@@ -221,6 +228,7 @@ export async function POST(request) {
           ${gemmaUrl},
           ${openRouterUrl},
           ${modalRenderUrl},
+          ${modalMergerUrl},
           NOW(),
           NOW()
         );

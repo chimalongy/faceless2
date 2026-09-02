@@ -205,6 +205,7 @@ export async function initDbSchema() {
         gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/',
         open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1',
         modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run',
+        modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -227,6 +228,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run';`;
     } catch {}
 
     return true;

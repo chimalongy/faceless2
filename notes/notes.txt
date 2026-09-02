@@ -2,3 +2,6 @@ triger.dev deployemets
 moneykoncept@
 chima.geniusdomins@
 
+modal.com
+scene_frames:me.chimaobi
+complete_video:confidence2000

@@ -104,6 +104,7 @@ export default function TopicStudioPage() {
   // 7. Completed Master Video & YouTube Publishing State
   const [completedMasterVideo, setCompletedMasterVideo] = useState(null);
   const [isRenderingMaster, setIsRenderingMaster] = useState(false);
+  const [isMergingMasterModal, setIsMergingMasterModal] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
   const [storyDescription, setStoryDescription] = useState("");
   const [postershiveApi, setPostershiveApi] = useState("");
@@ -1653,6 +1654,82 @@ export default function TopicStudioPage() {
     }
   }
 
+  async function handleMergeMasterVideoModal() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(scenesJson);
+    } catch {
+      parsed = [];
+    }
+
+    // Ensure all scene frames are rendered before merging
+    if (!parsed || parsed.length === 0) {
+      toast.error("No scenes defined in this topic.");
+      return;
+    }
+
+    const missingScenes = parsed.filter((scene) => {
+      const sNum = scene.scene_number;
+      const v = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+      return !v?.url;
+    });
+
+    if (missingScenes.length > 0) {
+      toast.error(
+        `Cannot merge: All ${parsed.length} scene frames must be rendered first (${parsed.length - missingScenes.length}/${parsed.length} ready).`
+      );
+      return;
+    }
+
+    // Build scene videos array from current state
+    const videosPayload = [];
+    parsed.forEach((scene) => {
+      const sNum = scene.scene_number;
+      const videoData = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+      if (videoData?.url) {
+        videosPayload.push({
+          scene_number: Number(sNum),
+          video_url: videoData.url,
+          video_key: videoData.key || "",
+        });
+      }
+    });
+
+    setIsMergingMasterModal(true);
+    toast(`[Modal Merger] Merging ${videosPayload.length} scene frames into master video via Modal service...`, { icon: "⚡" });
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/merge-scene-frames`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneVideos: videosPayload,
+          resolution: "1080p",
+          useModal: true,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.videoUrl) {
+        setCompletedMasterVideo({
+          url: data.videoUrl,
+          key: data.key,
+          duration: data.duration,
+          name: `${topicSlug}-master-1080p.mp4`,
+        });
+        toast.success("[Modal Merger] Master video merged and saved successfully! ⚡🚀");
+      } else {
+        toast.error(data.error || "Failed to merge scene frames on Modal.");
+      }
+    } catch (err) {
+      console.error("[Modal Merger] Error merging master video on Modal:", err);
+      toast.error("[Modal Merger] Error merging master video: " + err.message);
+    } finally {
+      setIsMergingMasterModal(false);
+    }
+  }
+
   // Save full topic studio state to Neon Database
   async function handleSaveStudioState() {
     setSaving(true);
@@ -1911,10 +1988,12 @@ export default function TopicStudioPage() {
               completedMasterVideo={completedMasterVideo}
               setCompletedMasterVideo={setCompletedMasterVideo}
               isRenderingMaster={isRenderingMaster}
+              isMergingMasterModal={isMergingMasterModal}
               renderProgress={renderProgress}
               handleUploadMasterVideo={handleUploadMasterVideo}
               handleDeleteMasterVideo={handleDeleteMasterVideo}
               handleRenderMasterVideo={handleRenderMasterVideo}
+              handleMergeMasterVideoModal={handleMergeMasterVideoModal}
               youtubeVideoId={youtubeVideoId}
               youtubeUrl={youtubeUrl}
               youtubePublishedAt={youtubePublishedAt}

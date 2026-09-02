@@ -52,6 +52,7 @@ export default function SettingsPage() {
   const [gemmaBaseUrl, setGemmaBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta/openai/");
   const [openRouterBaseUrl, setOpenRouterBaseUrl] = useState("https://openrouter.ai/api/v1");
   const [modalVideoRenderUrl, setModalVideoRenderUrl] = useState("https://me-chimaobi--faceless-video-renderer-api.modal.run");
+  const [modalSceneMergerUrl, setModalSceneMergerUrl] = useState("https://chima-geniusdomains--faceless-scene-merger-api.modal.run");
   const [editingGeneral, setEditingGeneral] = useState(false);
 
   // Tab 2: LLM Accounts State (Strictly: account_email, source, account_id, api_token, created, updated)
@@ -91,6 +92,7 @@ export default function SettingsPage() {
           if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
           if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
           if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
+          if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
 
           if (Array.isArray(data.llmAccounts)) {
             setLlmAccounts(
@@ -153,6 +155,7 @@ export default function SettingsPage() {
         if (p.gemmaBaseUrl !== undefined) setGemmaBaseUrl(p.gemmaBaseUrl);
         if (p.openRouterBaseUrl !== undefined) setOpenRouterBaseUrl(p.openRouterBaseUrl);
         if (p.modalVideoRenderUrl !== undefined) setModalVideoRenderUrl(p.modalVideoRenderUrl);
+        if (p.modalSceneMergerUrl !== undefined) setModalSceneMergerUrl(p.modalSceneMergerUrl);
       }
     } catch {}
   }, []);
@@ -360,6 +363,7 @@ export default function SettingsPage() {
       gemmaBaseUrl,
       openRouterBaseUrl,
       modalVideoRenderUrl,
+      modalSceneMergerUrl,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
       audioEndpoints: formattedAudioEndpoints,
@@ -390,6 +394,7 @@ export default function SettingsPage() {
         if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
         if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
         if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
+        if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
         if (Array.isArray(data.llmAccounts)) {
           setLlmAccounts(
             data.llmAccounts.map((item) => ({
@@ -883,6 +888,32 @@ export default function SettingsPage() {
                     />
                     <p className="text-[10px] text-ink-muted font-mono">
                       Modal FastAPI video renderer base URL for GPU-accelerated Ken Burns scene rendering.
+                    </p>
+                  </div>
+
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2 md:col-span-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="modal-scene-merger-url">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound size={13} className="text-signal" />
+                        <span>Modal Scene Merger Endpoint</span>
+                      </span>
+                    </label>
+                    <input
+                      id="modal-scene-merger-url"
+                      type="text"
+                      readOnly={!editingGeneral}
+                      disabled={!editingGeneral}
+                      value={modalSceneMergerUrl}
+                      onChange={(e) => setModalSceneMergerUrl(e.target.value)}
+                      placeholder="https://chima-geniusdomains--faceless-scene-merger-api.modal.run"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                        editingGeneral
+                          ? "bg-white border-line-dark focus:border-signal"
+                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                      }`}
+                    />
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      Modal FastAPI scene merger base URL for high-performance FFmpeg master video concatenation.
                     </p>
                   </div>
                 </div>
