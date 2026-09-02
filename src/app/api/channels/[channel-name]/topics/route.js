@@ -42,10 +42,13 @@ export async function GET(request, { params }) {
           t.title,
           t.slug,
           t.script_content AS "scriptContent",
+          t.story_description AS "storyDescription",
           t.scenes_json AS "scenesJson",
           t.thumbnail_url AS "thumbnailUrl",
           t.thumbnail_prompt AS "thumbnailPrompt",
           t.master_video_url AS "masterVideoUrl",
+          t.youtube_video_id AS "youtubeVideoId",
+          t.youtube_url AS "youtubeUrl",
           t.created_at AS "createdAt",
           t.updated_at AS "updatedAt"
         FROM topics t
@@ -70,10 +73,13 @@ export async function GET(request, { params }) {
           t.title,
           t.slug,
           t.script_content AS "scriptContent",
+          t.story_description AS "storyDescription",
           t.scenes_json AS "scenesJson",
           t.thumbnail_url AS "thumbnailUrl",
           t.thumbnail_prompt AS "thumbnailPrompt",
           t.master_video_url AS "masterVideoUrl",
+          t.youtube_video_id AS "youtubeVideoId",
+          t.youtube_url AS "youtubeUrl",
           t.created_at AS "createdAt",
           t.updated_at AS "updatedAt"
         FROM topics t
