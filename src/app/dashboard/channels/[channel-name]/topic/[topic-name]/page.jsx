@@ -48,16 +48,30 @@ export default function TopicStudioPage() {
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join(" ");
 
-  const backUrl = rawPillarSlug
-    ? `/dashboard/channels/${channelSlug}/content_pillar/${rawPillarSlug}`
-    : `/dashboard/channels/${channelSlug}`;
-
   // Studio Active Tab
   const [activeTab, setActiveTab] = useState("thumbnail");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [topicData, setTopicData] = useState(null);
+
+  const effectivePillarSlug = rawPillarSlug || topicData?.pillarSlug || null;
+  const effectivePillarName =
+    topicData?.pillarName ||
+    (effectivePillarSlug
+      ? effectivePillarSlug
+          .split("-")
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .join(" ")
+      : null);
+
+  const backUrl = effectivePillarSlug
+    ? `/dashboard/channels/${channelSlug}/content_pillar/${effectivePillarSlug}`
+    : `/dashboard/channels/${channelSlug}`;
+
+  const backLabel = effectivePillarName
+    ? `Back to ${effectivePillarName}`
+    : `Back to ${channelTitle}`;
 
   // 1. Thumbnail State
   const [thumbnailPrompt, setThumbnailPrompt] = useState("");
@@ -1778,11 +1792,40 @@ export default function TopicStudioPage() {
     <div className="space-y-8 animate-card-rise pb-20">
       {/* Top Header & Save Bar */}
       <div>
+        <div className="flex items-center gap-2 text-xs text-ink-muted mb-2 flex-wrap">
+          <Link
+            href="/dashboard"
+            className="hover:text-ink transition-colors"
+          >
+            Channels
+          </Link>
+          <span>/</span>
+          <Link
+            href={`/dashboard/channels/${channelSlug}`}
+            className="hover:text-ink transition-colors"
+          >
+            {channelTitle}
+          </Link>
+          {effectivePillarSlug && (
+            <>
+              <span>/</span>
+              <Link
+                href={`/dashboard/channels/${channelSlug}/content_pillar/${effectivePillarSlug}`}
+                className="hover:text-ink transition-colors font-medium text-ink/80"
+              >
+                {effectivePillarName}
+              </Link>
+            </>
+          )}
+          <span>/</span>
+          <span className="text-ink font-semibold">{topicTitle}</span>
+        </div>
+
         <Link
           href={backUrl}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors mb-3"
         >
-          <ArrowLeft size={14} /> Back to {channelTitle}
+          <ArrowLeft size={14} /> {backLabel}
         </Link>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">

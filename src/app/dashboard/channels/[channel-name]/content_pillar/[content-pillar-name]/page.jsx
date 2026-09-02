@@ -271,7 +271,7 @@ export default function ContentPillarDetail() {
                     >
                       <div className="space-y-1 flex-1">
                         <Link
-                          href={`/dashboard/channels/${channelSlug}/topic/${topic.slug}`}
+                          href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
                           className="text-sm sm:text-base font-semibold text-ink hover:text-signal transition-colors block"
                         >
                           {topic.title}
@@ -280,7 +280,7 @@ export default function ContentPillarDetail() {
 
                       <div className="flex items-center gap-3 shrink-0">
                         <Link
-                          href={`/dashboard/channels/${channelSlug}/topic/${topic.slug}`}
+                          href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
                           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer"
                         >
                           Open Studio <ChevronRight size={13} />
@@ -332,7 +332,7 @@ export default function ContentPillarDetail() {
                           Master Cut
                         </span>
                         <Link
-                          href={`/dashboard/channels/${channelSlug}/topic/${video.slug}`}
+                          href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${video.slug}`}
                           className="text-signal hover:underline inline-flex items-center gap-1 font-medium"
                         >
                           Play / Export <Play size={12} />
