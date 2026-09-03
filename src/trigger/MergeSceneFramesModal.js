@@ -87,15 +87,20 @@ export const mergeSceneFramesModalTask = task({
     }
 
     const resolvedEndpoint = await resolveModalMergerApiUrl(
-      modalMergerApiUrl || modalApiUrl
+      modalMergerApiUrl || modalApiUrl,
     );
     const endpoint = resolvedEndpoint.replace(/\/+$/, "");
 
-    logger.log(`Resolving scene videos for merge topic ${channelSlug}/${topicSlug}...`, {
-      endpoint,
-      providedVideosCount: Array.isArray(sceneVideos) ? sceneVideos.length : 0,
-      resolution,
-    });
+    logger.log(
+      `Resolving scene videos for merge topic ${channelSlug}/${topicSlug}...`,
+      {
+        endpoint,
+        providedVideosCount: Array.isArray(sceneVideos)
+          ? sceneVideos.length
+          : 0,
+        resolution,
+      },
+    );
 
     // 1. Prepare scene videos array (or let Modal pull from DB)
     let formattedSceneVideos = [];
@@ -149,8 +154,12 @@ export const mergeSceneFramesModalTask = task({
 
     const databaseUrl = (process.env.DATABASE_URL || "").trim();
     const r2AccountId = (process.env.CLOUDFLARE_R2_ACCOUNT_ID || "").trim();
-    const r2AccessKeyId = (process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || "").trim();
-    const r2SecretAccessKey = (process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || "").trim();
+    const r2AccessKeyId = (
+      process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || ""
+    ).trim();
+    const r2SecretAccessKey = (
+      process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || ""
+    ).trim();
     const r2BucketName = (process.env.CLOUDFLARE_R2_BUCKET_NAME || "").trim();
     const r2PublicUrl = (process.env.CLOUDFLARE_R2_PUBLIC_URL || "").trim();
 
@@ -158,17 +167,23 @@ export const mergeSceneFramesModalTask = task({
     if (!databaseUrl) missingValues.push("DATABASE_URL");
     if (!r2AccountId) missingValues.push("CLOUDFLARE_R2_ACCOUNT_ID");
     if (!r2AccessKeyId) missingValues.push("CLOUDFLARE_R2_ACCESS_KEY_ID");
-    if (!r2SecretAccessKey) missingValues.push("CLOUDFLARE_R2_SECRET_ACCESS_KEY");
+    if (!r2SecretAccessKey)
+      missingValues.push("CLOUDFLARE_R2_SECRET_ACCESS_KEY");
     if (!r2BucketName) missingValues.push("CLOUDFLARE_R2_BUCKET_NAME");
     if (!r2PublicUrl) missingValues.push("CLOUDFLARE_R2_PUBLIC_URL");
 
     if (missingValues.length > 0) {
       throw new Error(
-        `Missing required credentials for Modal scene merge: ${missingValues.join(", ")}`
+        `Missing required credentials for Modal scene merge: ${missingValues.join(", ")}`,
       );
     }
 
-    const normResolution = String(resolution || "1080p").toLowerCase().trim() === "720p" ? "720p" : "1080p";
+    const normResolution =
+      String(resolution || "1080p")
+        .toLowerCase()
+        .trim() === "720p"
+        ? "720p"
+        : "1080p";
 
     const requestBody = {
       credentials: {
@@ -187,9 +202,13 @@ export const mergeSceneFramesModalTask = task({
       fps: Number.parseInt(fps || 60, 10),
       downloadConcurrency: Number.parseInt(downloadConcurrency || 8, 10),
       ffmpegThreads: Number.parseInt(ffmpegThreads || 16, 10),
-      preset: String(preset || "veryfast").trim().toLowerCase(),
+      preset: String(preset || "veryfast")
+        .trim()
+        .toLowerCase(),
       crf: Number.parseInt(crf ?? 19, 10),
-      audioBitrate: String(audioBitrate || "192k").trim().toLowerCase(),
+      audioBitrate: String(audioBitrate || "192k")
+        .trim()
+        .toLowerCase(),
     };
 
     // 3. Submit merge request to Modal
@@ -218,7 +237,7 @@ export const mergeSceneFramesModalTask = task({
       throw new Error(
         `Could not connect to the Modal scene merger endpoint: ${
           error?.message || String(error)
-        }`
+        }`,
       );
     }
 
@@ -239,7 +258,7 @@ export const mergeSceneFramesModalTask = task({
       throw new Error(
         typeof errorMessage === "string"
           ? errorMessage
-          : JSON.stringify(errorMessage)
+          : JSON.stringify(errorMessage),
       );
     }
 
@@ -247,7 +266,7 @@ export const mergeSceneFramesModalTask = task({
 
     if (!jobId) {
       throw new Error(
-        `Modal did not return a jobId for merge: ${JSON.stringify(submitJson)}`
+        `Modal did not return a jobId for merge: ${JSON.stringify(submitJson)}`,
       );
     }
 
@@ -276,7 +295,7 @@ export const mergeSceneFramesModalTask = task({
         const pollJson = await pollResponse.json().catch(() => ({}));
 
         const elapsedSeconds = Math.round(
-          (Date.now() - pollingStartedAt) / 1000
+          (Date.now() - pollingStartedAt) / 1000,
         );
 
         if (pollResponse.ok && pollJson.status === "completed") {
@@ -304,13 +323,13 @@ export const mergeSceneFramesModalTask = task({
           throw new Error(
             typeof failureMessage === "string"
               ? failureMessage
-              : JSON.stringify(failureMessage)
+              : JSON.stringify(failureMessage),
           );
         }
 
         if (pollResponse.status === 404) {
           throw new Error(
-            `Modal merge job ${jobId} was not found on the container.`
+            `Modal merge job ${jobId} was not found on the container.`,
           );
         }
 
@@ -324,7 +343,7 @@ export const mergeSceneFramesModalTask = task({
           throw new Error(
             typeof pollingError === "string"
               ? pollingError
-              : JSON.stringify(pollingError)
+              : JSON.stringify(pollingError),
           );
         }
 
@@ -360,24 +379,44 @@ export const mergeSceneFramesModalTask = task({
       throw new Error(
         `Modal merge job ${jobId} did not complete within ${
           maxPollTimeMs / 1000
-        } seconds.`
+        } seconds.`,
       );
     }
 
     // 5. Ensure master video is updated in Neon database
-    const finalVideoUrl = jobResult.videoUrl || jobResult.publicUrl || jobResult.video_url || jobResult.public_url;
-    const finalKey = jobResult.key || jobResult.file_key || `channels/${channelSlug}/topics/${topicSlug}/master/${jobResult.fileName || "merged-master.mp4"}`;
-    const finalFileName = jobResult.fileName || jobResult.file_name || `${topicSlug}-master-${normResolution}.mp4`;
+    const finalVideoUrl =
+      jobResult.videoUrl ||
+      jobResult.publicUrl ||
+      jobResult.video_url ||
+      jobResult.public_url;
+    const finalKey =
+      jobResult.key ||
+      jobResult.file_key ||
+      `channels/${channelSlug}/topics/${topicSlug}/master/${jobResult.fileName || "merged-master.mp4"}`;
+    const finalFileName =
+      jobResult.fileName ||
+      jobResult.file_name ||
+      `${topicSlug}-master-${normResolution}.mp4`;
     const finalDuration = Number.parseFloat(jobResult.duration || 0);
-    const finalSizeBytes = Number.parseInt(jobResult.sizeBytes || jobResult.size_bytes || 0, 10);
-    const finalSceneCount = Number.parseInt(jobResult.sceneCount || jobResult.scene_count || formattedSceneVideos.length, 10);
+    const finalSizeBytes = Number.parseInt(
+      jobResult.sizeBytes || jobResult.size_bytes || 0,
+      10,
+    );
+    const finalSceneCount = Number.parseInt(
+      jobResult.sceneCount ||
+        jobResult.scene_count ||
+        formattedSceneVideos.length,
+      10,
+    );
 
     const sql = getDbSql();
     if (sql && finalVideoUrl) {
       try {
         await initDbSchema();
-        const cRows = await sql`SELECT id FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
-        const tRows = await sql`SELECT id FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
+        const cRows =
+          await sql`SELECT id FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
+        const tRows =
+          await sql`SELECT id FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
         const channelId = cRows?.[0]?.id || null;
         const topicId = tRows?.[0]?.id || null;
 
@@ -409,17 +448,30 @@ export const mergeSceneFramesModalTask = task({
               'video/mp4',
               ${finalSizeBytes}
             );
-          `.catch((dbErr) => logger.warn("DB topic_assets master insertion warning:", dbErr.message));
+          `.catch((dbErr) =>
+            logger.warn(
+              "DB topic_assets master insertion warning:",
+              dbErr.message,
+            ),
+          );
 
           // Update topics.master_video_url
           await sql`
             UPDATE topics
             SET master_video_url = ${finalVideoUrl}, updated_at = NOW()
             WHERE id = ${topicId};
-          `.catch((dbErr) => logger.warn("DB topics master_video_url update warning:", dbErr.message));
+          `.catch((dbErr) =>
+            logger.warn(
+              "DB topics master_video_url update warning:",
+              dbErr.message,
+            ),
+          );
         }
       } catch (syncErr) {
-        logger.warn("Database sync warning after Modal merge completion:", syncErr.message);
+        logger.warn(
+          "Database sync warning after Modal merge completion:",
+          syncErr.message,
+        );
       }
     }
 

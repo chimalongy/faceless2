@@ -76,18 +76,18 @@ export const generateScriptTask = task({
       pillar = pillarRows?.[0] || null;
     }
 
-    const topicTitle = topic.title || "Untitled Topic";
-    const pillarName = pillar?.name || "General Content";
-    const pillarDescription =
-      pillar?.description ||
-      channel.description ||
-      "In-depth strategic insights and engaging narrative storytelling.";
-    const pillarTone =
-      pillar?.tone || channel.personality || "Calm, analytical, insightful";
-    const pillarContentLength =
-      pillar?.contentLength || "15-20 minutes (~2500 words)";
-    const pillarContentWordsCount =
-      pillar?.contentWordsCount || "2,500 - 3,500 words";
+    if (!pillar) {
+      throw new Error(
+        "This topic is not linked to any Content Pillar. Please assign a Content Pillar to this topic before generating a script."
+      );
+    }
+
+    const topicTitle = (topic.title || "").trim();
+    const pillarName = pillar.name;
+    const pillarDescription = pillar.description;
+    const pillarTone = pillar.tone;
+    const pillarContentLength = pillar.contentLength;
+    const pillarContentWordsCount = pillar.contentWordsCount;
 
     // 2. Fetch General Settings for Script Generation Pipeline
     const generalRows = await sql`
@@ -209,8 +209,8 @@ export const generateScriptTask = task({
       channelDescription: channel.description,
       channelMission: channel.mission,
       contentPillarName: pillarName,
-      contentPillarCategoryTag: pillar?.tag || "General",
-      contentPillarTone: pillarTone || "Calm, analytical, insightful",
+      contentPillarCategoryTag: pillar.tag,
+      contentPillarTone: pillarTone,
       contentPillarLength: pillarContentLength,
       contentPillarWordsCount: pillarContentWordsCount,
       contentPillarDescription: pillarDescription,

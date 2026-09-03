@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import toast from "react-hot-toast";
 import { getScriptGenerationPrompt } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
 
 export default function ScriptTab({
@@ -172,23 +173,31 @@ export default function ScriptTab({
           <button
             type="button"
             onClick={() => {
-              const fullPrompt = getScriptGenerationPrompt({
-                channelName: topicData?.channelName || channelName || "YouTube Channel",
-                channelNiche: topicData?.channelNiche || "General",
-                channelSubNiche: topicData?.channelSubNiche || topicData?.channelNiche || "General",
-                channelDescription: topicData?.channelDescription || "Educational and narrative documentaries.",
-                channelMission: topicData?.channelMission || "Deliver high-value visual stories.",
-                contentPillarName: topicData?.pillarName || "General Content",
-                contentPillarCategoryTag: topicData?.pillarTag || "Documentary",
-                contentPillarTone: topicData?.pillarTone || "Calm, analytical, insightful",
-                contentPillarLength: topicData?.pillarContentLength || "15-20 minutes (~2500 words)",
-                contentPillarWordsCount: topicData?.pillarContentWordsCount || "2,500 - 3,500 words",
-                contentPillarDescription: topicData?.pillarDescription || "In-depth strategic insights and engaging narrative storytelling.",
-                topic: topicTitle || topicData?.title || "Topic Title",
-              });
-              navigator.clipboard.writeText(fullPrompt);
-              if (typeof triggerScriptNotice === "function") {
-                triggerScriptNotice("Full script system prompt copied to clipboard with populated variables.");
+              try {
+                const fullPrompt = getScriptGenerationPrompt({
+                  channelName: topicData?.channelName || channelName,
+                  channelNiche: topicData?.channelNiche,
+                  channelSubNiche: topicData?.channelSubNiche,
+                  channelDescription: topicData?.channelDescription,
+                  channelMission: topicData?.channelMission,
+                  contentPillarName: topicData?.pillarName,
+                  contentPillarCategoryTag: topicData?.pillarTag,
+                  contentPillarTone: topicData?.pillarTone,
+                  contentPillarLength: topicData?.pillarContentLength,
+                  contentPillarWordsCount: topicData?.pillarContentWordsCount,
+                  contentPillarDescription: topicData?.pillarDescription,
+                  topic: (topicTitle || topicData?.title || "").trim(),
+                });
+                navigator.clipboard.writeText(fullPrompt);
+                if (typeof triggerScriptNotice === "function") {
+                  triggerScriptNotice("Full script system prompt copied to clipboard with populated variables.");
+                }
+                toast.success("Script system prompt copied to clipboard.");
+              } catch (err) {
+                if (typeof triggerScriptNotice === "function") {
+                  triggerScriptNotice(err.message);
+                }
+                toast.error(err.message, { duration: 7000 });
               }
             }}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"

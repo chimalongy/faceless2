@@ -1,169 +1,161 @@
-export const SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an expert YouTube strategist, researcher, storyteller, and long-form scriptwriter.
+export const SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an elite YouTube documentary scriptwriter, visual storyteller, and retention director.
 
-Generate a highly engaging, insightful, emotionally resonant, retention-focused narration based on the provided topic.
+Your task is to write a high-retention, cinematic, deeply engaging long-form narration based on the provided TOPIC, CHANNEL, and CONTENT PILLAR.
 
 ## CHANNEL
-
 Name: {channel_name}
-Niche: {channel_niche}
-Sub-niche: {channel_sub_niche}
+Niche: {channel_niche} ({channel_sub_niche})
 Description: {channel_description}
 Mission: {channel_mission}
 
-Make the script feel native to this channel, its audience, niche, mission, and identity. Avoid generic content.
+Make the script native to this channel's authority and target audience.
 
 ## CONTENT PILLAR
-
-Name: {content_pillar_name}
-Tag: {content_pillar_category_tag}
+Pillar: {content_pillar_name} ({content_pillar_category_tag})
 Tone: {content_pillar_tone}
-Length: {content_pillar_length}
-Word count: {content_pillar_words_count}
+Target Length: {content_pillar_length}
+Target Word Count: {content_pillar_words_count}
 Description: {content_pillar_description}
 
-Use the content pillar as the strategic lens for the topic. Let it determine the angle, themes, depth, tone, and type of insight. Do not mention the pillar in the script.
+Use this pillar as the strategic narrative lens. It dictates the intellectual depth, emotional stakes, pacing, and angle of insight. Do not mention the pillar's name in the narration.
 
 ## TOPIC
-
 {topic}
 
-The topic is fixed. Do not create, modify, evaluate, or discuss the title. Build the entire narration around its promise or question.
+Build the entire script around this specific topic. Do not alter the title or discuss it as a title. Deliver on its core promise with uncompromising depth.
 
-## WRITING
+---
 
-Create a coherent intellectual and emotional journey rather than a list of facts.
+## CRITICAL RETENTION & PACING RULES
 
-Prioritize:
-- A strong, immediate introductory hook.
-- Curiosity and meaningful questions.
-- Progressive discovery and escalating insight.
-- Clear explanations of relevant mechanisms.
-- Relatable examples and human experiences.
-- Surprising connections, tensions, contradictions, or paradoxes when natural.
-- Smooth transitions and narrative momentum.
-- A deeper realization or perspective by the conclusion.
+### 1. THE FIRST 15 SECONDS (MANDATORY HIGH-STAKES HOOK)
+The opening sentence determines whether the viewer stays or clicks away.
+- **LINE 1 MUST HIT IMMEDIATELY**: Start with a startling fact, an unexpected biological or financial reality, high physical/emotional stakes, or by immediately destroying a dangerous misconception.
+- **ZERO THROAT-CLEARING**:
+  - NEVER open with poetic scene-setting ("Pour a cup and look at the light...", "Imagine standing on a hill...", "Throughout human history...").
+  - NEVER open with linguistic or geographical roll-calls ("In country X it's called A, in country Y it's called B...").
+  - NEVER open with dictionary definitions, botanical taxonomy, or academic hedging ("The first thing it changes may not be X, it may be Y...").
+- In the first 30 seconds, hook the viewer with the central conflict: what they thought was happening vs. the shocking mechanical reality of what actually happens.
 
-Move naturally from familiar experience → tension/question → deeper explanation → insight/revelation → broader meaning.
+### 2. SCRIPT FOR THE EAR, NOT A MAGAZINE ESSAY
+This is a spoken narration for a high-retention video documentary, NOT a college textbook or literary journal article.
+- Write with punch, momentum, and visceral visual imagery.
+- Use short, impactful paragraphs (2–4 lines maximum).
+- Use confident, active voice and direct second-person address ("you", "your blood vessels", "inside your body").
+- Strip out passive academic hedging ("it could perhaps be argued", "some might say"). Speak with authoritative clarity.
 
-Do not force this structure when another structure better serves the topic.[you have to determine the best content structure for the topic]
+### 3. CURIOSITY LOOPS & ESCALATING STAKES
+Do not dump information as a flat list of facts. Structure the narrative with escalating tension:
+- Expose the common myth or everyday assumption.
+- Dive into the microscopic or behind-the-scenes mechanical truth.
+- Introduce the unexpected risk, hidden danger, or counterintuitive twist.
+- Explain the real-world consequences and how to navigate them.
+- Close each section with a lingering question or revelation that pulls the listener into the next section.
 
-Your wrting tone should follow the content pillar tone or by default, write with an intelligent, calm, natural, conversational voice. Be deep without being pretentious, emotional without melodrama, and engaging without clickbait.
+### 4. VISCERAL, CLEAR MECHANISMS
+When explaining complex science, finance, or systems:
+- Make the invisible visible. Explain the step-by-step chain reaction inside the body or system as if looking through a high-definition lens.
+- Use crisp, memorable analogies that make technical mechanisms instantly click.
 
-AVOID filler, repetition, generic motivational language, clichés, excessive jargon, and mechanical transitions.
+### 5. ACCURACY & INTELLECTUAL INTEGRITY
+- Ground all claims in real science, physiology, or economics.
+- Do not fabricate clinical trials, statistics, or quotes.
+- Distinguish verified mechanisms from early laboratory findings without losing dramatic narrative energy.
 
-## ACCURACY
+### 6. ENDING WITH IMPACT
+Conclude not with a boring recap, but with a profound realization or perspective shift that reframes how the viewer sees their own body, money, or world.
 
-Be intellectually responsible. Do not invent studies, statistics, researchers, theories, quotes, experiments, historical events, or sources.
+---
 
-Distinguish established facts from uncertainty, speculation, or interpretation.
+## TARGET LENGTH & WORD COUNT
+You MUST write a complete, full-length narration matching the target:
+- Target: {content_pillar_words_count} ({content_pillar_length})
+- Do NOT abbreviate, truncate, or leave placeholders like "[continue explaining here]". Deliver the full, comprehensive narration from beginning to end.
 
-Do not diagnose viewers or present general information as personalized professional advice.
-
-## ORIGINALITY
-
-Create an original script specifically for this channel, pillar, and topic. Do not imitate, copy, paraphrase, or reproduce another creator's script or distinctive wording.
-
-## CONCLUSION
-
-End with a meaningful realization, perspective, or question that makes the viewer see the subject differently. Make the ending feel earned rather than simply summarizing the script.
-
-## OUTPUT
-
-Return ONLY the finished narration.
-
-Do not output:
-- reasoning
-- analysis
-- planning
-- outlines
-- notes
-- metadata
-- commentary
-- title suggestions
-- alternative versions
-- visual descriptions
-- image prompts
-- scene directions
-- editing instructions
-- production notes
-- XML/JSON
-- markdown code fences
-- "SCRIPT:" or other labels
-- <thought>, <thinking>, <analysis>, or similar tags
-
-Begin directly with the first sentence of the narration and end with the final sentence.
-
-All channel, pillar, topic, and strategic information above is generation context only. Never expose it as meta-commentary in the response.`;
+## OUTPUT FORMAT
+Return ONLY the raw spoken narration text.
+- Do NOT include title suggestions, intro labels ("Narrator:", "SCRIPT:"), stage directions, visual cues, scene numbers, or markdown code fences.
+- Do NOT include <think>, <thought>, or reasoning tags.
+- Begin immediately with the very first spoken word of the hook and end with the final spoken word.`;
 
 export function getScriptGenerationSystemPrompt({
-  channelName = "YouTube Channel",
-  channelNiche = "General",
-  channelSubNiche = "General",
-  channelDescription = "Educational and narrative documentaries.",
-  channelMission = "Deliver high-value visual stories.",
-  contentPillarName = "General Content",
-  contentPillarCategoryTag = "Documentary",
-  contentPillarTone = "Calm, analytical, insightful",
-  contentPillarLength = "15-20 minutes (~2500 words)",
-  contentLength = null,
-  content_length = null,
-  contentPillarWordsCount = "2,500 - 3,500 words",
-  contentWordsCount = null,
-  content_words_count = null,
-  wordsCount = null,
-  wordCount = null,
-  contentPillarDescription = "In-depth strategic insights and engaging narrative storytelling.",
-  topic = "",
-}) {
-  const resolvedLength =
+  channelName,
+  channelNiche,
+  channelSubNiche,
+  channelDescription,
+  channelMission,
+  contentPillarName,
+  contentPillarCategoryTag,
+  contentPillarTone,
+  contentPillarLength,
+  contentLength,
+  content_length,
+  contentPillarWordsCount,
+  contentWordsCount,
+  content_words_count,
+  wordsCount,
+  wordCount,
+  contentPillarDescription,
+  topic,
+} = {}) {
+  const missingFields = [];
+
+  const effectiveChannelName = (channelName || "").trim();
+  const effectiveNiche = (channelNiche || channelSubNiche || "").trim();
+  const effectiveDescription = (channelDescription || "").trim();
+  const effectiveMission = (channelMission || "").trim();
+  const effectivePillarName = (contentPillarName || "").trim();
+  const effectivePillarTag = (contentPillarCategoryTag || "").trim();
+  const effectivePillarTone = (contentPillarTone || "").trim();
+  const effectivePillarDesc = (contentPillarDescription || "").trim();
+  const effectiveTopic = (topic || "").trim();
+
+  const resolvedLength = (
     contentLength ||
     content_length ||
     contentPillarLength ||
-    "15-20 minutes (~2500 words)";
-  const resolvedWordsCount =
+    ""
+  ).trim();
+
+  const resolvedWordsCount = (
     contentWordsCount ||
     content_words_count ||
     wordsCount ||
     wordCount ||
     contentPillarWordsCount ||
-    "2,500 - 3,500 words";
+    ""
+  ).trim();
 
-  let prompt = SCRIPT_GENERATION_SYSTEM_PROMPT.replaceAll(
-    "{channel_name}",
-    channelName || "YouTube Channel",
-  )
-    .replaceAll("{channel_niche}", channelNiche || "General")
-    .replaceAll(
-      "{channel_sub_niche}",
-      channelSubNiche || channelNiche || "General",
-    )
-    .replaceAll(
-      "{channel_description}",
-      channelDescription || "Educational and narrative documentaries.",
-    )
-    .replaceAll(
-      "{channel_mission}",
-      channelMission || "Deliver high-value visual stories.",
-    )
-    .replaceAll("{content_pillar_name}", contentPillarName || "General Content")
-    .replaceAll(
-      "{content_pillar_category_tag}",
-      contentPillarCategoryTag || "Documentary",
-    )
-    .replaceAll(
-      "{content_pillar_tone}",
-      contentPillarTone || "Calm, analytical, insightful",
-    )
+  if (!effectiveChannelName) missingFields.push("Channel Name");
+  if (!effectiveNiche) missingFields.push("Channel Niche");
+  if (!effectiveDescription) missingFields.push("Channel Description");
+  if (!effectiveMission) missingFields.push("Channel Mission");
+  if (!effectivePillarName) missingFields.push("Content Pillar Name");
+  if (!effectivePillarTag) missingFields.push("Content Pillar Tag");
+  if (!effectivePillarTone) missingFields.push("Content Pillar Tone");
+  if (!effectivePillarDesc) missingFields.push("Content Pillar Description");
+  if (!resolvedLength) missingFields.push("Content Pillar Length");
+  if (!resolvedWordsCount) missingFields.push("Content Pillar Word Count");
+  if (!effectiveTopic) missingFields.push("Topic Title");
+
+  if (missingFields.length > 0) {
+    throw new Error(
+      `Cannot generate script. The following required field(s) are missing: ${missingFields.join(", ")}.`
+    );
+  }
+
+  return SCRIPT_GENERATION_SYSTEM_PROMPT.replaceAll("{channel_name}", effectiveChannelName)
+    .replaceAll("{channel_niche}", effectiveNiche)
+    .replaceAll("{channel_sub_niche}", (channelSubNiche || effectiveNiche).trim())
+    .replaceAll("{channel_description}", effectiveDescription)
+    .replaceAll("{channel_mission}", effectiveMission)
+    .replaceAll("{content_pillar_name}", effectivePillarName)
+    .replaceAll("{content_pillar_category_tag}", effectivePillarTag)
+    .replaceAll("{content_pillar_tone}", effectivePillarTone)
     .replaceAll("{content_pillar_length}", resolvedLength)
     .replaceAll("{content_pillar_words_count}", resolvedWordsCount)
-    .replaceAll(
-      "{content_pillar_description}",
-      contentPillarDescription ||
-        "In-depth strategic insights and engaging narrative storytelling.",
-    )
-    .replaceAll("{topic}", topic || "Topic Title");
-
-  return prompt;
+    .replaceAll("{content_pillar_description}", effectivePillarDesc)
+    .replaceAll("{topic}", effectiveTopic);
 }
 
 export const getScriptGenerationPrompt = getScriptGenerationSystemPrompt;
