@@ -71,6 +71,12 @@ export const generateScenesTask = task({
       pillar = pillarRows?.[0] || null;
     }
 
+    if (!pillar) {
+      throw new Error(
+        "This topic is not linked to any Content Pillar. Please assign a Content Pillar to this topic before generating scenes."
+      );
+    }
+
     const activeScript = (customScript || topic.script_content || "").trim();
     if (!activeScript) {
       throw new Error(
@@ -78,8 +84,7 @@ export const generateScenesTask = task({
       );
     }
 
-    const visualTheme = (customImageTheme || channel.image_theme || "Cinematic moody documentary, atmospheric volumetric lighting, rich color grading, ultra-high resolution photography and realistic 35mm film textures").trim();
-    const pillarTone = pillar?.tone || channel.personality || null;
+    const visualTheme = (customImageTheme || channel.image_theme || "").trim();
     const pillarUseMainCharacter = Boolean(pillar?.useMainCharacter);
     const pillarMainCharacterDescription = pillar?.mainCharacterDescription || null;
 
@@ -176,11 +181,10 @@ export const generateScenesTask = task({
       channelDescription: channel.description,
       channelMission: channel.mission,
       channelImageTheme: visualTheme,
-      contentPillarName: pillar?.name || channel.niche || "General Content",
-      contentPillarCategoryTag: pillar?.tag || "General",
-      contentPillarTone: pillarTone || "Calm, analytical, insightful",
-      contentPillarDescription: pillar?.description || channel.description || "In-depth strategic insights and engaging narrative storytelling.",
-      tone: pillarTone || "Calm, analytical, insightful",
+      contentPillarName: pillar.name,
+      contentPillarCategoryTag: pillar.tag,
+      contentPillarTone: pillar.tone,
+      contentPillarDescription: pillar.description,
       useMainCharacter: pillarUseMainCharacter,
       mainCharacterDescription: pillarMainCharacterDescription,
       activeScript,

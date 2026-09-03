@@ -28,6 +28,7 @@ import ImagesTab from "@/components/topic-studio/ImagesTab";
 import SceneFramesTab from "@/components/topic-studio/SceneFramesTab";
 import CompletedVideoTab from "@/components/topic-studio/CompletedVideoTab";
 import DeleteConfirmModal from "@/components/topic-studio/DeleteConfirmModal";
+import { getSceneGenerationPrompt } from "@/lib/LLMPrompts/SceneGenerationPrompt";
 
 export default function TopicStudioPage() {
   const params = useParams();
@@ -512,8 +513,31 @@ export default function TopicStudioPage() {
   }
 
   async function handleGenerateScenes() {
+    // 1. Client-side upfront validation
+    try {
+      getSceneGenerationPrompt({
+        channelName: topicData?.channelName || channelTitle,
+        channelNiche: topicData?.channelNiche,
+        channelSubNiche: topicData?.channelSubNiche,
+        channelDescription: topicData?.channelDescription,
+        channelMission: topicData?.channelMission,
+        channelImageTheme: topicData?.channelImageTheme,
+        contentPillarName: topicData?.pillarName,
+        contentPillarCategoryTag: topicData?.pillarTag,
+        contentPillarTone: topicData?.pillarTone,
+        contentPillarDescription: topicData?.pillarDescription,
+        useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
+        mainCharacterDescription: topicData?.pillarMainCharacterDescription,
+        activeScript: (scriptContent || topicData?.scriptContent || "").trim(),
+      });
+    } catch (valErr) {
+      toast.error(valErr.message, { duration: 7000 });
+      triggerScenesNotice(valErr.message);
+      return;
+    }
+
     setIsGeneratingScenes(true);
-    triggerScenesNotice("Generating cinematic scenes & image prompts with Cloudflare AI...");
+    triggerScenesNotice("Generating cinematic scenes & image prompts with AI...");
     try {
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scenes`, {
         method: "POST",
@@ -530,12 +554,14 @@ export default function TopicStudioPage() {
         const formatted = JSON.stringify(data.scenes, null, 2);
         setScenesJson(formatted);
         setJsonError("");
+        toast.success(`Generated ${data.totalScenes || data.scenes.length} scenes.`);
         triggerScenesNotice(`Successfully generated ${data.totalScenes || data.scenes.length} scenes using ${data.accountUsed || "LLM Account"}.`);
       } else {
         throw new Error("No scenes were returned by the generator.");
       }
     } catch (err) {
       console.error("Scenes generation error:", err);
+      toast.error(err.message, { duration: 7000 });
       triggerScenesNotice(`Generation failed: ${err.message}`);
     } finally {
       setIsGeneratingScenes(false);

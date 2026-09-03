@@ -66,10 +66,10 @@ export const generateThumbnailPromptTask = task({
       pillar = pillarRows?.[0] || null;
     }
 
-    const topicTitle = topic.title || "Untitled Topic";
-    const pillarName = pillar?.name || "General Content";
+    const topicTitle = (topic.title || "").trim();
+    const pillarName = pillar?.name || "";
     const imageTheme = (channel.image_theme || "").trim();
-    const thumbnailTheme = (channel.thumbnail_theme || imageTheme || "Cinematic high-contrast psychological documentary aesthetic, clean silhouette separation, volumetric lighting").trim();
+    const thumbnailTheme = (channel.thumbnail_theme || imageTheme || "").trim();
 
     // 2. Fetch General Settings
     const generalRows = await sql`

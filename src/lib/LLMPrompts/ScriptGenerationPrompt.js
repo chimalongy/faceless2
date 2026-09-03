@@ -21,7 +21,7 @@ Length: {content_pillar_length}
 Word count: {content_pillar_words_count}
 Description: {content_pillar_description}
 
-Use the pillar as the strategic lens for the topic. Let it determine the angle, themes, depth, tone, and type of insight. Do not mention the pillar in the script.
+Use the content pillar as the strategic lens for the topic. Let it determine the angle, themes, depth, tone, and type of insight. Do not mention the pillar in the script.
 
 ## TOPIC
 
@@ -45,11 +45,11 @@ Prioritize:
 
 Move naturally from familiar experience → tension/question → deeper explanation → insight/revelation → broader meaning.
 
-Do not force this structure when another structure better serves the topic.
+Do not force this structure when another structure better serves the topic.[you have to determine the best content structure for the topic]
 
-Write with an intelligent, calm, natural, conversational voice. Be deep without being pretentious, emotional without melodrama, and engaging without clickbait.
+Your wrting tone should follow the content pillar tone or by default, write with an intelligent, calm, natural, conversational voice. Be deep without being pretentious, emotional without melodrama, and engaging without clickbait.
 
-Avoid filler, repetition, generic motivational language, clichés, excessive jargon, and mechanical transitions.
+AVOID filler, repetition, generic motivational language, clichés, excessive jargon, and mechanical transitions.
 
 ## ACCURACY
 

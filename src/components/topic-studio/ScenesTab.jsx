@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import toast from "react-hot-toast";
 import { getSceneGenerationPrompt } from "@/lib/LLMPrompts/SceneGenerationPrompt";
 
 export default function ScenesTab({
@@ -260,24 +261,29 @@ export default function ScenesTab({
             <button
               type="button"
               onClick={() => {
-                const fullPrompt = getSceneGenerationPrompt({
-                  channelName: topicData?.channelName || channelName || "YouTube Channel",
-                  channelNiche: topicData?.channelNiche || "General",
-                  channelSubNiche: topicData?.channelSubNiche || topicData?.channelNiche || "General",
-                  channelDescription: topicData?.channelDescription || "Educational and narrative visual documentaries.",
-                  channelMission: topicData?.channelMission || "Deliver high-value visual stories.",
-                  channelImageTheme: topicData?.channelImageTheme || "Cinematic, moody psychological documentary style with realistic dramatic lighting and film grain texture.",
-                  contentPillarName: topicData?.pillarName || "General Content",
-                  contentPillarCategoryTag: topicData?.pillarTag || "General",
-                  contentPillarTone: topicData?.pillarTone || "Calm, analytical, insightful",
-                  contentPillarDescription: topicData?.pillarDescription || "In-depth strategic insights and engaging narrative storytelling.",
-                  tone: topicData?.pillarTone || "Calm, analytical, insightful",
-                  useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
-                  mainCharacterDescription: topicData?.pillarMainCharacterDescription || "None",
-                  activeScript: scriptContent || topicData?.scriptContent || "",
-                });
-                navigator.clipboard.writeText(fullPrompt);
-                triggerScenesNotice("Full scene system prompt copied to clipboard with populated variables.");
+                try {
+                  const fullPrompt = getSceneGenerationPrompt({
+                    channelName: topicData?.channelName || channelName,
+                    channelNiche: topicData?.channelNiche,
+                    channelSubNiche: topicData?.channelSubNiche,
+                    channelDescription: topicData?.channelDescription,
+                    channelMission: topicData?.channelMission,
+                    channelImageTheme: topicData?.channelImageTheme,
+                    contentPillarName: topicData?.pillarName,
+                    contentPillarCategoryTag: topicData?.pillarTag,
+                    contentPillarTone: topicData?.pillarTone,
+                    contentPillarDescription: topicData?.pillarDescription,
+                    useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
+                    mainCharacterDescription: topicData?.pillarMainCharacterDescription,
+                    activeScript: (scriptContent || topicData?.scriptContent || "").trim(),
+                  });
+                  navigator.clipboard.writeText(fullPrompt);
+                  triggerScenesNotice("Full scene system prompt copied to clipboard with populated variables.");
+                  toast.success("System prompt copied to clipboard.");
+                } catch (err) {
+                  triggerScenesNotice(err.message);
+                  toast.error(err.message, { duration: 7000 });
+                }
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer"
               title="Copy scene generation system prompt with all populated variables"
