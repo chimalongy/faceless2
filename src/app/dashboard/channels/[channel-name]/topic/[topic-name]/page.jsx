@@ -13,7 +13,8 @@ import {
   Check,
   Video,
   Loader2,
-  Clock
+  Clock,
+  Smartphone
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -55,6 +56,7 @@ export default function TopicStudioPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [topicData, setTopicData] = useState(null);
+  const isShort = topicData?.videoType === "short";
 
   const effectivePillarSlug = rawPillarSlug || topicData?.pillarSlug || null;
   const effectivePillarName =
@@ -1112,6 +1114,8 @@ export default function TopicStudioPage() {
         body: JSON.stringify({
           sceneIndex: sceneNum,
           prompt,
+          width: isShort ? 928 : 1664,
+          height: isShort ? 1664 : 928,
         }),
       });
 
@@ -1181,6 +1185,8 @@ export default function TopicStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scenes: scenesToGenerate,
+          width: isShort ? 928 : 1664,
+          height: isShort ? 1664 : 928,
         }),
       });
 
@@ -1453,6 +1459,8 @@ export default function TopicStudioPage() {
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
           transition: scene?.transition || "fade",
+          width: isShort ? 1080 : 1376,
+          height: isShort ? 1920 : 768,
         }),
       });
 
@@ -1534,6 +1542,8 @@ export default function TopicStudioPage() {
           scenes: scenesToRender,
           sceneImages,
           sceneAudios,
+          width: isShort ? 1080 : 1376,
+          height: isShort ? 1920 : 768,
         }),
       });
 
@@ -1744,7 +1754,7 @@ export default function TopicStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sceneVideos: videosPayload,
-          resolution: "1080p",
+          resolution: isShort ? "1080x1920" : "1080p",
           useModal: true,
         }),
       });
@@ -1857,9 +1867,15 @@ export default function TopicStudioPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-signal/10 text-signal border border-signal/20">
-                Topic Production Studio
-              </span>
+              {isShort ? (
+                <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 border border-rose-500/20 flex items-center gap-1">
+                  <Smartphone size={11} /> 9:16 Short Studio
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-signal/10 text-signal border border-signal/20">
+                  Topic Production Studio
+                </span>
+              )}
               <span className="text-xs font-mono text-ink-muted">/{topicSlug}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-semibold text-ink tracking-tight">
@@ -1934,6 +1950,7 @@ export default function TopicStudioPage() {
               handleThumbnailUpload={handleThumbnailUpload}
               handleClearThumbnail={handleClearThumbnail}
               handleGenerateThumbnail={handleGenerateThumbnail}
+              isShort={isShort}
             />
           )}
 
@@ -1954,6 +1971,7 @@ export default function TopicStudioPage() {
               handleClearScript={handleClearScript}
               handleUpdateScript={handleUpdateScript}
               handleGenerateScript={handleGenerateScript}
+              isShort={isShort}
             />
           )}
 
@@ -1976,6 +1994,7 @@ export default function TopicStudioPage() {
               handleClearScenes={handleClearScenes}
               handleUpdateScenes={handleUpdateScenes}
               handleGenerateScenes={handleGenerateScenes}
+              isShort={isShort}
             />
           )}
 
@@ -1997,6 +2016,7 @@ export default function TopicStudioPage() {
               handleDeleteMultipleSceneAudios={handleDeleteMultipleSceneAudios}
               handleGenerateSceneAudio={handleGenerateSceneAudio}
               handleGenerateAllAudios={handleGenerateAllAudios}
+              isShort={isShort}
             />
           )}
 
@@ -2015,6 +2035,7 @@ export default function TopicStudioPage() {
               handleDeleteMultipleSceneImages={handleDeleteMultipleSceneImages}
               handleGenerateSceneImage={handleGenerateSceneImage}
               handleGenerateAllImages={handleGenerateAllImages}
+              isShort={isShort}
             />
           )}
 
@@ -2035,6 +2056,7 @@ export default function TopicStudioPage() {
               handleGenerateAllVideos={handleGenerateAllVideos}
               handleGenerateSceneVideoModal={handleGenerateSceneVideoModal}
               handleGenerateAllVideosModal={handleGenerateAllVideosModal}
+              isShort={isShort}
             />
           )}
 
@@ -2066,6 +2088,7 @@ export default function TopicStudioPage() {
               youtubeVideoId={youtubeVideoId}
               youtubeUrl={youtubeUrl}
               youtubePublishedAt={youtubePublishedAt}
+              isShort={isShort}
               onYoutubePublished={({ youtubeVideoId, youtubeUrl, youtubePublishedAt }) => {
                 setYoutubeVideoId(youtubeVideoId);
                 setYoutubeUrl(youtubeUrl);

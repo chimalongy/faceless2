@@ -12,12 +12,14 @@ import {
   ClipboardPaste,
   Loader2,
   X,
-  AlertCircle
+  AlertCircle,
+  Smartphone
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { getScriptGenerationPrompt } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
+import { getShortScriptGenerationSystemPrompt } from "@/lib/LLMPrompts/ShortScriptGenerationPrompt";
 
 export default function ScriptTab({
   topicTitle = "",
@@ -34,6 +36,7 @@ export default function ScriptTab({
   triggerScriptNotice,
   isGeneratingScript = false,
   isUpdatingScript = false,
+  isShort = false,
 }) {
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pastedText, setPastedText] = useState("");
@@ -174,20 +177,33 @@ export default function ScriptTab({
             type="button"
             onClick={() => {
               try {
-                const fullPrompt = getScriptGenerationPrompt({
-                  channelName: topicData?.channelName || channelName,
-                  channelNiche: topicData?.channelNiche,
-                  channelSubNiche: topicData?.channelSubNiche,
-                  channelDescription: topicData?.channelDescription,
-                  channelMission: topicData?.channelMission,
-                  contentPillarName: topicData?.pillarName,
-                  contentPillarCategoryTag: topicData?.pillarTag,
-                  contentPillarTone: topicData?.pillarTone,
-                  contentPillarLength: topicData?.pillarContentLength,
-                  contentPillarWordsCount: topicData?.pillarContentWordsCount,
-                  contentPillarDescription: topicData?.pillarDescription,
-                  topic: (topicTitle || topicData?.title || "").trim(),
-                });
+                const fullPrompt = isShort
+                  ? getShortScriptGenerationSystemPrompt({
+                      channelName: topicData?.channelName || channelName,
+                      channelNiche: topicData?.channelNiche,
+                      channelSubNiche: topicData?.channelSubNiche,
+                      channelDescription: topicData?.channelDescription,
+                      channelMission: topicData?.channelMission,
+                      contentPillarName: topicData?.pillarName,
+                      contentPillarCategoryTag: topicData?.pillarTag,
+                      contentPillarTone: topicData?.pillarTone,
+                      contentPillarDescription: topicData?.pillarDescription,
+                      topic: (topicTitle || topicData?.title || "").trim(),
+                    })
+                  : getScriptGenerationPrompt({
+                      channelName: topicData?.channelName || channelName,
+                      channelNiche: topicData?.channelNiche,
+                      channelSubNiche: topicData?.channelSubNiche,
+                      channelDescription: topicData?.channelDescription,
+                      channelMission: topicData?.channelMission,
+                      contentPillarName: topicData?.pillarName,
+                      contentPillarCategoryTag: topicData?.pillarTag,
+                      contentPillarTone: topicData?.pillarTone,
+                      contentPillarLength: topicData?.pillarContentLength,
+                      contentPillarWordsCount: topicData?.pillarContentWordsCount,
+                      contentPillarDescription: topicData?.pillarDescription,
+                      topic: (topicTitle || topicData?.title || "").trim(),
+                    });
                 navigator.clipboard.writeText(fullPrompt);
                 if (typeof triggerScriptNotice === "function") {
                   triggerScriptNotice("Full script system prompt copied to clipboard with populated variables.");
@@ -253,19 +269,36 @@ export default function ScriptTab({
 
       {/* Editor & Reader Container */}
       <div className="p-6 border border-line bg-paper-card space-y-4">
+        {isShort && (
+          <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-xs flex items-center justify-between text-rose-700">
+            <div className="flex items-center gap-2 font-semibold">
+              <Smartphone size={13} />
+              <span>9:16 Short Script Mode: Optimal length is 35–50 seconds (85–135 words).</span>
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-wider font-bold bg-rose-500/20 px-1.5 py-0.5">
+              High Retention
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between border-b border-line/60 pb-3">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-signal" />
             <span className="text-xs font-mono font-semibold text-ink uppercase tracking-wider">
-              {isEditingScript ? "Script Editor" : "Script Teleprompter"}
+              {isEditingScript ? (isShort ? "Short Script Editor" : "Script Editor") : (isShort ? "Short Teleprompter" : "Script Teleprompter")}
             </span>
           </div>
 
           <div className="flex items-center gap-3 text-xs font-mono text-ink-muted">
-            <span>{scriptContent.split(/\s+/).filter(Boolean).length} words</span>
+            <span className={isShort && scriptContent.split(/\s+/).filter(Boolean).length >= 85 && scriptContent.split(/\s+/).filter(Boolean).length <= 135 ? "text-emerald-700 font-bold" : ""}>
+              {scriptContent.split(/\s+/).filter(Boolean).length} words
+              {isShort && scriptContent.split(/\s+/).filter(Boolean).length >= 85 && scriptContent.split(/\s+/).filter(Boolean).length <= 135 && " (Optimal)"}
+            </span>
             <span>•</span>
             <span>
-              ~{Math.max(1, Math.round(scriptContent.split(/\s+/).filter(Boolean).length / 130))} min read
+              {isShort
+                ? `~${Math.round(scriptContent.split(/\s+/).filter(Boolean).length / 2.5)} sec spoken`
+                : `~${Math.max(1, Math.round(scriptContent.split(/\s+/).filter(Boolean).length / 130))} min read`}
             </span>
           </div>
         </div>

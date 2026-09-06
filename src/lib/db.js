@@ -127,6 +127,9 @@ export async function initDbSchema() {
     try {
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_description TEXT;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_discription TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS video_type TEXT DEFAULT 'longform';`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS aspect_ratio TEXT DEFAULT '16:9';`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS parent_topic_id INT REFERENCES topics(id) ON DELETE SET NULL;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_video_id TEXT;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_url TEXT;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_published_at TIMESTAMPTZ;`;

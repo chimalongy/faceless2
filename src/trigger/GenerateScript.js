@@ -5,6 +5,7 @@ import {
   getScriptGenerationSystemPrompt,
   SCRIPT_GENERATION_SYSTEM_PROMPT,
 } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
+import { getShortScriptGenerationSystemPrompt } from "@/lib/LLMPrompts/ShortScriptGenerationPrompt";
 
 export const generateScriptTask = task({
   id: "generate-script",
@@ -51,7 +52,7 @@ export const generateScriptTask = task({
     const channel = channelRows[0];
 
     const topicRows = await sql`
-      SELECT id, channel_id, pillar_id, title, slug, script_content
+      SELECT id, channel_id, pillar_id, title, slug, script_content, COALESCE(video_type, 'longform') AS "videoType"
       FROM topics
       WHERE slug = ${topicSlug} AND channel_id = ${channel.id}
       LIMIT 1;
@@ -202,24 +203,40 @@ export const generateScriptTask = task({
     }
 
     // 4. Construct System & User Prompt
-    const fullSystemPrompt = getScriptGenerationSystemPrompt({
-      channelName: channel.name,
-      channelNiche: channel.niche,
-      channelSubNiche: channel.sub_niche,
-      channelDescription: channel.description,
-      channelMission: channel.mission,
-      contentPillarName: pillarName,
-      contentPillarCategoryTag: pillar.tag,
-      contentPillarTone: pillarTone,
-      contentPillarLength: pillarContentLength,
-      contentPillarWordsCount: pillarContentWordsCount,
-      contentPillarDescription: pillarDescription,
-      topic: topicTitle,
-    });
+    const isShort = topic.videoType === "short";
+    const fullSystemPrompt = isShort
+      ? getShortScriptGenerationSystemPrompt({
+          channelName: channel.name,
+          channelNiche: channel.niche,
+          channelSubNiche: channel.sub_niche,
+          channelDescription: channel.description,
+          channelMission: channel.mission,
+          contentPillarName: pillarName,
+          contentPillarCategoryTag: pillar?.tag || "",
+          contentPillarTone: pillarTone,
+          contentPillarDescription: pillarDescription,
+          topic: topicTitle,
+        })
+      : getScriptGenerationSystemPrompt({
+          channelName: channel.name,
+          channelNiche: channel.niche,
+          channelSubNiche: channel.sub_niche,
+          channelDescription: channel.description,
+          channelMission: channel.mission,
+          contentPillarName: pillarName,
+          contentPillarCategoryTag: pillar?.tag || "",
+          contentPillarTone: pillarTone,
+          contentPillarLength: pillarContentLength,
+          contentPillarWordsCount: pillarContentWordsCount,
+          contentPillarDescription: pillarDescription,
+          topic: topicTitle,
+        });
 
     const userPromptContent =
       customPrompt ||
-      `Generate the complete, engaging, long-form YouTube script for the topic: "${topicTitle}". Follow all instructions in the system prompt.`;
+      (isShort
+        ? `Generate a viral, high-retention 35-50 second YouTube Short script (85-135 words) for: "${topicTitle}". Follow all instructions in the system prompt.`
+        : `Generate the complete, engaging, long-form YouTube script for the topic: "${topicTitle}". Follow all instructions in the system prompt.`);
 
     // 5. Fallback Loop Across Selected LLM Accounts
     let generatedScript = null;

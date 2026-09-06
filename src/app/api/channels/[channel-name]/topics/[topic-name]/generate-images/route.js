@@ -36,6 +36,8 @@ export async function POST(req, context) {
         topicSlug,
         prompt: fullPrompt,
         sceneIndex,
+        ...(body.width ? { width: body.width } : {}),
+        ...(body.height ? { height: body.height } : {}),
       });
 
       console.log(`[GenerateImagesRoute] Task triggered with run ID: ${handle.id}, polling for completion...`);
@@ -73,6 +75,8 @@ export async function POST(req, context) {
         topicSlug,
         scenes,
         globalThemePrompt,
+        ...(body.width ? { width: body.width } : {}),
+        ...(body.height ? { height: body.height } : {}),
       });
 
       console.log(`[GenerateImagesRoute] Batch task triggered with run ID: ${handle.id}, polling for completion...`);

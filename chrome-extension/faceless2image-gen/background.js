@@ -51,18 +51,41 @@ async function downloadOne(tabId, url, filename) {
   return await new Promise((res) => {
     try {
       chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false }, (id) => {
+        if (chrome.runtime.lastError) {
+          console.warn("[Faceless] downloadOne error:", chrome.runtime.lastError.message);
+        }
         res(!chrome.runtime.lastError && id != null);
       });
     } catch (e) { PENDING_NAMES = []; res(false); }
   });
 }
 
+// Download via Data URL (base64 image payload — works 100% in Chrome MV3 without CORS/blob scoping issues)
+async function downloadDataUrl(dataUrl, filename) {
+  PENDING_NAMES = [filename];
+  return await new Promise((res) => {
+    try {
+      chrome.downloads.download({ url: dataUrl, filename, conflictAction: "uniquify", saveAs: false }, (id) => {
+        if (chrome.runtime.lastError) {
+          console.warn("[Faceless] downloadDataUrl error:", chrome.runtime.lastError.message);
+        }
+        res(!chrome.runtime.lastError && id != null);
+      });
+    } catch (e) {
+      PENDING_NAMES = [];
+      res(false);
+    }
+  });
+}
+
 // Rename downloads to our chosen filenames
 chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  if (!PENDING_NAMES.length) return false;
+  if (!PENDING_NAMES.length) return;
   const filename = PENDING_NAMES.shift();
-  suggest({ filename, conflictAction: "uniquify" });
-  return true;
+  if (filename) {
+    suggest({ filename, conflictAction: "uniquify" });
+    // Note: Do not return true when calling suggest synchronously in Chrome MV3.
+  }
 });
 
 // ---- Trusted typing via Chrome Debugger (CDP) -------------------------------
@@ -154,26 +177,109 @@ function emit(evt) {
   chrome.runtime.sendMessage({ type: "progress", ...evt }).catch(() => { });
 }
 
+function isFlowUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  const u = url.toLowerCase();
+  return (
+    u.includes("flow.google") ||
+    (u.includes("labs.google") && (u.includes("flow") || u.includes("/fx")))
+  );
+}
+
+function isFlowProjectUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  const u = url.toLowerCase();
+  return isFlowUrl(u) && (u.includes("project") || u.includes("/tools/flow"));
+}
+
 async function findFlowTab() {
-  const tabs = await chrome.tabs.query({ url: "https://labs.google/fx/tools/flow*" });
-  return tabs[0] || null;
+  try {
+    // 1. Query all open tabs across all browser windows
+    const allTabs = await chrome.tabs.query({});
+    if (Array.isArray(allTabs) && allTabs.length > 0) {
+      // Prioritize active tab in any focused window
+      const activeFlow = allTabs.find((t) => t.active && isFlowUrl(t.url));
+      if (activeFlow) {
+        console.log("[Faceless] Found active Flow tab:", activeFlow.id, activeFlow.url);
+        return activeFlow;
+      }
+
+      // Prioritize any tab with 'project' in URL or title
+      const projectTab = allTabs.find(
+        (t) =>
+          isFlowProjectUrl(t.url) ||
+          (isFlowUrl(t.url) && (t.title || "").toLowerCase().includes("project")),
+      );
+      if (projectTab) {
+        console.log("[Faceless] Found Flow project tab:", projectTab.id, projectTab.url);
+        return projectTab;
+      }
+
+      // Any tab on labs.google/flow or flow.google
+      const anyFlow = allTabs.find((t) => isFlowUrl(t.url));
+      if (anyFlow) {
+        console.log("[Faceless] Found Flow tab:", anyFlow.id, anyFlow.url);
+        return anyFlow;
+      }
+    }
+  } catch (err) {
+    console.warn("[Faceless] findFlowTab query error:", err);
+  }
+
+  // 2. Fallback match patterns
+  const patterns = [
+    "https://labs.google/fx/tools/flow*",
+    "https://labs.google/fx/tools/flow/*",
+    "https://labs.google/fx/*",
+    "https://labs.google/flow*",
+    "https://flow.google/*",
+  ];
+  for (const p of patterns) {
+    try {
+      const tabs = await chrome.tabs.query({ url: p });
+      if (tabs && tabs.length > 0) {
+        return tabs[0];
+      }
+    } catch (_) {}
+  }
+
+  return null;
 }
 
 // ---- Wait for generation to complete ----------------------------------------
 async function waitForCompletion(tabId, mediaBefore) {
   const deadline = Date.now() + DEFAULTS.pollTimeoutSec * 1000;
-  let grew = false;
-  await sleep(2500);
+  let sawGenerating = false;
+  let quietChecks = 0;
+  await sleep(3000); // Initial grace period after submission
+
   while (Date.now() < deadline) {
     if (RUN.stopped) return;
     const st = await send(tabId, { cmd: "status" });
     if (st.ok) {
-      if ((st.media || 0) + (st.videos || 0) > mediaBefore) grew = true;
-      if (grew && !st.generating) { await sleep(1500); return; }
+      const currentMedia = (st.media || 0) + (st.videos || 0);
+      const grew = currentMedia > mediaBefore;
+
+      if (st.generating) {
+        sawGenerating = true;
+        quietChecks = 0;
+      } else {
+        if (sawGenerating) {
+          // Flow was actively generating and has now stopped
+          quietChecks++;
+          if (quietChecks >= 2) {
+            await sleep(1500); // Allow DOM to settle and tiles to render
+            return;
+          }
+        } else if (grew) {
+          await sleep(1500);
+          return;
+        }
+      }
     }
-    await sleep(2500);
+    await sleep(2000);
   }
-  emit({ kind: "warn", message: "poll timeout — moving on" });
+  emit({ kind: "warn", message: "poll timeout — checking for generated images anyway" });
 }
 
 // ---- Main run loop ----------------------------------------------------------
@@ -289,6 +395,7 @@ async function runLoop() {
 
     // Wait for generation to complete (skip for instruction — just wait for agent to respond)
     const beforeImg = f.before || 0, beforeVid = f.beforeVid || 0;
+    const beforeSrcs = f.beforeSrcs || [];
     if (job.isInstruction) {
       // For instruction: just wait for the agent to process it, no image expected
       await waitForCompletion(tabId, beforeImg + beforeVid);
@@ -298,7 +405,7 @@ async function runLoop() {
 
       // Download the result (only for actual scene prompts)
       if (!RUN.stopped && DEFAULTS.autoDownload) {
-        await downloadJob(tabId, job, beforeImg);
+        await downloadJob(tabId, job, beforeImg, beforeSrcs);
       }
       RUN.completedScenes = (RUN.completedScenes || 0) + (job.sceneNumbers?.length || 1);
     }
@@ -327,46 +434,79 @@ async function runLoop() {
 }
 
 // Download the newest image(s) produced by the current job
-async function downloadJob(tabId, job, beforeImg) {
-  const mres = await send(tabId, { cmd: "mediaItems" });
-  const images = (mres.ok && mres.images) || [];
-  const newImg = Math.max(0, images.length - (beforeImg || 0));
-
+async function downloadJob(tabId, job, beforeImg, beforeSrcs = []) {
   const sceneNumbers = job.sceneNumbers && job.sceneNumbers.length > 0
     ? job.sceneNumbers
     : (job.sceneNumber != null ? [job.sceneNumber] : []);
 
   if (sceneNumbers.length === 0) return;
 
-  if (newImg === 0) {
-    const label = sceneNumbers.length === 1 ? `scene ${sceneNumbers[0]}` : `scenes ${sceneNumbers.join(", ")}`;
-    emit({ kind: "warn", message: `no new image for ${label} — skipping download` });
-    return;
-  }
-
   const folder = RUN.downloadFolder || "Faceless";
-  const newImageItems = images.length > beforeImg ? images.slice(0, newImg) : images;
+
+  // 1. Ask flow adapter for downloadable media (includes data URLs and new/old diff)
+  const mres = await send(tabId, {
+    cmd: "getDownloadableMedia",
+    beforeSrcs,
+    count: sceneNumbers.length,
+  });
+  const items = (mres.ok && mres.items) || [];
 
   for (let k = 0; k < sceneNumbers.length; k++) {
     const sceneNumber = sceneNumbers[k];
     const filename = `${folder}/${sceneNumber}.png`;
-    const targetImg = newImageItems[k] || images[k];
+    const targetItem = items[k] || items[items.length - 1];
 
     let ok = false;
-    if (targetImg?.src) {
-      try { ok = await downloadOne(tabId, targetImg.src, filename); } catch (e) { }
+
+    // Strategy 1: Data URL download via Chrome downloads API (immune to CORS & blob URL scoping in MV3)
+    if (targetItem?.dataUrl) {
+      try {
+        ok = await downloadDataUrl(targetItem.dataUrl, filename);
+      } catch (e) {
+        console.warn("[Faceless] Data URL download attempt failed:", e);
+      }
     }
+
+    // Strategy 2: Direct media URL download (for HTTP/HTTPS URLs)
+    if (!ok && targetItem?.src && !targetItem.src.startsWith("blob:")) {
+      try {
+        ok = await downloadOne(tabId, targetItem.src, filename);
+      } catch (e) {
+        console.warn("[Faceless] Direct URL download attempt failed:", e);
+      }
+    }
+
+    // Strategy 3: In-page download trigger (tile button or tab anchor)
     if (!ok) {
-      try { ok = await cdpDownloadTile(tabId, k, filename); } catch (e) { }
+      try {
+        const trig = await send(tabId, {
+          cmd: "triggerDownload",
+          index: targetItem?.index ?? k,
+          filename,
+        });
+        if (trig && trig.ok) {
+          ok = true;
+        }
+      } catch (e) {
+        console.warn("[Faceless] In-page trigger download attempt failed:", e);
+      }
+    }
+
+    // Strategy 4: Trusted CDP tile download (hover -> more -> download)
+    if (!ok) {
+      try {
+        ok = await cdpDownloadTile(tabId, targetItem?.index ?? k, filename);
+      } catch (e) {}
     }
 
     const isThumb = sceneNumber === "thumbnail";
+    const label = isThumb ? "thumbnail" : `scene ${sceneNumber}`;
     if (ok) {
-      emit({ kind: "info", message: `✓ saved ${isThumb ? "thumbnail" : `scene ${sceneNumber}`} → Downloads/${filename}` });
+      emit({ kind: "info", message: `✓ saved ${label} → Downloads/${filename}` });
     } else {
-      emit({ kind: "warn", message: `download failed for ${isThumb ? "thumbnail" : `scene ${sceneNumber}`}` });
+      emit({ kind: "warn", message: `download failed for ${label} (file: ${filename})` });
     }
-    await sleep(200);
+    await sleep(250);
   }
 }
 

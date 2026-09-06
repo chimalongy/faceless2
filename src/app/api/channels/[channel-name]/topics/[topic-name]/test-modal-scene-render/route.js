@@ -26,6 +26,8 @@ export async function POST(req, context) {
       scenes,
       sceneImages,
       sceneAudios,
+      width,
+      height,
     } = body;
 
     // Single scene render request via Modal
@@ -47,6 +49,8 @@ export async function POST(req, context) {
         audioUrl,
         kenBurns: kenBurns || { direction: "zoom-in", intensity: 0.15 },
         transition,
+        ...(width ? { width } : {}),
+        ...(height ? { height } : {}),
       });
 
       const run = await runs.poll(handle.id, { pollIntervalMs: 1500 });
@@ -75,6 +79,8 @@ export async function POST(req, context) {
         scenes,
         sceneImages: sceneImages || {},
         sceneAudios: sceneAudios || {},
+        ...(width ? { width } : {}),
+        ...(height ? { height } : {}),
       });
 
       const run = await runs.poll(handle.id, { pollIntervalMs: 2000 });

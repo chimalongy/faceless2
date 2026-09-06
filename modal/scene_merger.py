@@ -385,14 +385,21 @@ def create_concat_file(
 def output_dimensions(
     resolution: str,
 ):
-    if resolution == "720p":
+    res = str(resolution or "").strip().lower()
+    if res in ("720p", "1280x720"):
         return 1280, 720
 
-    if resolution == "1080p":
+    if res in ("1080p", "1920x1080"):
         return 1920, 1080
 
+    if res in ("1080x1920", "shorts", "vertical", "9:16"):
+        return 1080, 1920
+
+    if res in ("720x1280", "shorts-720p"):
+        return 720, 1280
+
     raise MergeInputError(
-        "resolution must be 720p or 1080p"
+        "resolution must be 720p, 1080p, 1080x1920 (shorts), or 720x1280"
     )
 
 

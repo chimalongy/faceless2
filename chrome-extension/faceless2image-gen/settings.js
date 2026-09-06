@@ -26,10 +26,16 @@ Ensure only one Image is Generated Per Prompt or Per Scene. and name each image 
 for exampe 1.png, 2.png, 3.png continuously
 
 when generating images ensure that image follow this theme
-"{channel_image_generation_theme}"`,
+"{channel_image_generation_theme}"
+
+make sure the generated images are inline (visual description) of what is being said in the audio-text.
+`,
 
   theme_instruction: `when generating images ensure that image follow this theme
-"{channel_image_generation_theme}"`,
+"{channel_image_generation_theme}"
+
+make sure the generated images are inline (visual description) of what is being said in the audio-text.
+`,
 
   missing_scenes_header: `Lets Focus on Generating for these scenes`,
 
@@ -40,7 +46,7 @@ thumbnail_prompt: "{thumbnail_prompt}"
 Ensure only one Image is Generated. Name the image thumbnail.png.
 
 when generating images ensure that image follow this theme
-"{channel_thumbnail_generation_theme}"`
+"{channel_thumbnail_generation_theme}"`,
 };
 
 // Export for module/bundler compatibility if needed

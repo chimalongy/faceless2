@@ -17,6 +17,7 @@ export async function GET(request, { params }) {
 
     const { searchParams } = new URL(request.url);
     const pillarSlug = searchParams.get("pillar");
+    const videoTypeParam = searchParams.get("type"); // 'short', 'longform', or null/all
 
     const sql = getDbSql();
     if (!sql) {
@@ -27,67 +28,213 @@ export async function GET(request, { params }) {
 
     let topics = [];
     if (pillarSlug && pillarSlug !== "All") {
-      topics = await sql`
-        SELECT 
-          t.id,
-          t.channel_id AS "channelId",
-          c.slug AS "channelSlug",
-          t.pillar_id AS "pillarId",
-          cp.slug AS "pillarSlug",
-          cp.name AS "pillarName",
-          cp.description AS "pillarDescription",
-          cp.tone AS "pillarTone",
-          cp.use_main_character AS "pillarUseMainCharacter",
-          cp.main_character_description AS "pillarMainCharacterDescription",
-          t.title,
-          t.slug,
-          t.script_content AS "scriptContent",
-          t.story_description AS "storyDescription",
-          t.scenes_json AS "scenesJson",
-          t.thumbnail_url AS "thumbnailUrl",
-          t.thumbnail_prompt AS "thumbnailPrompt",
-          t.master_video_url AS "masterVideoUrl",
-          t.youtube_video_id AS "youtubeVideoId",
-          t.youtube_url AS "youtubeUrl",
-          t.created_at AS "createdAt",
-          t.updated_at AS "updatedAt"
-        FROM topics t
-        JOIN channels c ON c.id = t.channel_id
-        LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
-        WHERE c.slug = ${channelSlug} AND cp.slug = ${pillarSlug}
-        ORDER BY t.created_at DESC;
-      `;
+      if (videoTypeParam === "short") {
+        topics = await sql`
+          SELECT 
+            t.id,
+            t.channel_id AS "channelId",
+            c.slug AS "channelSlug",
+            t.pillar_id AS "pillarId",
+            cp.slug AS "pillarSlug",
+            cp.name AS "pillarName",
+            cp.description AS "pillarDescription",
+            cp.tone AS "pillarTone",
+            cp.use_main_character AS "pillarUseMainCharacter",
+            cp.main_character_description AS "pillarMainCharacterDescription",
+            t.title,
+            t.slug,
+            COALESCE(t.video_type, 'longform') AS "videoType",
+            COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+            t.parent_topic_id AS "parentTopicId",
+            t.script_content AS "scriptContent",
+            t.story_description AS "storyDescription",
+            t.scenes_json AS "scenesJson",
+            t.thumbnail_url AS "thumbnailUrl",
+            t.thumbnail_prompt AS "thumbnailPrompt",
+            t.master_video_url AS "masterVideoUrl",
+            t.youtube_video_id AS "youtubeVideoId",
+            t.youtube_url AS "youtubeUrl",
+            t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt"
+          FROM topics t
+          JOIN channels c ON c.id = t.channel_id
+          LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
+          WHERE c.slug = ${channelSlug} AND cp.slug = ${pillarSlug} AND t.video_type = 'short'
+          ORDER BY t.created_at DESC;
+        `;
+      } else if (videoTypeParam === "longform") {
+        topics = await sql`
+          SELECT 
+            t.id,
+            t.channel_id AS "channelId",
+            c.slug AS "channelSlug",
+            t.pillar_id AS "pillarId",
+            cp.slug AS "pillarSlug",
+            cp.name AS "pillarName",
+            cp.description AS "pillarDescription",
+            cp.tone AS "pillarTone",
+            cp.use_main_character AS "pillarUseMainCharacter",
+            cp.main_character_description AS "pillarMainCharacterDescription",
+            t.title,
+            t.slug,
+            COALESCE(t.video_type, 'longform') AS "videoType",
+            COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+            t.parent_topic_id AS "parentTopicId",
+            t.script_content AS "scriptContent",
+            t.story_description AS "storyDescription",
+            t.scenes_json AS "scenesJson",
+            t.thumbnail_url AS "thumbnailUrl",
+            t.thumbnail_prompt AS "thumbnailPrompt",
+            t.master_video_url AS "masterVideoUrl",
+            t.youtube_video_id AS "youtubeVideoId",
+            t.youtube_url AS "youtubeUrl",
+            t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt"
+          FROM topics t
+          JOIN channels c ON c.id = t.channel_id
+          LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
+          WHERE c.slug = ${channelSlug} AND cp.slug = ${pillarSlug} AND (t.video_type IS NULL OR t.video_type != 'short')
+          ORDER BY t.created_at DESC;
+        `;
+      } else {
+        topics = await sql`
+          SELECT 
+            t.id,
+            t.channel_id AS "channelId",
+            c.slug AS "channelSlug",
+            t.pillar_id AS "pillarId",
+            cp.slug AS "pillarSlug",
+            cp.name AS "pillarName",
+            cp.description AS "pillarDescription",
+            cp.tone AS "pillarTone",
+            cp.use_main_character AS "pillarUseMainCharacter",
+            cp.main_character_description AS "pillarMainCharacterDescription",
+            t.title,
+            t.slug,
+            COALESCE(t.video_type, 'longform') AS "videoType",
+            COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+            t.parent_topic_id AS "parentTopicId",
+            t.script_content AS "scriptContent",
+            t.story_description AS "storyDescription",
+            t.scenes_json AS "scenesJson",
+            t.thumbnail_url AS "thumbnailUrl",
+            t.thumbnail_prompt AS "thumbnailPrompt",
+            t.master_video_url AS "masterVideoUrl",
+            t.youtube_video_id AS "youtubeVideoId",
+            t.youtube_url AS "youtubeUrl",
+            t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt"
+          FROM topics t
+          JOIN channels c ON c.id = t.channel_id
+          LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
+          WHERE c.slug = ${channelSlug} AND cp.slug = ${pillarSlug}
+          ORDER BY t.created_at DESC;
+        `;
+      }
     } else {
-      topics = await sql`
-        SELECT 
-          t.id,
-          t.channel_id AS "channelId",
-          c.slug AS "channelSlug",
-          t.pillar_id AS "pillarId",
-          cp.slug AS "pillarSlug",
-          cp.name AS "pillarName",
-          cp.description AS "pillarDescription",
-          cp.tone AS "pillarTone",
-          cp.use_main_character AS "pillarUseMainCharacter",
-          cp.main_character_description AS "pillarMainCharacterDescription",
-          t.title,
-          t.slug,
-          t.script_content AS "scriptContent",
-          t.story_description AS "storyDescription",
-          t.scenes_json AS "scenesJson",
-          t.thumbnail_url AS "thumbnailUrl",
-          t.thumbnail_prompt AS "thumbnailPrompt",
-          t.master_video_url AS "masterVideoUrl",
-          t.youtube_video_id AS "youtubeVideoId",
-          t.youtube_url AS "youtubeUrl",
-          t.created_at AS "createdAt",
-          t.updated_at AS "updatedAt"
-        FROM topics t
-        JOIN channels c ON c.id = t.channel_id
-        LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
-        WHERE c.slug = ${channelSlug}
-        ORDER BY t.created_at DESC;
-      `;
+      if (videoTypeParam === "short") {
+        topics = await sql`
+          SELECT 
+            t.id,
+            t.channel_id AS "channelId",
+            c.slug AS "channelSlug",
+            t.pillar_id AS "pillarId",
+            cp.slug AS "pillarSlug",
+            cp.name AS "pillarName",
+            cp.description AS "pillarDescription",
+            cp.tone AS "pillarTone",
+            cp.use_main_character AS "pillarUseMainCharacter",
+            cp.main_character_description AS "pillarMainCharacterDescription",
+            t.title,
+            t.slug,
+            COALESCE(t.video_type, 'longform') AS "videoType",
+            COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+            t.parent_topic_id AS "parentTopicId",
+            t.script_content AS "scriptContent",
+            t.story_description AS "storyDescription",
+            t.scenes_json AS "scenesJson",
+            t.thumbnail_url AS "thumbnailUrl",
+            t.thumbnail_prompt AS "thumbnailPrompt",
+            t.master_video_url AS "masterVideoUrl",
+            t.youtube_video_id AS "youtubeVideoId",
+            t.youtube_url AS "youtubeUrl",
+            t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt"
+          FROM topics t
+          JOIN channels c ON c.id = t.channel_id
+          LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
+          WHERE c.slug = ${channelSlug} AND t.video_type = 'short'
+          ORDER BY t.created_at DESC;
+        `;
+      } else if (videoTypeParam === "longform") {
+        topics = await sql`
+          SELECT 
+            t.id,
+            t.channel_id AS "channelId",
+            c.slug AS "channelSlug",
+            t.pillar_id AS "pillarId",
+            cp.slug AS "pillarSlug",
+            cp.name AS "pillarName",
+            cp.description AS "pillarDescription",
+            cp.tone AS "pillarTone",
+            cp.use_main_character AS "pillarUseMainCharacter",
+            cp.main_character_description AS "pillarMainCharacterDescription",
+            t.title,
+            t.slug,
+            COALESCE(t.video_type, 'longform') AS "videoType",
+            COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+            t.parent_topic_id AS "parentTopicId",
+            t.script_content AS "scriptContent",
+            t.story_description AS "storyDescription",
+            t.scenes_json AS "scenesJson",
+            t.thumbnail_url AS "thumbnailUrl",
+            t.thumbnail_prompt AS "thumbnailPrompt",
+            t.master_video_url AS "masterVideoUrl",
+            t.youtube_video_id AS "youtubeVideoId",
+            t.youtube_url AS "youtubeUrl",
+            t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt"
+          FROM topics t
+          JOIN channels c ON c.id = t.channel_id
+          LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
+          WHERE c.slug = ${channelSlug} AND (t.video_type IS NULL OR t.video_type != 'short')
+          ORDER BY t.created_at DESC;
+        `;
+      } else {
+        topics = await sql`
+          SELECT 
+            t.id,
+            t.channel_id AS "channelId",
+            c.slug AS "channelSlug",
+            t.pillar_id AS "pillarId",
+            cp.slug AS "pillarSlug",
+            cp.name AS "pillarName",
+            cp.description AS "pillarDescription",
+            cp.tone AS "pillarTone",
+            cp.use_main_character AS "pillarUseMainCharacter",
+            cp.main_character_description AS "pillarMainCharacterDescription",
+            t.title,
+            t.slug,
+            COALESCE(t.video_type, 'longform') AS "videoType",
+            COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+            t.parent_topic_id AS "parentTopicId",
+            t.script_content AS "scriptContent",
+            t.story_description AS "storyDescription",
+            t.scenes_json AS "scenesJson",
+            t.thumbnail_url AS "thumbnailUrl",
+            t.thumbnail_prompt AS "thumbnailPrompt",
+            t.master_video_url AS "masterVideoUrl",
+            t.youtube_video_id AS "youtubeVideoId",
+            t.youtube_url AS "youtubeUrl",
+            t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt"
+          FROM topics t
+          JOIN channels c ON c.id = t.channel_id
+          LEFT JOIN content_pillars cp ON cp.id = t.pillar_id
+          WHERE c.slug = ${channelSlug}
+          ORDER BY t.created_at DESC;
+        `;
+      }
     }
 
     return NextResponse.json({ topics: topics || [] });
@@ -161,6 +308,10 @@ export async function POST(request, { params }) {
     }
 
     const insertedTopics = [];
+    const videoType = (body.videoType || body.video_type || "longform").toLowerCase().trim();
+    const defaultRatio = videoType === "short" ? "9:16" : "16:9";
+    const aspectRatio = (body.aspectRatio || body.aspect_ratio || defaultRatio).trim();
+    const parentTopicId = body.parentTopicId || body.parent_topic_id || null;
 
     for (const title of titlesList) {
       const slug = toSlug(title) || `topic-${Date.now()}`;
@@ -180,7 +331,10 @@ export async function POST(request, { params }) {
           scenes_json,
           thumbnail_url,
           thumbnail_prompt,
-          master_video_url
+          master_video_url,
+          video_type,
+          aspect_ratio,
+          parent_topic_id
         ) VALUES (
           ${channelId},
           ${pillarId},
@@ -190,11 +344,17 @@ export async function POST(request, { params }) {
           ${scenesJson}::jsonb,
           ${thumbnailUrl},
           ${thumbnailPrompt},
-          ${masterVideoUrl}
+          ${masterVideoUrl},
+          ${videoType},
+          ${aspectRatio},
+          ${parentTopicId}
         )
         ON CONFLICT (channel_id, slug) DO UPDATE SET
           title = EXCLUDED.title,
           pillar_id = EXCLUDED.pillar_id,
+          video_type = EXCLUDED.video_type,
+          aspect_ratio = EXCLUDED.aspect_ratio,
+          parent_topic_id = EXCLUDED.parent_topic_id,
           updated_at = NOW()
         RETURNING *;
       `;

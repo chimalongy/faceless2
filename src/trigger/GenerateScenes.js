@@ -5,6 +5,7 @@ import {
   getSceneGenerationPrompt,
   SCENE_GENERATION_SYSTEM_PROMPT,
 } from "@/lib/LLMPrompts/SceneGenerationPrompt";
+import { getShortSceneGenerationPrompt } from "@/lib/LLMPrompts/ShortSceneGenerationPrompt";
 
 export const generateScenesTask = task({
   id: "generate-scenes",
@@ -48,7 +49,7 @@ export const generateScenesTask = task({
     const channel = channelRows[0];
 
     const topicRows = await sql`
-      SELECT id, channel_id, pillar_id, title, slug, script_content, scenes_json
+      SELECT id, channel_id, pillar_id, title, slug, script_content, scenes_json, COALESCE(video_type, 'longform') AS "videoType"
       FROM topics
       WHERE slug = ${topicSlug} AND channel_id = ${channel.id}
       LIMIT 1;
@@ -173,22 +174,39 @@ export const generateScenesTask = task({
       logger.log(`[GenerateScenes] Prioritizing ${matchingAccounts.length} ${sceneGenSource} account(s), with ${otherAccounts.length} fallback account(s).`);
     }
 
-    // 4. Construct Full Prompt using SceneGenerationPrompt module
-    const fullPrompt = getSceneGenerationPrompt({
-      channelName: channel.name,
-      channelNiche: channel.niche,
-      channelSubNiche: channel.sub_niche,
-      channelDescription: channel.description,
-      channelMission: channel.mission,
-      channelImageTheme: visualTheme,
-      contentPillarName: pillar.name,
-      contentPillarCategoryTag: pillar.tag,
-      contentPillarTone: pillar.tone,
-      contentPillarDescription: pillar.description,
-      useMainCharacter: pillarUseMainCharacter,
-      mainCharacterDescription: pillarMainCharacterDescription,
-      activeScript,
-    });
+    // 4. Construct Full Prompt using SceneGenerationPrompt or ShortSceneGenerationPrompt
+    const isShort = topic.videoType === "short";
+    const fullPrompt = isShort
+      ? getShortSceneGenerationPrompt({
+          channelName: channel.name,
+          channelNiche: channel.niche,
+          channelSubNiche: channel.sub_niche,
+          channelDescription: channel.description,
+          channelMission: channel.mission,
+          channelImageTheme: visualTheme,
+          contentPillarName: pillar.name,
+          contentPillarCategoryTag: pillar.tag,
+          contentPillarTone: pillar.tone,
+          contentPillarDescription: pillar.description,
+          useMainCharacter: pillarUseMainCharacter,
+          mainCharacterDescription: pillarMainCharacterDescription,
+          activeScript,
+        })
+      : getSceneGenerationPrompt({
+          channelName: channel.name,
+          channelNiche: channel.niche,
+          channelSubNiche: channel.sub_niche,
+          channelDescription: channel.description,
+          channelMission: channel.mission,
+          channelImageTheme: visualTheme,
+          contentPillarName: pillar.name,
+          contentPillarCategoryTag: pillar.tag,
+          contentPillarTone: pillar.tone,
+          contentPillarDescription: pillar.description,
+          useMainCharacter: pillarUseMainCharacter,
+          mainCharacterDescription: pillarMainCharacterDescription,
+          activeScript,
+        });
 
     // 5. Fallback Loop Across Selected LLM Accounts
     let parsedScenes = null;

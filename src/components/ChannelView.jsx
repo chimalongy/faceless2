@@ -22,12 +22,15 @@ import {
   Youtube,
   X,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Smartphone,
+  Scissors
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import ChannelShortsView from "./ChannelShortsView";
 
 function toPillarSlug(name) {
   return name
@@ -220,10 +223,35 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
   const [pillarContentWordsCount, setPillarContentWordsCount] = useState("");
   const [pillarUseMainChar, setPillarUseMainChar] = useState(false);
   const [pillarMainCharDesc, setPillarMainCharDesc] = useState("");
+  const [extractingShortSlug, setExtractingShortSlug] = useState(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  async function handleExtractShort(topicSlug) {
+    if (!topicSlug || extractingShortSlug) return;
+    setExtractingShortSlug(topicSlug);
+    try {
+      const res = await fetch(
+        `/api/channels/${channelSlug}/topics/${topicSlug}/extract-short`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to extract Short");
+      }
+      if (data.redirectUrl) {
+        router.push(data.redirectUrl);
+      } else {
+        loadWorkspaceData();
+      }
+    } catch (err) {
+      alert("Error extracting short: " + err.message);
+    } finally {
+      setExtractingShortSlug(null);
+    }
+  }
 
   async function loadWorkspaceData() {
     if (!channelSlug) return;
@@ -260,18 +288,26 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
     loadWorkspaceData();
   }, [channelSlug]);
 
-  // Topic groupings
-  const postedTopics = useMemo(() => {
-    return topics.filter(isTopicPosted);
+  // Topic groupings: separate longform from shorts
+  const longformTopics = useMemo(() => {
+    return topics.filter((t) => t.videoType !== "short");
   }, [topics]);
+
+  const shortsTopics = useMemo(() => {
+    return topics.filter((t) => t.videoType === "short");
+  }, [topics]);
+
+  const postedTopics = useMemo(() => {
+    return longformTopics.filter(isTopicPosted);
+  }, [longformTopics]);
 
   const completedTopics = useMemo(() => {
-    return topics.filter(isTopicCompleted);
-  }, [topics]);
+    return longformTopics.filter(isTopicCompleted);
+  }, [longformTopics]);
 
   const uncompletedTopics = useMemo(() => {
-    return topics.filter(isTopicUncompleted);
-  }, [topics]);
+    return longformTopics.filter(isTopicUncompleted);
+  }, [longformTopics]);
 
   // Filter topics based on active tab search and pillar
   const displayedTopics = useMemo(() => {
@@ -700,6 +736,21 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
               {postedTopics.length}
             </span>
           </Link>
+
+          <Link
+            href={`/dashboard/channels/${channelSlug}/shorts`}
+            className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === "shorts"
+                ? "border-signal text-signal font-bold bg-signal/5"
+                : "border-transparent text-ink-muted hover:text-ink hover:border-line"
+            }`}
+          >
+            <Smartphone size={14} className="text-rose-500" />
+            <span>Shorts</span>
+            <span className="text-[11px] font-mono px-1.5 py-0.5 bg-paper border border-line rounded-xs">
+              {shortsTopics.length}
+            </span>
+          </Link>
         </div>
       </div>
 
@@ -1052,6 +1103,27 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
                               <Youtube size={13} /> Watch
                             </a>
                           )}
+                          {hasScript && (
+                            <button
+                              type="button"
+                              onClick={() => handleExtractShort(topic.slug)}
+                              disabled={extractingShortSlug === topic.slug}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                              title="Extract a 45s viral Short from this topic's script"
+                            >
+                              {extractingShortSlug === topic.slug ? (
+                                <>
+                                  <Loader2 size={13} className="animate-spin text-signal" />
+                                  <span>Extracting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Scissors size={13} className="text-signal" />
+                                  <span>Extract Short</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                           <Link
                             href={`/dashboard/channels/${channelSlug}/topic/${topic.slug}`}
                             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto"
@@ -1065,6 +1137,17 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
                 </div>
               )}
             </section>
+          )}
+
+          {/* TAB 5: SHORTS */}
+          {activeTab === "shorts" && (
+            <ChannelShortsView
+              channelSlug={channelSlug}
+              channelTitle={channelTitle}
+              topics={topics}
+              pillars={pillars}
+              onRefresh={loadWorkspaceData}
+            />
           )}
         </>
       )}

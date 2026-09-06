@@ -40,6 +40,9 @@ export async function GET(request, { params }) {
         cp.main_character_description AS "pillarMainCharacterDescription",
         t.title,
         t.slug,
+        COALESCE(t.video_type, 'longform') AS "videoType",
+        COALESCE(t.aspect_ratio, '16:9') AS "aspectRatio",
+        t.parent_topic_id AS "parentTopicId",
         t.script_content AS "scriptContent",
         t.scenes_json AS "scenesJson",
         t.thumbnail_url AS "thumbnailUrl",
@@ -137,6 +140,9 @@ export async function PUT(request, { params }) {
       }
     }
 
+    const videoType = body.videoType || body.video_type || undefined;
+    const aspectRatio = body.aspectRatio || body.aspect_ratio || undefined;
+
     const updated = await sql`
       UPDATE topics
       SET
@@ -148,6 +154,8 @@ export async function PUT(request, { params }) {
         thumbnail_prompt = COALESCE(${body.thumbnailPrompt}, thumbnail_prompt),
         story_description = COALESCE(${storyDesc}, story_description),
         master_video_url = COALESCE(${body.masterVideoUrl}, master_video_url),
+        video_type = COALESCE(${videoType}, video_type),
+        aspect_ratio = COALESCE(${aspectRatio}, aspect_ratio),
         youtube_video_id = COALESCE(${body.youtubeVideoId !== undefined ? body.youtubeVideoId : null}, youtube_video_id),
         youtube_url = COALESCE(${body.youtubeUrl !== undefined ? body.youtubeUrl : null}, youtube_url),
         youtube_published_at = COALESCE(${body.youtubePublishedAt !== undefined ? body.youtubePublishedAt : null}, youtube_published_at),

@@ -65,6 +65,7 @@ export default function CompletedVideoTab({
   youtubeUrl: initialYoutubeUrl,
   youtubePublishedAt: initialYoutubePublishedAt,
   onYoutubePublished,
+  isShort = false,
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -269,8 +270,12 @@ export default function CompletedVideoTab({
 
     try {
       const endpoint = `/api/channels/${channelSlug}/topics/${topicSlug}/publish-youtube`;
+      let finalTitle = (customTitle.trim() || topicTitle).trim();
+      if (isShort && !finalTitle.toLowerCase().includes("#shorts")) {
+        finalTitle = `${finalTitle} #Shorts`;
+      }
       const payload = {
-        title: customTitle.trim() || topicTitle,
+        title: finalTitle,
         description: customDescription.trim() || descText || storyDescription || scriptContent || topicTitle,
       };
 
@@ -422,8 +427,8 @@ export default function CompletedVideoTab({
         <div className="lg:col-span-2 space-y-6">
           {/* Cinema Player Card */}
           <div className="border border-line bg-slate-950 rounded-none overflow-hidden relative shadow-lg group">
-            {/* 16:9 Aspect Cinema Container */}
-            <div className="aspect-video w-full relative flex items-center justify-center bg-radial from-slate-900 to-black overflow-hidden">
+            {/* Aspect Cinema Container (16:9 for longform, 9:16 for Shorts) */}
+            <div className={`${isShort ? "aspect-[9/16] max-w-sm mx-auto my-2 border border-white/10" : "aspect-video w-full"} relative flex items-center justify-center bg-radial from-slate-900 to-black overflow-hidden`}>
               {hasMaster ? (
                 <video
                   ref={videoRef}

@@ -13,12 +13,14 @@ import {
   FileCode,
   Loader2,
   Move,
-  Sliders
+  Sliders,
+  Smartphone
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { getSceneGenerationPrompt } from "@/lib/LLMPrompts/SceneGenerationPrompt";
+import { getShortSceneGenerationPrompt } from "@/lib/LLMPrompts/ShortSceneGenerationPrompt";
 
 export default function ScenesTab({
   topicData = null,
@@ -34,6 +36,7 @@ export default function ScenesTab({
   triggerScenesNotice,
   isGeneratingScenes = false,
   isUpdatingScenes = false,
+  isShort = false,
 }) {
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pastedJsonText, setPastedJsonText] = useState("");
@@ -262,21 +265,37 @@ export default function ScenesTab({
               type="button"
               onClick={() => {
                 try {
-                  const fullPrompt = getSceneGenerationPrompt({
-                    channelName: topicData?.channelName || channelName,
-                    channelNiche: topicData?.channelNiche,
-                    channelSubNiche: topicData?.channelSubNiche,
-                    channelDescription: topicData?.channelDescription,
-                    channelMission: topicData?.channelMission,
-                    channelImageTheme: topicData?.channelImageTheme,
-                    contentPillarName: topicData?.pillarName,
-                    contentPillarCategoryTag: topicData?.pillarTag,
-                    contentPillarTone: topicData?.pillarTone,
-                    contentPillarDescription: topicData?.pillarDescription,
-                    useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
-                    mainCharacterDescription: topicData?.pillarMainCharacterDescription,
-                    activeScript: (scriptContent || topicData?.scriptContent || "").trim(),
-                  });
+                  const fullPrompt = isShort
+                    ? getShortSceneGenerationPrompt({
+                        channelName: topicData?.channelName || channelName,
+                        channelNiche: topicData?.channelNiche,
+                        channelSubNiche: topicData?.channelSubNiche,
+                        channelDescription: topicData?.channelDescription,
+                        channelMission: topicData?.channelMission,
+                        channelImageTheme: topicData?.channelImageTheme,
+                        contentPillarName: topicData?.pillarName,
+                        contentPillarCategoryTag: topicData?.pillarTag,
+                        contentPillarTone: topicData?.pillarTone,
+                        contentPillarDescription: topicData?.pillarDescription,
+                        useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
+                        mainCharacterDescription: topicData?.pillarMainCharacterDescription,
+                        activeScript: (scriptContent || topicData?.scriptContent || "").trim(),
+                      })
+                    : getSceneGenerationPrompt({
+                        channelName: topicData?.channelName || channelName,
+                        channelNiche: topicData?.channelNiche,
+                        channelSubNiche: topicData?.channelSubNiche,
+                        channelDescription: topicData?.channelDescription,
+                        channelMission: topicData?.channelMission,
+                        channelImageTheme: topicData?.channelImageTheme,
+                        contentPillarName: topicData?.pillarName,
+                        contentPillarCategoryTag: topicData?.pillarTag,
+                        contentPillarTone: topicData?.pillarTone,
+                        contentPillarDescription: topicData?.pillarDescription,
+                        useMainCharacter: Boolean(topicData?.pillarUseMainCharacter),
+                        mainCharacterDescription: topicData?.pillarMainCharacterDescription,
+                        activeScript: (scriptContent || topicData?.scriptContent || "").trim(),
+                      });
                   navigator.clipboard.writeText(fullPrompt);
                   triggerScenesNotice("Full scene system prompt copied to clipboard with populated variables.");
                   toast.success("System prompt copied to clipboard.");
