@@ -34,6 +34,7 @@ export default function SceneFramesTab({
   handleGenerateAllVideos,
   handleGenerateSceneVideoModal,
   handleGenerateAllVideosModal,
+  isShort = false,
 }) {
   const [downloadingVideos, setDownloadingVideos] = useState({});
 
@@ -160,12 +161,21 @@ export default function SceneFramesTab({
         </div>
       </div>
 
-      {/* 3-Column Desktop Grid for Scene Videos */}
+      {/* Responsive Grid for Scene Videos */}
       <div className="space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-line">
-          <h4 className="text-xs font-mono font-semibold uppercase tracking-wider text-ink">
-            Scene Video Reels ({parsedScenes.length} Scenes)
-          </h4>
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-mono font-semibold uppercase tracking-wider text-ink">
+              Scene Video Reels ({parsedScenes.length} Scenes)
+            </h4>
+            <span className={`px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded border ${
+              isShort 
+                ? "text-signal bg-signal/10 border-signal/30" 
+                : "text-ink-muted bg-ink/5 border-line"
+            }`}>
+              {isShort ? "9:16 Short Reels" : "16:9 Landscape"}
+            </span>
+          </div>
         </div>
 
         {parsedScenes.length === 0 ? (
@@ -177,7 +187,11 @@ export default function SceneFramesTab({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+          <div className={`grid gap-4 sm:gap-5 ${
+            isShort
+              ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+              : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+          }`}>
             {parsedScenes.map((scene) => {
               const sceneNum = scene.scene_number;
               const videoData = sceneVideos[sceneNum] || sceneVideos[String(sceneNum)] || sceneVideos[Number(sceneNum)];
@@ -231,8 +245,12 @@ export default function SceneFramesTab({
                     </div>
                   </div>
 
-                  {/* 16:9 Video Player Box */}
-                  <div className="relative aspect-video w-full bg-ink text-white overflow-hidden flex items-center justify-center">
+                  {/* Video Player Box (9:16 for Shorts, 16:9 for Long-Form) */}
+                  <div className={`relative ${isShort ? "aspect-[9/16]" : "aspect-video"} w-full bg-ink text-white overflow-hidden flex items-center justify-center`}>
+                    {/* Aspect Ratio Indicator Badge */}
+                    <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black/70 text-white/90 backdrop-blur-xs rounded border border-white/10 pointer-events-none z-10 shadow-xs">
+                      {isShort ? "9:16" : "16:9"}
+                    </span>
                     {generatingSceneVideos[sceneNum] || generatingSceneVideosModal[sceneNum] || (isGeneratingAllVideos && !hasVideo) || (isGeneratingAllVideosModal && !hasVideo) ? (
                       <div className="relative w-full h-full flex items-center justify-center bg-slate-900 text-center p-3 space-y-1.5">
                         <div className="space-y-1.5">
