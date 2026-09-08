@@ -4,6 +4,82 @@ import { transcribeAudio } from "@/lib/transcription";
 import { getScenePlannerPrompt } from "@/lib/LLMPrompts/ScenePlannerPrompt";
 
 /**
+ * Robustly extract a JSON array from LLM text output,
+ * handling cases where explanatory text/brackets appear after the JSON array.
+ */
+export function extractJsonArray(text) {
+  if (!text || typeof text !== "string") return null;
+
+  let str = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+  try {
+    const direct = JSON.parse(str);
+    if (Array.isArray(direct)) return direct;
+  } catch (_) {}
+
+  const startIdx = str.indexOf("[");
+  if (startIdx === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = startIdx; i < str.length; i++) {
+    const char = str[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === "\\") {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === "[") {
+        depth++;
+      } else if (char === "]") {
+        depth--;
+        if (depth === 0) {
+          const candidate = str.slice(startIdx, i + 1);
+          try {
+            const parsed = JSON.parse(candidate);
+            if (Array.isArray(parsed)) return parsed;
+          } catch (e) {
+            try {
+              const cleaned = candidate
+                .replace(/,\s*]/g, "]")
+                .replace(/,\s*}/g, "}");
+              const p2 = JSON.parse(cleaned);
+              if (Array.isArray(p2)) return p2;
+            } catch (_) {}
+          }
+        }
+      }
+    }
+  }
+
+  const arrayMatch = str.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (arrayMatch) {
+    try {
+      const p = JSON.parse(arrayMatch[0]);
+      if (Array.isArray(p)) return p;
+    } catch (_) {
+      try {
+        const cleaned = arrayMatch[0].replace(/,\s*]/g, "]").replace(/,\s*}/g, "}");
+        const p2 = JSON.parse(cleaned);
+        if (Array.isArray(p2)) return p2;
+      } catch (_) {}
+    }
+  }
+
+  return null;
+}
+
+/**
  * Fallback helper: generate proportional timing slices across N images.
  */
 export function generateProportionalTimings(images, totalDuration) {
@@ -210,21 +286,14 @@ export async function planSceneTiming({
         temperature: 0.2,
       });
 
-      let content = (completion.choices?.[0]?.message?.content || "").trim();
-      content = content.replace(/```json/gi, "").replace(/```/g, "").trim();
-
-      const firstBracket = content.indexOf("[");
-      const lastBracket = content.lastIndexOf("]");
-      if (firstBracket !== -1 && lastBracket !== -1) {
-        content = content.slice(firstBracket, lastBracket + 1);
-      }
-
-      const parsed = JSON.parse(content);
+      const rawContent = completion.choices?.[0]?.message?.content || "";
+      const parsed = extractJsonArray(rawContent);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const validated = normalizeTimings(parsed, images, safeDuration);
         console.log(`[ScenePlanner] Successfully planned Scene ${sceneNumber} image timings:`, validated);
         return validated;
       }
+      throw new Error(`Could not parse valid JSON array from LLM response: ${rawContent.slice(0, 100)}...`);
     } catch (llmErr) {
       console.warn(`[ScenePlanner] LLM account attempt ${i + 1} failed for Scene ${sceneNumber}:`, llmErr?.message || llmErr);
     }

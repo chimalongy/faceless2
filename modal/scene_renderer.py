@@ -457,18 +457,22 @@ def render_scene(scene, zoom_amount, pan_zoom, fps, width, height, threads):
             )
             segment_paths.append(seg_video_path)
 
-        concat_list = scene["outputPath"].parent / "concat_list.txt"
-        with concat_list.open("w", encoding="utf-8") as f:
-            for sp in segment_paths:
-                f.write(f"file '{sp.as_posix()}'\n")
+        inputs = []
+        for sp in segment_paths:
+            inputs.extend(["-i", str(sp)])
+        filter_inputs = "".join(f"[{idx}:v]" for idx in range(num_images))
+        filter_complex = f"{filter_inputs}concat=n={num_images}:v=1:a=0[v]"
 
         subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", str(concat_list),
-                "-c", "copy",
+                *inputs,
+                "-filter_complex", filter_complex,
+                "-map", "[v]",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "17",
+                "-pix_fmt", "yuv420p",
                 "-fps_mode", "cfr",
                 "-r", str(fps),
                 "-an", str(video_path),

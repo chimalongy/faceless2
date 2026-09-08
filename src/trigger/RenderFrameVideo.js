@@ -317,23 +317,25 @@ async function renderSingleScene({
         segmentFiles.push(segVideoPath);
       }
 
-      // Concat all segments together
-      const concatListPath = path.join(jobDir, "concat_list.txt");
-      const concatContent = segmentFiles
-        .map((f) => `file '${f.replace(/\\/g, "/")}'`)
-        .join("\n");
-      fs.writeFileSync(concatListPath, concatContent, "utf8");
+      // Concat all segments using FFmpeg filtergraph concat for seamless continuous timestamps
+      const inputs = segmentFiles.map((f) => `-i "${f}"`).join(" ");
+      const filterInputs = segmentFiles.map((_, idx) => `[${idx}:v]`).join("");
+      const filterComplex = `"${filterInputs}concat=n=${N}:v=1:a=0[v]"`;
 
-      logger.log(`Concatenating ${N} image segments for Scene ${sceneIndex}...`);
+      logger.log(`Concatenating ${N} image segments for Scene ${sceneIndex} via filtergraph concat...`);
       const concatCommand = [
         `"${ffmpeg}"`,
         "-y",
-        "-f concat",
-        "-safe 0",
-        `-i "${concatListPath}"`,
-        "-c copy",
+        inputs,
+        `-filter_complex ${filterComplex}`,
+        '-map "[v]"',
+        "-c:v libx264",
+        "-preset veryfast",
+        "-crf 17",
+        "-pix_fmt yuv420p",
         "-fps_mode cfr",
         `-r ${fps}`,
+        "-vsync cfr",
         "-an",
         `"${videoPath}"`,
       ].join(" ");
