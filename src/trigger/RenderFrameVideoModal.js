@@ -76,6 +76,7 @@ export const renderFrameVideoModalTask = task({
       // Single-scene fields
       sceneIndex,
       imageUrl,
+      imageUrls = [],
       audioUrl,
       kenBurns,
       transition = "fade",
@@ -107,15 +108,47 @@ export const renderFrameVideoModalTask = task({
      * Build the standardized scenes array that Modal expects.
      *
      * This supports:
-     * - One scene using sceneIndex, imageUrl and audioUrl
+     * - One scene using sceneIndex, imageUrl/imageUrls and audioUrl
      * - Multiple scenes using the scenes array
      */
     let scenesToRender = [];
 
     if (sceneIndex !== undefined && sceneIndex !== null) {
-      if (!imageUrl || !audioUrl) {
+      let resolvedImageUrls = Array.isArray(imageUrls) && imageUrls.length > 0
+        ? imageUrls.map((u) => (typeof u === "string" ? u : u?.url)).filter(Boolean)
+        : (imageUrl ? [imageUrl.trim()] : []);
+
+      // DB fallback if only 1 image provided
+      if (resolvedImageUrls.length <= 1 && channelSlug && topicSlug) {
+        try {
+          const sql = getDbSql();
+          if (sql) {
+            await initDbSchema();
+            const dbRows = await sql`
+              SELECT ta.file_url FROM topic_assets ta
+              JOIN topics t ON ta.topic_id = t.id
+              JOIN channels c ON ta.channel_id = c.id
+              WHERE c.slug = ${channelSlug}
+                AND t.slug = ${topicSlug}
+                AND ta.asset_type = 'image'
+                AND ta.scene_index = ${Number.parseInt(sceneIndex, 10)}
+              ORDER BY ta.file_name ASC, ta.id ASC;
+            `;
+            if (dbRows && dbRows.length > 1) {
+              resolvedImageUrls = dbRows.map((r) => r.file_url).filter(Boolean);
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (resolvedImageUrls.length === 0) {
         throw new Error(
-          `Scene ${sceneIndex} requires both an imageUrl and an audioUrl.`
+          `Scene ${sceneIndex} requires an imageUrl or imageUrls.`
+        );
+      }
+      if (!audioUrl) {
+        throw new Error(
+          `Scene ${sceneIndex} requires an audioUrl.`
         );
       }
 
@@ -127,7 +160,8 @@ export const renderFrameVideoModalTask = task({
       scenesToRender = [
         {
           scene_number: Number.parseInt(sceneIndex, 10),
-          imageUrl: imageUrl.trim(),
+          imageUrl: resolvedImageUrls[0] || (imageUrl || "").trim(),
+          imageUrls: resolvedImageUrls,
           audioUrl: audioUrl.trim(),
           ken_burns: {
             direction: kenBurnsDirection,
@@ -154,12 +188,30 @@ export const renderFrameVideoModalTask = task({
             sceneAudios[String(sceneNumber)] ??
             sceneAudios[Number(sceneNumber)];
 
+          let resolvedImageUrls = [];
+          if (Array.isArray(imageAsset?.images) && imageAsset.images.length > 0) {
+            resolvedImageUrls = imageAsset.images
+              .map((img) => (typeof img === "string" ? img : img?.url))
+              .filter(Boolean);
+          } else if (Array.isArray(scene?.images) && scene.images.length > 0) {
+            resolvedImageUrls = scene.images
+              .map((img) => (typeof img === "string" ? img : img?.url))
+              .filter(Boolean);
+          } else if (Array.isArray(scene?.imageUrls) && scene.imageUrls.length > 0) {
+            resolvedImageUrls = scene.imageUrls.filter(Boolean);
+          }
+
           const resolvedImageUrl = (
+            resolvedImageUrls[0] ||
             scene.imageUrl ||
             scene.image_url ||
             imageAsset?.url ||
             ""
           ).trim();
+
+          if (resolvedImageUrls.length === 0 && resolvedImageUrl) {
+            resolvedImageUrls = [resolvedImageUrl];
+          }
 
           const resolvedAudioUrl = (
             scene.audioUrl ||
@@ -189,6 +241,7 @@ export const renderFrameVideoModalTask = task({
           return {
             scene_number: Number.parseInt(sceneNumber, 10),
             imageUrl: resolvedImageUrl,
+            imageUrls: resolvedImageUrls,
             audioUrl: resolvedAudioUrl,
             ken_burns: {
               direction: kenBurnsDirection,
@@ -197,6 +250,37 @@ export const renderFrameVideoModalTask = task({
           };
         })
         .filter(Boolean);
+
+      // Augment with DB assets for multi-image scenes if any scene only has 1 image
+      try {
+        const sql = getDbSql();
+        if (sql && channelSlug && topicSlug) {
+          await initDbSchema();
+          const dbRows = await sql`
+            SELECT ta.scene_index, ta.file_url FROM topic_assets ta
+            JOIN topics t ON ta.topic_id = t.id
+            JOIN channels c ON ta.channel_id = c.id
+            WHERE c.slug = ${channelSlug}
+              AND t.slug = ${topicSlug}
+              AND ta.asset_type = 'image'
+            ORDER BY ta.scene_index ASC, ta.file_name ASC, ta.id ASC;
+          `;
+          if (dbRows && dbRows.length > 0) {
+            const dbMap = {};
+            for (const row of dbRows) {
+              const sIdx = Number(row.scene_index);
+              if (!dbMap[sIdx]) dbMap[sIdx] = [];
+              if (row.file_url) dbMap[sIdx].push(row.file_url);
+            }
+            for (const s of scenesToRender) {
+              if ((!s.imageUrls || s.imageUrls.length <= 1) && dbMap[s.scene_number]?.length > 1) {
+                s.imageUrls = dbMap[s.scene_number];
+                s.imageUrl = s.imageUrls[0];
+              }
+            }
+          }
+        }
+      } catch (_) {}
 
       if (scenesToRender.length === 0) {
         throw new Error(

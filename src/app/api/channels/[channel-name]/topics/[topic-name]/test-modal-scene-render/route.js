@@ -20,6 +20,7 @@ export async function POST(req, context) {
     const {
       sceneIndex,
       imageUrl,
+      imageUrls,
       audioUrl,
       kenBurns,
       transition = "fade",
@@ -32,20 +33,31 @@ export async function POST(req, context) {
 
     // Single scene render request via Modal
     if (sceneIndex !== undefined) {
-      if (!imageUrl || !audioUrl) {
+      if (!imageUrl && (!imageUrls || imageUrls.length === 0)) {
         return NextResponse.json(
-          { error: `Scene ${sceneIndex} requires both an image and voice audio narration to render video on Modal.` },
+          { error: `Scene ${sceneIndex} requires an image to render video on Modal.` },
+          { status: 400 }
+        );
+      }
+      if (!audioUrl) {
+        return NextResponse.json(
+          { error: `Scene ${sceneIndex} requires voice audio narration to render video on Modal.` },
           { status: 400 }
         );
       }
 
       console.log(`[TestModalRoute] Triggering Modal render task for Scene ${sceneIndex}...`);
 
+      const resolvedImageUrls = Array.isArray(imageUrls) && imageUrls.length > 0
+        ? imageUrls
+        : (imageUrl ? [imageUrl] : []);
+
       const handle = await tasks.trigger("render-frame-video-modal", {
         channelSlug,
         topicSlug,
         sceneIndex,
-        imageUrl,
+        imageUrl: resolvedImageUrls[0] || imageUrl,
+        imageUrls: resolvedImageUrls,
         audioUrl,
         kenBurns: kenBurns || { direction: "zoom-in", intensity: 0.15 },
         transition,

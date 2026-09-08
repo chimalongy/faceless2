@@ -20,6 +20,7 @@ export async function POST(req, context) {
     const {
       sceneIndex,
       imageUrl,
+      imageUrls,
       audioUrl,
       kenBurns,
       transition = "fade",
@@ -30,20 +31,31 @@ export async function POST(req, context) {
 
     // Single scene render request
     if (sceneIndex !== undefined) {
-      if (!imageUrl || !audioUrl) {
+      if (!imageUrl && (!imageUrls || imageUrls.length === 0)) {
         return NextResponse.json(
-          { error: `Scene ${sceneIndex} requires both an image and voice audio narration to render video.` },
+          { error: `Scene ${sceneIndex} requires an image to render video.` },
+          { status: 400 }
+        );
+      }
+      if (!audioUrl) {
+        return NextResponse.json(
+          { error: `Scene ${sceneIndex} requires voice audio narration to render video.` },
           { status: 400 }
         );
       }
 
       console.log(`[GenerateSceneFramesRoute] Triggering single scene video render for Scene ${sceneIndex} (Transition: ${transition})...`);
 
+      const resolvedImageUrls = Array.isArray(imageUrls) && imageUrls.length > 0
+        ? imageUrls
+        : (imageUrl ? [imageUrl] : []);
+
       const handle = await tasks.trigger("render-scene-frame", {
         channelSlug,
         topicSlug,
         sceneIndex,
-        imageUrl,
+        imageUrl: resolvedImageUrls[0] || imageUrl,
+        imageUrls: resolvedImageUrls,
         audioUrl,
         kenBurns: kenBurns || { direction: "zoom-in", intensity: 0.10 },
         transition,

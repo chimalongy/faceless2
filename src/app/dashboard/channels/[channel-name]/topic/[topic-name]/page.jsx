@@ -1351,12 +1351,17 @@ export default function TopicStudioPage() {
     toast(`Rendering Scene ${sceneNum} video clip via Trigger.dev...`, { icon: "🎬" });
 
     try {
+      const allUrls = Array.isArray(imgData?.images) && imgData.images.length > 0
+        ? imgData.images.map((img) => (typeof img === "string" ? img : img.url)).filter(Boolean)
+        : [imgData.url];
+
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scene-frames`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sceneIndex: sceneNum,
-          imageUrl: imgData.url,
+          imageUrl: allUrls[0] || imgData.url,
+          imageUrls: allUrls,
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.10 },
           transition: scene?.transition || "fade",
@@ -1498,12 +1503,17 @@ export default function TopicStudioPage() {
     toast(`[Modal Test] Rendering Scene ${sceneNum} video clip via Modal GPU...`, { icon: "⚡" });
 
     try {
+      const allUrls = Array.isArray(imgData?.images) && imgData.images.length > 0
+        ? imgData.images.map((img) => (typeof img === "string" ? img : img.url)).filter(Boolean)
+        : [imgData.url];
+
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/test-modal-scene-render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sceneIndex: sceneNum,
-          imageUrl: imgData.url,
+          imageUrl: allUrls[0] || imgData.url,
+          imageUrls: allUrls,
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
           transition: scene?.transition || "fade",

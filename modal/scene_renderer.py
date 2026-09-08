@@ -293,16 +293,40 @@ def prepare_scene(scene, fallback, job_dir, r2_client, bucket):
     scene_index = resolve_scene_index(scene, fallback)
     scene_dir = job_dir / f"scene-{scene_index}"
     scene_dir.mkdir(parents=True, exist_ok=True)
-    image_path = scene_dir / "image.png"
     audio_path = scene_dir / "audio.wav"
 
-    download_asset(
-        scene.get("imageUrl") or scene.get("visual_url"),
-        scene.get("imageKey"),
-        image_path,
-        r2_client,
-        bucket,
-    )
+    # Gather all image URLs/keys for multi-image scenes
+    raw_urls = scene.get("imageUrls") or []
+    if not raw_urls and isinstance(scene.get("images"), list):
+        for img in scene.get("images"):
+            if isinstance(img, str) and img.strip():
+                raw_urls.append(img.strip())
+            elif isinstance(img, dict) and img.get("url"):
+                raw_urls.append(img["url"].strip())
+
+    if not raw_urls:
+        single_url = scene.get("imageUrl") or scene.get("visual_url")
+        if single_url:
+            raw_urls = [single_url.strip()]
+
+    # Download all images
+    image_paths = []
+    if len(raw_urls) > 1:
+        for idx, url in enumerate(raw_urls):
+            dest = scene_dir / f"image_{idx}.png"
+            download_asset(url, None, dest, r2_client, bucket)
+            image_paths.append(dest)
+    else:
+        dest = scene_dir / "image.png"
+        download_asset(
+            raw_urls[0] if raw_urls else (scene.get("imageUrl") or scene.get("visual_url")),
+            scene.get("imageKey"),
+            dest,
+            r2_client,
+            bucket,
+        )
+        image_paths.append(dest)
+
     download_asset(
         scene.get("audioUrl"),
         scene.get("audioKey"),
@@ -317,7 +341,8 @@ def prepare_scene(scene, fallback, job_dir, r2_client, bucket):
             (scene.get("ken_burns") or {}).get("direction", "zoom-in")
         ),
         "transition": normalize_transition(scene.get("transition", "fade")),
-        "imagePath": image_path,
+        "imagePath": image_paths[0],
+        "imagePaths": image_paths,
         "audioPath": audio_path,
         "outputPath": scene_dir / "final.mp4",
         "duration": get_audio_duration(audio_path),
@@ -329,38 +354,111 @@ def render_scene(scene, zoom_amount, pan_zoom, fps, width, height, threads):
     total_frames = max(2, round(duration * fps))
     exact_duration = total_frames / fps
     video_path = scene["outputPath"].with_name("video-only.mp4")
+    image_paths = scene.get("imagePaths") or [scene["imagePath"]]
+    num_images = len(image_paths)
 
-    filters = [
-        build_ken_burns_filter(
-            scene["direction"],
-            zoom_amount,
-            pan_zoom,
-            fps,
-            total_frames,
-            width,
-            height,
-        ),
-        build_transition_filter(scene["transition"], exact_duration),
-    ]
+    if num_images <= 1:
+        filters = [
+            build_ken_burns_filter(
+                scene["direction"],
+                zoom_amount,
+                pan_zoom,
+                fps,
+                total_frames,
+                width,
+                height,
+            ),
+            build_transition_filter(scene["transition"], exact_duration),
+        ]
 
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-loop", "1", "-i", str(scene["imagePath"]),
-            "-filter_threads", str(threads),
-            "-vf", ",".join(filter(None, filters)),
-            "-frames:v", str(total_frames),
-            "-fps_mode", "cfr",
-            "-c:v", "libx264",
-            "-threads:v", str(threads),
-            "-preset", "medium",
-            "-crf", "17",
-            "-pix_fmt", "yuv420p",
-            "-r", str(fps),
-            "-an", str(video_path),
-        ],
-        check=True,
-        capture_output=True,
-    )
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-loop", "1", "-i", str(image_paths[0]),
+                "-filter_threads", str(threads),
+                "-vf", ",".join(filter(None, filters)),
+                "-frames:v", str(total_frames),
+                "-fps_mode", "cfr",
+                "-c:v", "libx264",
+                "-threads:v", str(threads),
+                "-preset", "medium",
+                "-crf", "17",
+                "-pix_fmt", "yuv420p",
+                "-r", str(fps),
+                "-an", str(video_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        base_frames = total_frames // num_images
+        remainder = total_frames % num_images
+        segment_paths = []
+
+        directions_pool = ["zoom-in", "pan-right", "zoom-out", "pan-left", "pan-up", "pan-down"]
+        base_dir = scene["direction"]
+        base_idx = directions_pool.index(base_dir) if base_dir in directions_pool else 0
+
+        for k, img_p in enumerate(image_paths):
+            seg_frames = max(2, base_frames + (1 if k < remainder else 0))
+            seg_duration = seg_frames / fps
+            seg_video_path = scene["outputPath"].parent / f"segment_{k}.mp4"
+            dir_k = directions_pool[(base_idx + k) % len(directions_pool)]
+
+            filters = [
+                build_ken_burns_filter(
+                    dir_k,
+                    zoom_amount,
+                    pan_zoom,
+                    fps,
+                    seg_frames,
+                    width,
+                    height,
+                ),
+                build_transition_filter(
+                    scene["transition"] if k == num_images - 1 else "cut",
+                    seg_duration,
+                ),
+            ]
+
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-loop", "1", "-i", str(img_p),
+                    "-filter_threads", str(threads),
+                    "-vf", ",".join(filter(None, filters)),
+                    "-frames:v", str(seg_frames),
+                    "-fps_mode", "cfr",
+                    "-c:v", "libx264",
+                    "-threads:v", str(threads),
+                    "-preset", "medium",
+                    "-crf", "17",
+                    "-pix_fmt", "yuv420p",
+                    "-r", str(fps),
+                    "-an", str(seg_video_path),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            segment_paths.append(seg_video_path)
+
+        concat_list = scene["outputPath"].parent / "concat_list.txt"
+        with concat_list.open("w", encoding="utf-8") as f:
+            for sp in segment_paths:
+                f.write(f"file '{sp.as_posix()}'\n")
+
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(concat_list),
+                "-c", "copy",
+                "-fps_mode", "cfr",
+                "-r", str(fps),
+                "-an", str(video_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
 
     subprocess.run(
         [

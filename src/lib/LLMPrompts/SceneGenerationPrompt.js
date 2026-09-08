@@ -112,15 +112,18 @@ export function getSceneGenerationPrompt({
   if (!effectivePillarName) missingFields.push("Content Pillar Name");
   if (!effectivePillarTag) missingFields.push("Content Pillar Tag");
   if (!effectivePillarTone) missingFields.push("Content Pillar Tone");
-  if (!effectivePillarDescription) missingFields.push("Content Pillar Description");
+  if (!effectivePillarDescription)
+    missingFields.push("Content Pillar Description");
   if (!effectiveScript) missingFields.push("Script Narration");
   if (useMainCharacter && !(mainCharacterDescription || "").trim()) {
-    missingFields.push("Main Character Description (Main Character is enabled)");
+    missingFields.push(
+      "Main Character Description (Main Character is enabled)",
+    );
   }
 
   if (missingFields.length > 0) {
     throw new Error(
-      `Cannot generate scenes. The following required field(s) are missing: ${missingFields.join(", ")}.`
+      `Cannot generate scenes. The following required field(s) are missing: ${missingFields.join(", ")}.`,
     );
   }
 

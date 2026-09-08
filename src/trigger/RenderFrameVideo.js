@@ -37,6 +37,7 @@ async function renderSingleScene({
   topicSlug,
   sceneIndex = 1,
   imageUrl,
+  imageUrls = [],
   audioUrl = null,
   fps = 60,
   width = 1376,
@@ -47,7 +48,41 @@ async function renderSingleScene({
   },
   transition = "fade",
 }) {
-  if (!imageUrl) {
+  let resolvedImageUrls = [];
+  if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+    resolvedImageUrls = imageUrls.map((u) => (typeof u === "string" ? u : u?.url)).filter(Boolean);
+  }
+  if (resolvedImageUrls.length === 0 && imageUrl) {
+    resolvedImageUrls = [imageUrl];
+  }
+
+  // Fallback: If only 1 image provided, check DB to see if multiple images were stored for this scene
+  if (resolvedImageUrls.length <= 1 && channelSlug && topicSlug && sceneIndex) {
+    try {
+      const sql = getDbSql();
+      if (sql) {
+        await initDbSchema();
+        const dbRows = await sql`
+          SELECT ta.file_url FROM topic_assets ta
+          JOIN topics t ON ta.topic_id = t.id
+          JOIN channels c ON ta.channel_id = c.id
+          WHERE c.slug = ${channelSlug}
+            AND t.slug = ${topicSlug}
+            AND ta.asset_type = 'image'
+            AND ta.scene_index = ${sceneIndex}
+          ORDER BY ta.file_name ASC, ta.id ASC;
+        `;
+        if (dbRows && dbRows.length > 1) {
+          resolvedImageUrls = dbRows.map((r) => r.file_url).filter(Boolean);
+          logger.log(`Found ${resolvedImageUrls.length} images in DB for scene ${sceneIndex}.`);
+        }
+      }
+    } catch (dbErr) {
+      logger.warn(`Could not check DB for additional images for scene ${sceneIndex}:`, dbErr.message);
+    }
+  }
+
+  if (resolvedImageUrls.length === 0) {
     throw new Error(`No image URL supplied for scene ${sceneIndex}. Image is required.`);
   }
 
@@ -61,20 +96,13 @@ async function renderSingleScene({
   const jobDir = path.join(os.tmpdir(), "trigger-render-frames", jobId);
   fs.mkdirSync(jobDir, { recursive: true });
 
-  const imagePath = path.join(jobDir, `${jobId}.png`);
   const audioPath = path.join(jobDir, `${jobId}.wav`);
   const videoPath = path.join(jobDir, `${jobId}_video.mp4`);
   const finalPath = path.join(jobDir, `${jobId}_final.mp4`);
 
   try {
     /**
-     * 1. DOWNLOAD IMAGE
-     */
-    logger.log(`Downloading image for scene ${sceneIndex}...`);
-    await downloadFileToDisk(imageUrl, imagePath);
-
-    /**
-     * 2. AUDIO & DURATION CALCULATION
+     * 1. AUDIO & DURATION CALCULATION
      */
     let duration = 5;
     let hasAudio = false;
@@ -88,18 +116,19 @@ async function renderSingleScene({
         logger.log(`Audio duration for scene ${sceneIndex}: ${duration}s`);
       } catch (err) {
         logger.warn(
-          `Audio processing warning for scene ${sceneIndex}: ${err?.message || err
-          }`
+          `Audio processing warning for scene ${sceneIndex}: ${err?.message || err}`
         );
       }
     }
 
     /**
-     * 3. EXACT FRAME COUNT (60 FPS CFR)
+     * 2. EXACT FRAME COUNT (60 FPS CFR)
      */
     duration = Math.max(1.0, Number(duration));
     const totalFrames = Math.max(2, Math.round(duration * fps));
     const exactDuration = totalFrames / fps;
+    const ffmpeg = getFfmpegPath();
+    const N = resolvedImageUrls.length;
 
     logger.log(`Scene ${sceneIndex} timing`, {
       sceneIndex,
@@ -107,62 +136,168 @@ async function renderSingleScene({
       fps,
       totalFrames,
       exactDuration,
+      imageCount: N,
     });
 
     /**
-     * 4. BUILD FILTERS (KEN BURNS & TRANSITION)
+     * 3. VIDEO RENDER (Single vs Multi-Image)
      */
-    const kenBurnsFilter = buildKenBurnsFilter(
-      kenBurns,
-      fps,
-      totalFrames,
-      width,
-      height
-    );
+    if (N <= 1) {
+      // Single-image rendering
+      const imagePath = path.join(jobDir, `${jobId}.png`);
+      logger.log(`Downloading image for scene ${sceneIndex}...`);
+      await downloadFileToDisk(resolvedImageUrls[0], imagePath);
 
-    const transitionFilter = buildTransitionFilter(
-      transition,
-      exactDuration
-    );
+      const kenBurnsFilter = buildKenBurnsFilter(
+        kenBurns,
+        fps,
+        totalFrames,
+        width,
+        height
+      );
 
-    const filter = [kenBurnsFilter, transitionFilter]
-      .filter(Boolean)
-      .join(",");
+      const transitionFilter = buildTransitionFilter(
+        transition,
+        exactDuration
+      );
 
-    const ffmpeg = getFfmpegPath();
+      const filter = [kenBurnsFilter, transitionFilter]
+        .filter(Boolean)
+        .join(",");
 
-    /**
-     * 5. VIDEO RENDER
-     */
-    const renderCommand = [
-      `"${ffmpeg}"`,
-      "-y",
-      "-loop 1",
-      `-i "${imagePath}"`,
-      `-vf "${filter}"`,
-      `-frames:v ${totalFrames}`,
-      "-fps_mode cfr",
-      "-c:v libx264",
-      "-preset medium",
-      "-crf 17",
-      "-pix_fmt yuv420p",
-      `-r ${fps}`,
-      "-vsync cfr",
-      "-an",
-      `"${videoPath}"`,
-    ].join(" ");
+      const renderCommand = [
+        `"${ffmpeg}"`,
+        "-y",
+        "-loop 1",
+        `-i "${imagePath}"`,
+        `-vf "${filter}"`,
+        `-frames:v ${totalFrames}`,
+        "-fps_mode cfr",
+        "-c:v libx264",
+        "-preset medium",
+        "-crf 17",
+        "-pix_fmt yuv420p",
+        `-r ${fps}`,
+        "-vsync cfr",
+        "-an",
+        `"${videoPath}"`,
+      ].join(" ");
 
-    logger.log(`Rendering scene ${sceneIndex} video at ${fps} FPS...`);
-    await execAsync(renderCommand, {
-      maxBuffer: 1024 * 1024 * 100,
-    });
+      logger.log(`Rendering scene ${sceneIndex} video (1 image) at ${fps} FPS...`);
+      await execAsync(renderCommand, {
+        maxBuffer: 1024 * 1024 * 100,
+      });
+    } else {
+      // Multi-image rendering: distribute totalFrames across N images
+      const baseFrames = Math.floor(totalFrames / N);
+      const remainder = totalFrames % N;
+      const segmentFiles = [];
+
+      const directionsPool = [
+        "zoom-in",
+        "pan-right",
+        "zoom-out",
+        "pan-left",
+        "pan-up",
+        "pan-down",
+      ];
+      const baseDir = (typeof kenBurns === "string" ? kenBurns : kenBurns?.direction) || "zoom-in";
+      const baseIdx = Math.max(0, directionsPool.indexOf(baseDir));
+
+      for (let k = 0; k < N; k++) {
+        const segFrames = Math.max(2, baseFrames + (k < remainder ? 1 : 0));
+        const segDuration = segFrames / fps;
+        const segImgPath = path.join(jobDir, `image_${k}.png`);
+        const segVideoPath = path.join(jobDir, `segment_${k}.mp4`);
+
+        logger.log(
+          `Downloading and rendering image ${k + 1}/${N} for Scene ${sceneIndex} (${segFrames} frames, ${segDuration.toFixed(2)}s)...`
+        );
+        await downloadFileToDisk(resolvedImageUrls[k], segImgPath);
+
+        const imgDirection = directionsPool[(baseIdx + k) % directionsPool.length];
+        const segKenBurns = {
+          direction: imgDirection,
+          intensity: kenBurns?.intensity || 0.10,
+        };
+
+        const segKbFilter = buildKenBurnsFilter(
+          segKenBurns,
+          fps,
+          segFrames,
+          width,
+          height
+        );
+
+        // Apply scene transition only to final segment
+        let segTransitionFilter = "";
+        if (k === N - 1) {
+          segTransitionFilter = buildTransitionFilter(transition, segDuration);
+        }
+
+        const segFilter = [segKbFilter, segTransitionFilter].filter(Boolean).join(",");
+
+        const segCommand = [
+          `"${ffmpeg}"`,
+          "-y",
+          "-loop 1",
+          `-i "${segImgPath}"`,
+          `-vf "${segFilter}"`,
+          `-frames:v ${segFrames}`,
+          "-fps_mode cfr",
+          "-c:v libx264",
+          "-preset medium",
+          "-crf 17",
+          "-pix_fmt yuv420p",
+          `-r ${fps}`,
+          "-vsync cfr",
+          "-an",
+          `"${segVideoPath}"`,
+        ].join(" ");
+
+        await execAsync(segCommand, {
+          maxBuffer: 1024 * 1024 * 100,
+        });
+
+        if (!fs.existsSync(segVideoPath)) {
+          throw new Error(`FFmpeg failed to produce segment ${k + 1} for scene ${sceneIndex}.`);
+        }
+
+        segmentFiles.push(segVideoPath);
+      }
+
+      // Concat all segments together
+      const concatListPath = path.join(jobDir, "concat_list.txt");
+      const concatContent = segmentFiles
+        .map((f) => `file '${f.replace(/\\/g, "/")}'`)
+        .join("\n");
+      fs.writeFileSync(concatListPath, concatContent, "utf8");
+
+      logger.log(`Concatenating ${N} image segments for Scene ${sceneIndex}...`);
+      const concatCommand = [
+        `"${ffmpeg}"`,
+        "-y",
+        "-f concat",
+        "-safe 0",
+        `-i "${concatListPath}"`,
+        "-c copy",
+        "-fps_mode cfr",
+        `-r ${fps}`,
+        "-an",
+        `"${videoPath}"`,
+      ].join(" ");
+
+      await execAsync(concatCommand, {
+        maxBuffer: 1024 * 1024 * 100,
+      });
+    }
 
     if (!fs.existsSync(videoPath)) {
       throw new Error(`FFmpeg did not produce video for scene ${sceneIndex}.`);
     }
 
     /**
-     * 6. MUX AUDIO IF AVAILABLE
+     * 4. MUX AUDIO IF AVAILABLE
      */
     if (hasAudio && fs.existsSync(audioPath)) {
       const muxCommand = [
@@ -344,6 +479,7 @@ export const renderSceneFrameTask = task({
       topicSlug,
       sceneIndex = 1,
       imageUrl,
+      imageUrls = [],
       audioUrl,
       fps = 60,
       width = 1376,
@@ -360,6 +496,7 @@ export const renderSceneFrameTask = task({
       topicSlug,
       sceneIndex,
       fps,
+      imageCount: Array.isArray(imageUrls) && imageUrls.length > 0 ? imageUrls.length : 1,
     });
 
     return await renderSingleScene({
@@ -367,6 +504,7 @@ export const renderSceneFrameTask = task({
       topicSlug,
       sceneIndex,
       imageUrl,
+      imageUrls,
       audioUrl,
       fps,
       width,
@@ -434,7 +572,24 @@ export const renderAllSceneFramesTask = task({
         sceneAudios[String(sceneIndex)] ||
         sceneAudios[Number(sceneIndex)];
 
-      const imageUrl = imgData?.url || scene.imageUrl || scene.visual_url || "";
+      // Collect all image URLs for this scene
+      let imageUrls = [];
+      if (Array.isArray(imgData?.images) && imgData.images.length > 0) {
+        imageUrls = imgData.images
+          .map((img) => (typeof img === "string" ? img : img?.url))
+          .filter(Boolean);
+      } else if (Array.isArray(scene?.images) && scene.images.length > 0) {
+        imageUrls = scene.images
+          .map((img) => (typeof img === "string" ? img : img?.url))
+          .filter(Boolean);
+      } else if (Array.isArray(scene?.imageUrls) && scene.imageUrls.length > 0) {
+        imageUrls = scene.imageUrls.filter(Boolean);
+      }
+
+      const imageUrl = imgData?.url || scene.imageUrl || scene.visual_url || imageUrls[0] || "";
+      if (imageUrls.length === 0 && imageUrl) {
+        imageUrls = [imageUrl];
+      }
       const audioUrl = audioData?.url || scene.audioUrl || null;
 
       if (!imageUrl || !audioUrl) {
@@ -456,6 +611,7 @@ export const renderAllSceneFramesTask = task({
           topicSlug,
           sceneIndex,
           imageUrl,
+          imageUrls,
           audioUrl,
           fps,
           width,
