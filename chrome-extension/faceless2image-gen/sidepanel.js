@@ -513,6 +513,58 @@ generateThumbnailBtn?.addEventListener("click", async () => {
 
 // ── SCENES RENDERING ──
 
+// Helper: normalize scene prompt items for both new multi-image structure and legacy single-image structure
+function getScenePromptItems(scene) {
+  if (Array.isArray(scene.images) && scene.images.length > 0) {
+    if (scene.images.length === 1) {
+      const img = scene.images[0];
+      const prompt = (img?.image_prompt || scene.image_prompt || "").trim();
+      return [
+        {
+          id: `${scene.scene_number}`,
+          tag: `scene_${scene.scene_number}`,
+          sceneNumber: scene.scene_number,
+          imageNumber: 1,
+          audioText: scene.audio_text,
+          prompt,
+          isMulti: false,
+        },
+      ];
+    }
+    return scene.images.map((img, idx) => {
+      const imgNum = img?.image_number || idx + 1;
+      return {
+        id: `${scene.scene_number}_${imgNum}`,
+        tag: `scene_${scene.scene_number}_${imgNum}`,
+        sceneNumber: scene.scene_number,
+        imageNumber: imgNum,
+        audioText: scene.audio_text,
+        prompt: (img?.image_prompt || "").trim(),
+        isMulti: true,
+      };
+    });
+  }
+
+  const prompt = (scene.image_prompt || "").trim();
+  return [
+    {
+      id: `${scene.scene_number}`,
+      tag: `scene_${scene.scene_number}`,
+      sceneNumber: scene.scene_number,
+      imageNumber: 1,
+      audioText: scene.audio_text,
+      prompt,
+      isMulti: false,
+    },
+  ];
+}
+
+function hasScenePrompts(scene) {
+  return getScenePromptItems(scene).some((it) => Boolean(it.prompt));
+}
+
+// ── SCENES RENDERING ──
+
 function renderScenes(scenes) {
   scenesList.innerHTML = "";
   sceneCount.textContent = scenes.length;
@@ -521,15 +573,25 @@ function renderScenes(scenes) {
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     const num = scene.scene_number || i + 1;
-    const prompt = (scene.image_prompt || "").trim();
+    const items = getScenePromptItems(scene);
+    const promptSummary = items
+      .map((it) => (it.isMulti ? `[img ${it.imageNumber}]: ${it.prompt}` : it.prompt))
+      .filter(Boolean)
+      .join(" | ");
 
     const div = document.createElement("div");
     div.className = "scene-item";
     div.dataset.sceneNum = num;
+
+    const badge =
+      items.length > 1
+        ? `<span style="font-size:10px;background:#334155;color:#94a3b8;border-radius:4px;padding:1px 4px;margin-left:4px;">${items.length} imgs</span>`
+        : "";
+
     div.innerHTML = `
       <input type="checkbox" class="scene-checkbox" data-scene-num="${num}" title="Select for generation" />
-      <span class="scene-num">${num}</span>
-      <span class="scene-prompt">${escapeHtml(prompt || "(no prompt)")}</span>
+      <span class="scene-num">${num}${badge}</span>
+      <span class="scene-prompt">${escapeHtml(promptSummary || "(no prompt)")}</span>
       <button type="button" class="btn-scene-gen" title="Generate this scene image">▶</button>
     `;
 
@@ -597,11 +659,17 @@ unselectAllBtn?.addEventListener("click", () => {
 function buildBatchPrompt(scenesChunk, channelTheme = "") {
   const scenesText = scenesChunk
     .map((s) => {
-      const audioLine = s.audio_text
-        ? `audio_text: "${s.audio_text.trim()}"\n`
-        : "";
-      return `scene_${s.scene_number}\n${audioLine}image_prompt: "${(s.image_prompt || "").trim()}"`;
+      const items = getScenePromptItems(s).filter((it) => it.prompt);
+      return items
+        .map((it) => {
+          const audioLine = it.audioText
+            ? `audio_text: "${it.audioText.trim()}"\n`
+            : "";
+          return `${it.tag}\n${audioLine}image_prompt: "${it.prompt}"`;
+        })
+        .join("\n\n");
     })
+    .filter(Boolean)
     .join("\n\n");
 
   const themeText = (
@@ -629,11 +697,17 @@ function buildMissingScenesPrompt(scenesList, channelTheme = "") {
 
   const scenesText = scenesList
     .map((s) => {
-      const audioLine = s.audio_text
-        ? `audio_text: "${s.audio_text.trim()}"\n`
-        : "";
-      return `scene_${s.scene_number}\n${audioLine}image_prompt: "${(s.image_prompt || "").trim()}"`;
+      const items = getScenePromptItems(s).filter((it) => it.prompt);
+      return items
+        .map((it) => {
+          const audioLine = it.audioText
+            ? `audio_text: "${it.audioText.trim()}"\n`
+            : "";
+          return `${it.tag}\n${audioLine}image_prompt: "${it.prompt}"`;
+        })
+        .join("\n\n");
     })
+    .filter(Boolean)
     .join("\n\n");
 
   const themeText = (
@@ -654,26 +728,36 @@ function buildMissingScenesPrompt(scenesList, channelTheme = "") {
 }
 
 async function generateSingleScene(scene) {
-  if (!scene.image_prompt) {
+  const items = getScenePromptItems(scene).filter((it) => it.prompt);
+  if (items.length === 0) {
     addLog(`Scene ${scene.scene_number} has no image prompt`, "error");
     return;
   }
 
+  const sceneNumbers = items.map((it) => it.id);
+  const label =
+    items.length > 1
+      ? `Scene ${scene.scene_number} (${items.length} images)`
+      : `Scene ${scene.scene_number}`;
+
   const queue = [
     {
       prompt: buildBatchPrompt([scene], selectedChannelTheme),
-      sceneNumbers: [scene.scene_number],
-      sceneNumber: scene.scene_number,
-      sceneCount: 1,
-      label: `Scene ${scene.scene_number}`,
+      sceneNumbers,
+      sceneNumber: sceneNumbers[0],
+      sceneCount: items.length,
+      label,
       batchIndex: 1,
       totalBatches: 1,
     },
   ];
 
-  addLog(`▶ Generating scene ${scene.scene_number}…`, "start");
+  addLog(
+    `▶ Generating scene ${scene.scene_number} (${items.length} image${items.length === 1 ? "" : "s"})…`,
+    "start",
+  );
   progressCard.classList.remove("hidden");
-  updateProgress(0, 1);
+  updateProgress(0, items.length);
 
   document
     .querySelectorAll(".btn-scene-gen")
@@ -682,7 +766,7 @@ async function generateSingleScene(scene) {
   const res = await bg({
     type: "start",
     queue,
-    totalScenes: 1,
+    totalScenes: items.length,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
   });
@@ -703,7 +787,7 @@ genSelectedBtn.addEventListener("click", async () => {
   if (selectedSceneNumbers.size === 0) return;
 
   const selectedScenes = currentScenes
-    .filter((s) => selectedSceneNumbers.has(s.scene_number) && s.image_prompt)
+    .filter((s) => selectedSceneNumbers.has(s.scene_number) && hasScenePrompts(s))
     .sort((a, b) => a.scene_number - b.scene_number);
 
   if (selectedScenes.length === 0) {
@@ -711,18 +795,23 @@ genSelectedBtn.addEventListener("click", async () => {
     return;
   }
 
-  const sceneNumbers = selectedScenes.map((s) => s.scene_number);
+  const allItems = selectedScenes.flatMap((s) =>
+    getScenePromptItems(s).filter((it) => it.prompt),
+  );
+  const sceneNumbers = allItems.map((it) => it.id);
   const label =
-    sceneNumbers.length === 1
-      ? `Scene ${sceneNumbers[0]}`
-      : `Scenes ${sceneNumbers.join(", ")}`;
+    selectedScenes.length === 1
+      ? allItems.length > 1
+        ? `Scene ${selectedScenes[0].scene_number} (${allItems.length} images)`
+        : `Scene ${selectedScenes[0].scene_number}`
+      : `Scenes ${selectedScenes.map((s) => s.scene_number).join(", ")} (${allItems.length} images)`;
 
   const queue = [
     {
       prompt: buildMissingScenesPrompt(selectedScenes, selectedChannelTheme),
       sceneNumbers,
       sceneNumber: sceneNumbers[0],
-      sceneCount: selectedScenes.length,
+      sceneCount: allItems.length,
       label,
       batchIndex: 1,
       totalBatches: 1,
@@ -730,18 +819,18 @@ genSelectedBtn.addEventListener("click", async () => {
   ];
 
   addLog(
-    `▶ Generating for ${selectedScenes.length} selected scene(s): ${label}…`,
+    `▶ Generating for ${selectedScenes.length} selected scene(s) (${allItems.length} image(s)): ${label}…`,
     "start",
   );
   progressCard.classList.remove("hidden");
-  updateProgress(0, selectedScenes.length);
+  updateProgress(0, allItems.length);
 
   setRunningUI(true, false);
 
   const res = await bg({
     type: "start",
     queue,
-    totalScenes: selectedScenes.length,
+    totalScenes: allItems.length,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
   });
@@ -765,7 +854,37 @@ function buildInstruction(topicTitle, batchCount = 3, channelTheme = "") {
   const template =
     typeof setup !== "undefined" && setup.start_up_instruction
       ? setup.start_up_instruction
-      : `Hi, I need you to assist me in generating images for content titled "{topicTitle}".\n\nI will provide the prompts for each scene in batches of "{batch_count}", and you would generate the image.\neach scene prompt would be mapped with a scene number\neg \nscene_1\naudio_text: "the words that would be spoken"\nimage_prompt: "<image prompt text for scene 1>"\n\nscene_2\naudio_text: "the words that would be spoken"\nimage_prompt: "<image prompt text for scene 2>"\n\nscene_3\naudio_text: "the words that would be spoken"\nimage_prompt: "<image prompt text for scene 3>"\n\n\nEnsure only one Image is Generated Per Prompt or Per Scene. and name each image by thier scene number\n\nfor exampe 1.png, 2.png, 3.png continuously\n\nwhen generating images ensure that image follow this theme\n"{channel_image_generation_theme}"`;
+      : `Hi, I need you to assist me in generating images for content titled "{topicTitle}".
+
+I will provide the prompts for each scene in batches of "{batch_count}", and you would generate the image.
+each scene prompt would be mapped with a scene identifier.
+eg 
+scene_1
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for scene 1>"
+
+scene_2_1
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for image 1 of scene 2>"
+
+scene_2_2
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for image 2 of scene 2>"
+
+scene_3
+audio_text: "the words that would be spoken"
+image_prompt: "<image prompt text for scene 3>"
+
+
+Ensure only one Image is Generated Per Prompt. Name each image by its scene identifier:
+- For single-image scenes: name by scene number (e.g. 1.png, 3.png)
+- For multi-image scenes: name by scene and image number (e.g. 2_1.png, 2_2.png)
+
+when generating images ensure that image follow this theme
+"{channel_image_generation_theme}"
+
+make sure the generated images are inline (visual description) of what is being said in the audio-text.
+`;
 
   const themeText = (channelTheme || selectedChannelTheme || "").trim();
 
@@ -792,7 +911,7 @@ startBtn.addEventListener("click", async () => {
   const batchCount = Math.max(1, parseInt(batchCountInput?.value) || 3);
 
   const validScenes = currentScenes
-    .filter((s) => s.image_prompt && s.scene_number >= startSceneNum)
+    .filter((s) => hasScenePrompts(s) && s.scene_number >= startSceneNum)
     .sort((a, b) => a.scene_number - b.scene_number);
 
   if (validScenes.length === 0) {
@@ -805,20 +924,28 @@ startBtn.addEventListener("click", async () => {
 
   const queue = [];
   const totalBatches = Math.ceil(validScenes.length / batchCount);
+  let totalImagesCount = 0;
 
   for (let i = 0; i < validScenes.length; i += batchCount) {
     const chunk = validScenes.slice(i, i + batchCount);
-    const sceneNumbers = chunk.map((s) => s.scene_number);
+    const chunkItems = chunk.flatMap((s) =>
+      getScenePromptItems(s).filter((it) => it.prompt),
+    );
+    const sceneNumbers = chunkItems.map((it) => it.id);
+    totalImagesCount += chunkItems.length;
+
     const label =
       chunk.length === 1
-        ? `Scene ${sceneNumbers[0]}`
-        : `Scenes ${sceneNumbers[0]}–${sceneNumbers[sceneNumbers.length - 1]}`;
+        ? chunkItems.length > 1
+          ? `Scene ${chunk[0].scene_number} (${chunkItems.length} images)`
+          : `Scene ${chunk[0].scene_number}`
+        : `Scenes ${chunk[0].scene_number}–${chunk[chunk.length - 1].scene_number} (${chunkItems.length} images)`;
 
     queue.push({
       prompt: buildBatchPrompt(chunk, selectedChannelTheme),
       sceneNumbers,
       sceneNumber: sceneNumbers[0],
-      sceneCount: chunk.length,
+      sceneCount: chunkItems.length,
       label,
       batchIndex: Math.floor(i / batchCount) + 1,
       totalBatches,
@@ -826,16 +953,16 @@ startBtn.addEventListener("click", async () => {
   }
 
   addLog(
-    `Starting generation: ${validScenes.length} scenes (starting from Scene ${startSceneNum}) in ${queue.length} batch${queue.length === 1 ? "" : "es"} (batch size: ${batchCount})`,
+    `Starting generation: ${validScenes.length} scenes (${totalImagesCount} image(s), starting from Scene ${startSceneNum}) in ${queue.length} batch${queue.length === 1 ? "" : "es"} (batch size: ${batchCount})`,
     "start",
   );
   progressCard.classList.remove("hidden");
-  updateProgress(0, validScenes.length);
+  updateProgress(0, totalImagesCount);
 
   const res = await bg({
     type: "start",
     queue,
-    totalScenes: validScenes.length,
+    totalScenes: totalImagesCount,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
   });

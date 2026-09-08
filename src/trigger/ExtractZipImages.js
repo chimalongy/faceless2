@@ -102,6 +102,7 @@ export const extractZipImagesTask = task({
 
       const results = [];
       let thumbnailResult = null;
+      const cleanedScenes = new Set();
 
       for (const item of imageFiles) {
         const fullFileName = item.path.split("/").pop() || item.path;
@@ -129,34 +130,9 @@ export const extractZipImagesTask = task({
         // ── THUMBNAIL DETECTION: Any image containing "thumbnail" in its filename ──
         if (lowerFull.includes("thumbnail")) {
           logger.log(`Found thumbnail image in ZIP: ${fullFileName}`);
-
-          // Clean up any previous thumbnail asset from R2 and DB
-          if (sql && channelId && topicId) {
-            try {
-              const oldRows = await sql`
-                SELECT file_key FROM topic_assets
-                WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'thumbnail';
-              `;
-              if (oldRows && oldRows.length > 0) {
-                for (const row of oldRows) {
-                  if (row.file_key) {
-                    await deleteFromR2(row.file_key).catch(() => {});
-                  }
-                }
-                await sql`
-                  DELETE FROM topic_assets
-                  WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'thumbnail';
-                `;
-              }
-            } catch (cleanErr) {
-              logger.warn("Old thumbnail asset cleanup error:", cleanErr.message);
-            }
-          }
-
-          // Upload thumbnail directly to Cloudflare R2
           const timestamp = Date.now();
           const randomSuffix = Math.random().toString(36).substring(2, 7);
-          const key = `channels/${channelSlug}/topics/${topicSlug}/thumbnail/thumbnail-${timestamp}-${randomSuffix}.${ext}`;
+          const key = `channels/${channelSlug}/topics/${topicSlug}/thumbnail/thumb-${timestamp}-${randomSuffix}.${ext}`;
 
           const uploadResult = await uploadToR2({
             key,
@@ -171,8 +147,8 @@ export const extractZipImagesTask = task({
             },
           });
 
-          // Record in Neon database and update topics.thumbnail_url
-          if (sql && channelId && topicId) {
+          // Update topic record in Neon database
+          if (sql && topicId) {
             try {
               await sql`
                 INSERT INTO topic_assets (
@@ -195,7 +171,6 @@ export const extractZipImagesTask = task({
                   ${imgBuffer.length}
                 );
               `;
-
               await sql`
                 UPDATE topics
                 SET thumbnail_url = ${uploadResult.publicUrl}, updated_at = NOW()
@@ -219,22 +194,47 @@ export const extractZipImagesTask = task({
         }
 
         // ── SCENE IMAGE DETECTION ──
-        // Filenames in ZIP can be e.g. "1.jfif", "2.jfif", "1.png_202608210053", "2.jpg_timestamp", "scene_3.png"
-        // Step A: Strip extension to extract the basename
-        const nameWithoutExt = fullFileName.replace(/\.[^/.]+$/, "");
-        const primaryPart = nameWithoutExt.split("_")[0];
-        
-        // Step B: Extract scene number from primary part or full filename
-        const numberMatch = primaryPart.match(/(\d+)/) || nameWithoutExt.match(/(\d+)/) || fullFileName.match(/(\d+)/);
-        if (!numberMatch) {
+        // Filenames in ZIP can be:
+        // Multi-image format: "1_1.png", "1_2.png", "scene_1_1.png", "scene-2-3.jpg", "1-2.jfif"
+        // Legacy format: "1.jfif", "2.jfif", "scene_3.png"
+        // Browser/downloader timestamped: "1_2.png_202608210053", "1.png_202608210053", "1_202608210053.png"
+
+        // Step A: Strip extensions and trailing download timestamps (e.g. .png_timestamp)
+        let cleanName = fullFileName.replace(/\.[^/.]+(?:_\d+)?$/, "");
+        cleanName = cleanName.replace(/\.[^/.]+$/, "");
+        const baseName = cleanName.toLowerCase().replace(/^scene[-_]?/i, "");
+
+        // Step B: Match multi-part numbers like "1_2", "1-2", "1_image_2"
+        const multiMatch = baseName.match(/^(\d+)[-_](?:image[-_]?)?(\d+)/i);
+        let sceneIndex = null;
+        let imageIndex = 1;
+
+        if (multiMatch) {
+          sceneIndex = parseInt(multiMatch[1], 10);
+          const secondNum = multiMatch[2];
+          // If the second number has 6+ digits (e.g. timestamp 20260821), treat it as timestamp, not image index
+          if (secondNum.length >= 6) {
+            imageIndex = 1;
+          } else {
+            imageIndex = parseInt(secondNum, 10);
+          }
+        } else {
+          // Fallback to primary scene number extraction
+          const primaryPart = baseName.split("_")[0];
+          const numberMatch = primaryPart.match(/(\d+)/) || baseName.match(/(\d+)/) || fullFileName.match(/(\d+)/);
+          if (numberMatch) {
+            sceneIndex = parseInt(numberMatch[1], 10);
+            imageIndex = 1;
+          }
+        }
+
+        if (!sceneIndex) {
           logger.warn(`Could not extract scene number or thumbnail identifier from filename: ${fullFileName}. Skipping.`);
           continue;
         }
 
-        const sceneIndex = parseInt(numberMatch[1], 10);
-
-        // Clean up any previous image asset for this scene from R2 and DB
-        if (sql && channelId && topicId && sceneIndex) {
+        // Clean up any previous image assets for this scene from R2 and DB (only once per scene in this ZIP extraction)
+        if (sql && channelId && topicId && !cleanedScenes.has(sceneIndex)) {
           try {
             const oldRows = await sql`
               SELECT file_key FROM topic_assets
@@ -251,6 +251,7 @@ export const extractZipImagesTask = task({
                 WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'image' AND scene_index = ${sceneIndex};
               `;
             }
+            cleanedScenes.add(sceneIndex);
           } catch (cleanErr) {
             logger.warn(`Old asset cleanup error for scene ${sceneIndex}:`, cleanErr.message);
           }
@@ -259,7 +260,8 @@ export const extractZipImagesTask = task({
         // Upload extracted image directly to Cloudflare R2
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 7);
-        const key = `channels/${channelSlug}/topics/${topicSlug}/images/scene-${sceneIndex}-${timestamp}-${randomSuffix}.${ext}`;
+        const imageSuffix = imageIndex > 1 ? `-${imageIndex}` : "";
+        const key = `channels/${channelSlug}/topics/${topicSlug}/images/scene-${sceneIndex}${imageSuffix}-${timestamp}-${randomSuffix}.${ext}`;
 
         const uploadResult = await uploadToR2({
           key,
@@ -269,12 +271,14 @@ export const extractZipImagesTask = task({
             channelSlug,
             topicSlug,
             sceneIndex: String(sceneIndex),
+            imageIndex: String(imageIndex),
             source: "zip_upload",
             originalName: fullFileName,
           },
         });
 
         // Record in Neon database
+        const assetFileName = imageIndex > 1 ? `scene-${sceneIndex}-${imageIndex}.${ext}` : `scene-${sceneIndex}.${ext}`;
         if (sql && channelId && topicId) {
           try {
             await sql`
@@ -295,21 +299,22 @@ export const extractZipImagesTask = task({
                 ${sceneIndex},
                 ${uploadResult.publicUrl},
                 ${uploadResult.key},
-                ${`scene-${sceneIndex}.${ext}`},
+                ${assetFileName},
                 ${mimeType},
                 ${imgBuffer.length}
               );
             `;
           } catch (dbErr) {
-            logger.warn(`Could not save DB record for scene ${sceneIndex}:`, dbErr.message);
+            logger.warn(`Could not save DB record for scene ${sceneIndex} image ${imageIndex}:`, dbErr.message);
           }
         }
 
-        logger.log(`Mapped Scene ${sceneIndex} (${fullFileName}) -> ${uploadResult.publicUrl}`);
+        logger.log(`Mapped Scene ${sceneIndex}${imageIndex > 1 ? ` (Image ${imageIndex})` : ""} (${fullFileName}) -> ${uploadResult.publicUrl}`);
 
         results.push({
           sceneIndex,
-          fileName: `scene-${sceneIndex}.${ext}`,
+          imageIndex,
+          fileName: assetFileName,
           publicUrl: uploadResult.publicUrl,
           key: uploadResult.key,
           mimeType,

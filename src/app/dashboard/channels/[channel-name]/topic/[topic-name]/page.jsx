@@ -235,11 +235,35 @@ export default function TopicStudioPage() {
                     duration: "00:20",
                   };
                 } else if (asset.assetType === "image" && asset.sceneIndex) {
-                  images[asset.sceneIndex] = {
-                    url: asset.fileUrl,
-                    key: asset.fileKey,
-                    name: asset.fileName || `Scene ${asset.sceneIndex} Image`,
-                  };
+                  if (!images[asset.sceneIndex]) {
+                    images[asset.sceneIndex] = {
+                      url: asset.fileUrl,
+                      key: asset.fileKey,
+                      name: asset.fileName || `Scene ${asset.sceneIndex} Image`,
+                      images: [
+                        {
+                          url: asset.fileUrl,
+                          key: asset.fileKey,
+                          name: asset.fileName || `Scene ${asset.sceneIndex} Image 1`,
+                        }
+                      ],
+                    };
+                  } else {
+                    if (!images[asset.sceneIndex].images) {
+                      images[asset.sceneIndex].images = [
+                        {
+                          url: images[asset.sceneIndex].url,
+                          key: images[asset.sceneIndex].key,
+                          name: images[asset.sceneIndex].name,
+                        }
+                      ];
+                    }
+                    images[asset.sceneIndex].images.push({
+                      url: asset.fileUrl,
+                      key: asset.fileKey,
+                      name: asset.fileName || `Scene ${asset.sceneIndex} Image ${images[asset.sceneIndex].images.length + 1}`,
+                    });
+                  }
                 } else if (asset.assetType === "video" && asset.sceneIndex) {
                   videos[asset.sceneIndex] = {
                     url: asset.fileUrl,
@@ -1065,11 +1089,35 @@ export default function TopicStudioPage() {
           setSceneImages((prev) => {
             const next = { ...prev };
             data.images.forEach((img) => {
-              next[img.sceneIndex] = {
-                url: img.publicUrl,
-                key: img.key,
-                name: img.fileName || `Scene ${img.sceneIndex} Image`,
-              };
+              if (!next[img.sceneIndex]) {
+                next[img.sceneIndex] = {
+                  url: img.publicUrl,
+                  key: img.key,
+                  name: img.fileName || `Scene ${img.sceneIndex} Image`,
+                  images: [
+                    {
+                      url: img.publicUrl,
+                      key: img.key,
+                      name: img.fileName || `Scene ${img.sceneIndex} Image 1`,
+                    },
+                  ],
+                };
+              } else {
+                if (!next[img.sceneIndex].images) {
+                  next[img.sceneIndex].images = [
+                    {
+                      url: next[img.sceneIndex].url,
+                      key: next[img.sceneIndex].key,
+                      name: next[img.sceneIndex].name,
+                    },
+                  ];
+                }
+                next[img.sceneIndex].images.push({
+                  url: img.publicUrl,
+                  key: img.key,
+                  name: img.fileName || `Scene ${img.sceneIndex} Image ${next[img.sceneIndex].images.length + 1}`,
+                });
+              }
             });
             return next;
           });
