@@ -49,9 +49,7 @@ The opening sentence determines whether the viewer stays or clicks away.
 ### 2. SCRIPT FOR THE EAR, NOT A MAGAZINE ESSAY
 This is spoken narration for an engaging video, NOT a college textbook or literary journal article.
 - Write with punch, momentum, and vivid imagery.
-- Use short, impactful paragraphs (2–4 lines maximum).
-- Use confident, active voice and direct second-person address ("you", "your blood vessels", "inside your body").
-- Strip out passive academic hedging ("it could perhaps be argued", "some might say"). Speak with authoritative clarity.
+- Speak with authoritative clarity and strip out passive academic hedging ("it could perhaps be argued", "some might say").
 
 ### 3. CURIOSITY LOOPS & ESCALATING STAKES
 Do not dump information as a flat list of facts. Structure the narration with escalating tension:
