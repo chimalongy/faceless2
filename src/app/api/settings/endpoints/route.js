@@ -45,6 +45,7 @@ export async function GET() {
         open_router_base_url AS "openRouterBaseUrl",
         modal_video_render_url AS "modalVideoRenderUrl",
         modal_scene_merger_url AS "modalSceneMergerUrl",
+        modal_audio_transcription_url AS "modalAudioTranscriptionUrl",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
       FROM general_settings
@@ -88,6 +89,7 @@ export async function GET() {
     const openRouterBaseUrl = generalData.openRouterBaseUrl || "https://openrouter.ai/api/v1";
     const modalVideoRenderUrl = generalData.modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run";
     const modalSceneMergerUrl = generalData.modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run";
+    const modalAudioTranscriptionUrl = generalData.modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run";
 
     return NextResponse.json({
       success: true,
@@ -106,6 +108,7 @@ export async function GET() {
       openRouterBaseUrl,
       modalVideoRenderUrl,
       modalSceneMergerUrl,
+      modalAudioTranscriptionUrl,
       generalSettings: generalData,
       imageEndpoints: imageRows || [],
       audioEndpoints: audioRows || [],
@@ -151,6 +154,7 @@ export async function POST(request) {
       openRouterBaseUrl = "https://openrouter.ai/api/v1",
       modalVideoRenderUrl = "https://me-chimaobi--faceless-video-renderer-api.modal.run",
       modalSceneMergerUrl = "https://chima-geniusdomains--faceless-scene-merger-api.modal.run",
+      modalAudioTranscriptionUrl = "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run",
     } = body;
 
     // 1. Sync General Settings
@@ -171,6 +175,7 @@ export async function POST(request) {
     const openRouterUrl = (openRouterBaseUrl || "https://openrouter.ai/api/v1").trim();
     const modalRenderUrl = (modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run").trim();
     const modalMergerUrl = (modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run").trim();
+    const modalTranscribeUrl = (modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {
@@ -191,6 +196,7 @@ export async function POST(request) {
           open_router_base_url = ${openRouterUrl},
           modal_video_render_url = ${modalRenderUrl},
           modal_scene_merger_url = ${modalMergerUrl},
+          modal_audio_transcription_url = ${modalTranscribeUrl},
           updated_at = NOW()
         WHERE id = ${existing[0].id};
       `;
@@ -211,6 +217,7 @@ export async function POST(request) {
           open_router_base_url,
           modal_video_render_url,
           modal_scene_merger_url,
+          modal_audio_transcription_url,
           created_at,
           updated_at
         )
@@ -229,6 +236,7 @@ export async function POST(request) {
           ${openRouterUrl},
           ${modalRenderUrl},
           ${modalMergerUrl},
+          ${modalTranscribeUrl},
           NOW(),
           NOW()
         );
