@@ -28,6 +28,7 @@ export async function GET(request, { params }) {
         c.image_theme AS "channelImageTheme",
         c.thumbnail_theme AS "channelThumbnailTheme",
         c.postershive_api AS "postershiveApi",
+        c.script_structure AS "channelScriptStructure",
         t.pillar_id AS "pillarId",
         cp.slug AS "pillarSlug",
         cp.name AS "pillarName",

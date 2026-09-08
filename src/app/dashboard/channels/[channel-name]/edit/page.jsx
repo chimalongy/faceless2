@@ -35,13 +35,19 @@ import {
   Upload,
   Camera,
   Download,
-  Share2
+  Share2,
+  Code2,
+  RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { KOKORO_VOICES } from "@/lib/audio-generator";
+import {
+  DEFAULT_SCRIPT_STRUCTURE,
+  SCRIPT_STRUCTURE_PRESETS
+} from "@/lib/defaultScriptStructure";
 
 const STORAGE_KEY = "faceless_channels";
 
@@ -86,6 +92,11 @@ export default function EditChannelPage() {
   const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
   const [postershiveApi, setPostershiveApi] = useState("");
+  const [scriptStructureText, setScriptStructureText] = useState(
+    JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2)
+  );
+  const [structureError, setStructureError] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState("engaging_storytelling");
   const [status, setStatus] = useState("Active");
 
   // Artwork & Branding Images
@@ -125,6 +136,15 @@ export default function EditChannelPage() {
             setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
             setPostershiveApi(c.postershiveApi || "");
+            if (c.scriptStructure) {
+              setScriptStructureText(
+                typeof c.scriptStructure === "string"
+                  ? c.scriptStructure
+                  : JSON.stringify(c.scriptStructure, null, 2)
+              );
+            } else {
+              setScriptStructureText(JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2));
+            }
             setBannerUrl(c.bannerUrl || "");
             setAvatarUrl(c.avatarUrl || "");
             setStatus(c.status || "Active");
@@ -162,6 +182,15 @@ export default function EditChannelPage() {
             setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
             setPostershiveApi(found.postershiveApi || "");
+            if (found.scriptStructure) {
+              setScriptStructureText(
+                typeof found.scriptStructure === "string"
+                  ? found.scriptStructure
+                  : JSON.stringify(found.scriptStructure, null, 2)
+              );
+            } else {
+              setScriptStructureText(JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2));
+            }
             setBannerUrl(found.bannerUrl || "");
             setAvatarUrl(found.avatarUrl || "");
             setStatus(found.status || "Active");
@@ -246,6 +275,14 @@ export default function EditChannelPage() {
     setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
     setField(setStatus, "status");
 
+    const structureVal = findValue("script_structure", "scriptStructure", "script_structure_json", "scriptStructureJson");
+    if (structureVal !== undefined && structureVal !== null) {
+      setScriptStructureText(
+        typeof structureVal === "object" ? JSON.stringify(structureVal, null, 2) : String(structureVal)
+      );
+      count++;
+    }
+
     if (count === 0) {
       return { success: false, error: "No matching channel fields found in this JSON object." };
     }
@@ -319,6 +356,13 @@ export default function EditChannelPage() {
       integrations: {
         postershive_api: postershiveApi.trim(),
       },
+      script_structure: (() => {
+        try {
+          return JSON.parse(scriptStructureText);
+        } catch {
+          return scriptStructureText;
+        }
+      })(),
     };
 
     try {
@@ -330,10 +374,40 @@ export default function EditChannelPage() {
     }
   }
 
+  function handleApplyPreset(presetId) {
+    setSelectedPreset(presetId);
+    const found = SCRIPT_STRUCTURE_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setScriptStructureText(JSON.stringify(found.structure, null, 2));
+      setStructureError("");
+    }
+  }
+
+  function handlePrettifyJson() {
+    try {
+      const parsed = JSON.parse(scriptStructureText);
+      setScriptStructureText(JSON.stringify(parsed, null, 2));
+      setStructureError("");
+    } catch (err) {
+      setStructureError(`JSON syntax error: ${err.message}`);
+    }
+  }
+
   async function handleSave(e) {
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) return;
+
+    let parsedStructure = null;
+    if (scriptStructureText.trim()) {
+      try {
+        parsedStructure = JSON.parse(scriptStructureText.trim());
+        setStructureError("");
+      } catch (err) {
+        setStructureError(`Invalid JSON in Script Structure: ${err.message}`);
+        return;
+      }
+    }
 
     setSaving(true);
     const updatedChannel = {
@@ -359,6 +433,7 @@ export default function EditChannelPage() {
       postershiveApi: postershiveApi.trim(),
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
+      scriptStructure: parsedStructure,
       status,
     };
 
@@ -1216,7 +1291,7 @@ export default function EditChannelPage() {
               rows={3}
               value={imageTheme}
               onChange={(e) => setImageTheme(e.target.value)}
-              placeholder="e.g. Monochromatic dark slate, gold bullion accents, archival parchment textures, volumetric rim lighting, 8k cinematic macro documentary"
+              placeholder="e.g. Clean modern aesthetic, sharp focal point, rich color grading, high quality, well-lit"
               className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
             />
           </div>
@@ -1294,7 +1369,103 @@ export default function EditChannelPage() {
           </div>
         </section>
 
-        {/* SECTION 6: SAVE BAR & DANGER ZONE */}
+        {/* SECTION 6: SCRIPT STRUCTURE & LLM DIRECTIVES */}
+        <section className="p-6 border border-line bg-paper-card space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Code2 size={16} />
+              </span>
+              <div>
+                <span>Script Structure & LLM Narrative Blueprint (JSON)</span>
+                <p className="text-xs text-ink-muted font-normal mt-0.5">
+                  Guides any LLM on how to pace, structure acts, hook viewers, and avoid boring clichés.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={selectedPreset}
+                onChange={(e) => handleApplyPreset(e.target.value)}
+                className="text-xs font-medium border border-line bg-white px-2.5 py-1.5 text-ink outline-none focus:border-signal cursor-pointer"
+                title="Load a pre-engineered retention structure preset"
+              >
+                {SCRIPT_STRUCTURE_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handlePrettifyJson}
+                className="px-2.5 py-1.5 text-xs font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer"
+                title="Prettify and validate JSON formatting"
+              >
+                Prettify JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(selectedPreset)}
+                className="p-2 border border-line bg-white hover:bg-ink/5 text-ink-muted hover:text-ink transition-colors cursor-pointer"
+                title="Reset to preset template"
+              >
+                <RotateCcw size={13} />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="relative">
+              <textarea
+                id="field-script-structure"
+                rows={16}
+                value={scriptStructureText}
+                onChange={(e) => {
+                  setScriptStructureText(e.target.value);
+                  if (structureError) {
+                    try {
+                      JSON.parse(e.target.value.trim());
+                      setStructureError("");
+                    } catch {}
+                  }
+                }}
+                placeholder="Enter channel script structure JSON..."
+                spellCheck={false}
+                className={`w-full font-mono text-xs p-3.5 border bg-slate-950 text-emerald-400 leading-relaxed outline-none transition-colors ${
+                  structureError
+                    ? "border-rose-500 focus:border-rose-600"
+                    : "border-line-dark focus:border-signal"
+                }`}
+              />
+              <div className="absolute bottom-3 right-4 pointer-events-none">
+                {structureError ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-rose-400 bg-rose-950/90 px-2.5 py-1 border border-rose-800">
+                    <AlertCircle size={12} /> Invalid JSON
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/90 px-2.5 py-1 border border-emerald-800">
+                    <CheckCircle2 size={12} /> Valid JSON
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {structureError && (
+              <p className="text-xs text-rose-600 flex items-center gap-1.5 font-mono">
+                <AlertCircle size={13} /> {structureError}
+              </p>
+            )}
+
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              This blueprint is automatically injected into the script generation prompt whenever a topic script is generated.
+            </p>
+          </div>
+        </section>
+
+        {/* SECTION 7: SAVE BAR & DANGER ZONE */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-line">
           <button
             type="button"

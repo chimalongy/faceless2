@@ -40,7 +40,7 @@ export const generateScriptTask = task({
 
     // 1. Fetch Channel & Topic records
     const channelRows = await sql`
-      SELECT id, name, slug, niche, sub_niche, description, mission, personality
+      SELECT id, name, slug, niche, sub_niche, description, mission, personality, script_structure
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -216,6 +216,7 @@ export const generateScriptTask = task({
           contentPillarTone: pillarTone,
           contentPillarDescription: pillarDescription,
           topic: topicTitle,
+          scriptStructure: channel.script_structure,
         })
       : getScriptGenerationSystemPrompt({
           channelName: channel.name,
@@ -230,6 +231,7 @@ export const generateScriptTask = task({
           contentPillarWordsCount: pillarContentWordsCount,
           contentPillarDescription: pillarDescription,
           topic: topicTitle,
+          scriptStructure: channel.script_structure,
         });
 
     const userPromptContent =

@@ -53,7 +53,7 @@ Return ONLY a valid raw JSON array. Start directly with [ and end with ]. No mar
   {
     "scene_number": 1,
     "audio_text": "Exact verbatim narration snippet from script...",
-    "image_prompt": "Vertical 9:16 composition, center focused, cinematic shot of...",
+    "image_prompt": "Vertical 9:16 composition, center focused, shot of...",
     "transition": "cut",
     "ken_burns": {
       "direction": "zoom-in"
@@ -83,7 +83,7 @@ export function getShortSceneGenerationPrompt({
   prompt = prompt.replace(/{CHANNEL_SUB_NICHE}/g, channelSubNiche || "");
   prompt = prompt.replace(/{CHANNEL_DESCRIPTION}/g, channelDescription || "");
   prompt = prompt.replace(/{CHANNEL_MISSION}/g, channelMission || "");
-  prompt = prompt.replace(/{CHANNEL_IMAGE_THEME}/g, channelImageTheme || "Cinematic, hyper-realistic, dark moody lighting");
+  prompt = prompt.replace(/{CHANNEL_IMAGE_THEME}/g, channelImageTheme || "High quality, sharp focus, well-lit");
 
   prompt = prompt.replace(/{CONTENT_PILLAR_NAME}/g, contentPillarName || "Core Focus");
   prompt = prompt.replace(/{CONTENT_PILLAR_CATEGORY_TAG}/g, contentPillarCategoryTag || "");

@@ -219,7 +219,7 @@ export function normalizeKenBurnsDirection(
 }
 
 /**
- * Build a smooth cinematic Ken Burns filter.
+ * Build a smooth Ken Burns filter.
  *
  * IMPORTANT:
  *

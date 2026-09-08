@@ -137,7 +137,7 @@ The description must reflect:
 
 - Channel Name: \${channelName || "Faceless Documentary"}
 - Niche: \${channelNiche || "Documentary / Storytelling"}
-- Brand Personality: \${channelPersonality || "Authoritative, compelling, cinematic, objective"}
+- Brand Personality: \${channelPersonality || "Authoritative, compelling, engaging, objective"}
 - Target Audience: \${channelTargetAudience || "In-depth documentary and story seekers"}
 
 The description should also respect the channel's mission, content pillar, and narrative tone when provided.
@@ -217,7 +217,7 @@ export function getStoryDescriptionPrompt({
 
 - Channel Name: ${channelName || "Faceless Documentary"}
 - Niche: ${channelNiche || "Documentary / Storytelling"}
-- Brand Personality: ${channelPersonality || "Authoritative, compelling, cinematic, objective"}
+- Brand Personality: ${channelPersonality || "Authoritative, compelling, engaging, objective"}
 - Target Audience: ${channelTargetAudience || "In-depth documentary and story seekers"}
 ${channelDescription ? `- Channel Mission/Description: ${channelDescription}` : ""}
 ${pillarName ? `- Content Pillar: ${pillarName}` : ""}

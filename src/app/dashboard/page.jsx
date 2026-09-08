@@ -12,11 +12,20 @@ import {
   Copy,
   Check,
   Loader2,
-  Tv
+  Tv,
+  Code2,
+  FileCode,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import {
+  DEFAULT_SCRIPT_STRUCTURE,
+  SCRIPT_STRUCTURE_PRESETS
+} from "@/lib/defaultScriptStructure";
 
 const STORAGE_KEY = "faceless_channels";
 
@@ -47,6 +56,11 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [channelToDelete, setChannelToDelete] = useState(null);
   const [name, setName] = useState("");
+  const [scriptStructureText, setScriptStructureText] = useState(
+    JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2)
+  );
+  const [structureError, setStructureError] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState("engaging_storytelling");
   const [copiedSlug, setCopiedSlug] = useState(null);
   const [creating, setCreating] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -128,6 +142,7 @@ export default function OverviewPage() {
         thumbnail_theme: channel.thumbnailTheme || "",
         audio_theme: channel.audioTheme || "",
       },
+      script_structure: channel.scriptStructure || null,
     };
 
     try {
@@ -139,10 +154,40 @@ export default function OverviewPage() {
     }
   }
 
+  function handleApplyPreset(presetId) {
+    setSelectedPreset(presetId);
+    const found = SCRIPT_STRUCTURE_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setScriptStructureText(JSON.stringify(found.structure, null, 2));
+      setStructureError("");
+    }
+  }
+
+  function handlePrettifyJson() {
+    try {
+      const parsed = JSON.parse(scriptStructureText);
+      setScriptStructureText(JSON.stringify(parsed, null, 2));
+      setStructureError("");
+    } catch (err) {
+      setStructureError(`JSON syntax error: ${err.message}`);
+    }
+  }
+
   async function submitChannel(event) {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+
+    let parsedStructure = null;
+    if (scriptStructureText.trim()) {
+      try {
+        parsedStructure = JSON.parse(scriptStructureText.trim());
+        setStructureError("");
+      } catch (err) {
+        setStructureError(`Invalid JSON in Script Structure: ${err.message}`);
+        return;
+      }
+    }
 
     setCreating(true);
     const cleanSlug = trimmed
@@ -170,6 +215,7 @@ export default function OverviewPage() {
       imageTheme: "",
       thumbnailTheme: "",
       audioTheme: "",
+      scriptStructure: parsedStructure,
       status: "Active",
     };
 
@@ -194,6 +240,8 @@ export default function OverviewPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } finally {
       setName("");
+      setScriptStructureText(JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2));
+      setStructureError("");
       setCreating(false);
       setOpenComposer(false);
     }
@@ -420,7 +468,7 @@ export default function OverviewPage() {
           aria-labelledby="composer-title"
         >
           <form
-            className="relative w-full max-w-md bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-6 animate-scale-in text-ink my-auto"
+            className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-6 animate-scale-in text-ink my-auto"
             onSubmit={submitChannel}
           >
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-signal/10 text-signal font-mono text-[10px] font-semibold tracking-wider uppercase mb-1">
@@ -432,11 +480,11 @@ export default function OverviewPage() {
                 Create Channel
               </h2>
               <p className="text-xs sm:text-sm text-ink-muted mt-1">
-                Enter a name for your new automated channel to establish its workspace.
+                Establish your channel identity and define its script structure blueprint to guide AI scriptwriters.
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-ink/80 mb-1.5" htmlFor="channel-name">
                   Channel name *
@@ -451,6 +499,94 @@ export default function OverviewPage() {
                   className="w-full h-11 px-3.5 border border-line-dark bg-white text-sm text-ink outline-none focus:border-signal"
                 />
               </div>
+
+              {/* Script Structure JSON Section */}
+              <div className="pt-2 border-t border-line space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink/90 flex items-center gap-1.5" htmlFor="script-structure-json">
+                      <Code2 size={14} className="text-signal" /> Script Structure (JSON)
+                    </label>
+                    <p className="text-[11px] text-ink-muted mt-0.5">
+                      Blueprint telling any LLM how to pace, structure acts, hook viewers, and avoid boring tropes.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Preset Picker */}
+                    <select
+                      value={selectedPreset}
+                      onChange={(e) => handleApplyPreset(e.target.value)}
+                      className="text-[11px] font-medium border border-line bg-white px-2 py-1 text-ink outline-none focus:border-signal cursor-pointer"
+                      title="Load a pre-engineered retention structure preset"
+                    >
+                      {SCRIPT_STRUCTURE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handlePrettifyJson}
+                      className="px-2 py-1 text-[11px] font-medium border border-line bg-paper-card hover:bg-ink/5 text-ink transition-colors cursor-pointer"
+                      title="Format and validate JSON"
+                    >
+                      Prettify JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset(selectedPreset)}
+                      className="p-1 text-ink-muted hover:text-ink transition-colors cursor-pointer"
+                      title="Reset to selected preset template"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <textarea
+                    id="script-structure-json"
+                    rows={12}
+                    value={scriptStructureText}
+                    onChange={(e) => {
+                      setScriptStructureText(e.target.value);
+                      if (structureError) {
+                        try {
+                          JSON.parse(e.target.value.trim());
+                          setStructureError("");
+                        } catch {}
+                      }
+                    }}
+                    placeholder="Enter script structure JSON..."
+                    spellCheck={false}
+                    className={`w-full font-mono text-xs p-3 border bg-slate-950 text-emerald-400 leading-relaxed outline-none transition-colors ${
+                      structureError
+                        ? "border-rose-500 focus:border-rose-600"
+                        : "border-line-dark focus:border-signal"
+                    }`}
+                  />
+                  <div className="absolute bottom-2.5 right-3 pointer-events-none">
+                    {structureError ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono text-rose-400 bg-rose-950/80 px-2 py-0.5 border border-rose-800">
+                        <AlertCircle size={11} /> Invalid JSON
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 border border-emerald-800">
+                        <CheckCircle2 size={11} /> Valid JSON
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {structureError && (
+                  <p className="text-[11px] text-rose-600 flex items-center gap-1 font-mono">
+                    <AlertCircle size={12} /> {structureError}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
@@ -459,6 +595,7 @@ export default function OverviewPage() {
                 className="px-4 py-2.5 border border-line bg-paper-card text-xs font-semibold text-ink/70 hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
                 onClick={() => {
                   setName("");
+                  setStructureError("");
                   setOpenComposer(false);
                 }}
               >

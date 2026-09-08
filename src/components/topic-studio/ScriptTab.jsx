@@ -189,6 +189,7 @@ export default function ScriptTab({
                       contentPillarTone: topicData?.pillarTone,
                       contentPillarDescription: topicData?.pillarDescription,
                       topic: (topicTitle || topicData?.title || "").trim(),
+                      scriptStructure: topicData?.channelScriptStructure || topicData?.scriptStructure,
                     })
                   : getScriptGenerationPrompt({
                       channelName: topicData?.channelName || channelName,
@@ -203,6 +204,7 @@ export default function ScriptTab({
                       contentPillarWordsCount: topicData?.pillarContentWordsCount,
                       contentPillarDescription: topicData?.pillarDescription,
                       topic: (topicTitle || topicData?.title || "").trim(),
+                      scriptStructure: topicData?.channelScriptStructure || topicData?.scriptStructure,
                     });
                 navigator.clipboard.writeText(fullPrompt);
                 if (typeof triggerScriptNotice === "function") {

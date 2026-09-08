@@ -1,6 +1,8 @@
-export const SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an elite YouTube documentary scriptwriter, visual storyteller, and retention director.
+import { formatScriptStructureForPrompt } from "../defaultScriptStructure.js";
 
-Your task is to write a high-retention, cinematic, deeply engaging long-form narration based on the provided TOPIC, CHANNEL, and CONTENT PILLAR.
+export const SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an elite YouTube scriptwriter and audience retention director.
+
+Your task is to write a high-retention, deeply engaging long-form narration based on the provided TOPIC, CHANNEL, CONTENT PILLAR, and the CHANNEL'S SCRIPT STRUCTURE DIRECTIVES.
 
 ## CHANNEL
 Name: {channel_name}
@@ -26,6 +28,13 @@ Build the entire script around this specific topic. Do not alter the title or di
 
 ---
 
+## CHANNEL SCRIPT STRUCTURE & CONTENT BLUEPRINT
+You MUST strictly follow this channel's content structure and delivery blueprint below. It guides the content flow, hook formula, pacing rules, and prohibited words:
+
+{channel_script_structure_block}
+
+---
+
 ## CRITICAL RETENTION & PACING RULES
 
 ### 1. THE FIRST 15 SECONDS (MANDATORY HIGH-STAKES HOOK)
@@ -38,14 +47,14 @@ The opening sentence determines whether the viewer stays or clicks away.
 - In the first 30 seconds, hook the viewer with the central conflict: what they thought was happening vs. the shocking mechanical reality of what actually happens.
 
 ### 2. SCRIPT FOR THE EAR, NOT A MAGAZINE ESSAY
-This is a spoken narration for a high-retention video documentary, NOT a college textbook or literary journal article.
-- Write with punch, momentum, and visceral visual imagery.
+This is spoken narration for an engaging video, NOT a college textbook or literary journal article.
+- Write with punch, momentum, and vivid imagery.
 - Use short, impactful paragraphs (2–4 lines maximum).
 - Use confident, active voice and direct second-person address ("you", "your blood vessels", "inside your body").
 - Strip out passive academic hedging ("it could perhaps be argued", "some might say"). Speak with authoritative clarity.
 
 ### 3. CURIOSITY LOOPS & ESCALATING STAKES
-Do not dump information as a flat list of facts. Structure the narrative with escalating tension:
+Do not dump information as a flat list of facts. Structure the narration with escalating tension:
 - Expose the common myth or everyday assumption.
 - Dive into the microscopic or behind-the-scenes mechanical truth.
 - Introduce the unexpected risk, hidden danger, or counterintuitive twist.
@@ -54,7 +63,7 @@ Do not dump information as a flat list of facts. Structure the narrative with es
 
 ### 4. VISCERAL, CLEAR MECHANISMS
 When explaining complex science, finance, or systems:
-- Make the invisible visible. Explain the step-by-step chain reaction inside the body or system as if looking through a high-definition lens.
+- Make the invisible visible. Explain the step-by-step chain reaction inside the body or system clearly.
 - Use crisp, memorable analogies that make technical mechanisms instantly click.
 
 ### 5. ACCURACY & INTELLECTUAL INTEGRITY
@@ -97,6 +106,9 @@ export function getScriptGenerationSystemPrompt({
   wordCount,
   contentPillarDescription,
   topic,
+  scriptStructure,
+  script_structure,
+  channelScriptStructure,
 } = {}) {
   const missingFields = [];
 
@@ -144,6 +156,9 @@ export function getScriptGenerationSystemPrompt({
     );
   }
 
+  const effectiveStructure = scriptStructure || script_structure || channelScriptStructure;
+  const formattedStructureBlock = formatScriptStructureForPrompt(effectiveStructure);
+
   return SCRIPT_GENERATION_SYSTEM_PROMPT.replaceAll("{channel_name}", effectiveChannelName)
     .replaceAll("{channel_niche}", effectiveNiche)
     .replaceAll("{channel_sub_niche}", (channelSubNiche || effectiveNiche).trim())
@@ -155,7 +170,8 @@ export function getScriptGenerationSystemPrompt({
     .replaceAll("{content_pillar_length}", resolvedLength)
     .replaceAll("{content_pillar_words_count}", resolvedWordsCount)
     .replaceAll("{content_pillar_description}", effectivePillarDesc)
-    .replaceAll("{topic}", effectiveTopic);
+    .replaceAll("{topic}", effectiveTopic)
+    .replaceAll("{channel_script_structure_block}", formattedStructureBlock);
 }
 
 export const getScriptGenerationPrompt = getScriptGenerationSystemPrompt;

@@ -60,6 +60,7 @@ export async function initDbSchema() {
         avatar_url TEXT,
         default_voice TEXT DEFAULT 'af_heart',
         postershive_api TEXT,
+        script_structure JSONB,
         status TEXT DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -71,6 +72,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
     } catch {}
 
     // 2. Content Pillars Table

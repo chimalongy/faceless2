@@ -294,7 +294,7 @@ export const generateScenesTask = task({
           messages: [
             {
               role: "system",
-              content: "You are an expert cinematic storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, image_prompt, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
+              content: "You are an expert storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, image_prompt, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
             },
             {
               role: "user",

@@ -1,6 +1,8 @@
-export const SHORT_SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an elite YouTube Shorts, TikTok, and Instagram Reels scriptwriter specialized in high-retention, viral short-form documentaries and curiosity hooks.
+import { formatScriptStructureForPrompt } from "../defaultScriptStructure.js";
 
-Your task is to write a punchy, 30–60 second vertical video narration based on the provided TOPIC, CHANNEL, and CONTENT PILLAR.
+export const SHORT_SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an elite YouTube Shorts, TikTok, and Instagram Reels scriptwriter specialized in high-retention, viral short-form videos and curiosity hooks.
+
+Your task is to write a punchy, 30–60 second vertical video narration based on the provided TOPIC, CHANNEL, CONTENT PILLAR, and the CHANNEL'S SCRIPT STRUCTURE DIRECTIVES.
 
 ## CHANNEL
 Name: {channel_name}
@@ -15,6 +17,13 @@ Description: {content_pillar_description}
 
 ## TOPIC
 {topic}
+
+---
+
+## CHANNEL SCRIPT STRUCTURE & TONE DIRECTIVES
+Adapt the channel's signature style, hook formula, and banned phrases to this short-form narration:
+
+{channel_script_structure_block}
 
 ---
 
@@ -58,6 +67,9 @@ export function getShortScriptGenerationSystemPrompt({
   contentPillarTone = "",
   contentPillarDescription = "",
   topic = "",
+  scriptStructure,
+  script_structure,
+  channelScriptStructure,
 } = {}) {
   let prompt = SHORT_SCRIPT_GENERATION_SYSTEM_PROMPT;
 
@@ -69,10 +81,14 @@ export function getShortScriptGenerationSystemPrompt({
 
   prompt = prompt.replace(/{content_pillar_name}/g, contentPillarName || "Core Focus");
   prompt = prompt.replace(/{content_pillar_category_tag}/g, contentPillarCategoryTag || "");
-  prompt = prompt.replace(/{content_pillar_tone}/g, contentPillarTone || "Punchy, cinematic, authoritative");
+  prompt = prompt.replace(/{content_pillar_tone}/g, contentPillarTone || "Punchy, engaging, authoritative");
   prompt = prompt.replace(/{content_pillar_description}/g, contentPillarDescription || "");
 
   prompt = prompt.replace(/{topic}/g, topic || "");
+
+  const effectiveStructure = scriptStructure || script_structure || channelScriptStructure;
+  const formattedStructureBlock = formatScriptStructureForPrompt(effectiveStructure);
+  prompt = prompt.replace(/{channel_script_structure_block}/g, formattedStructureBlock);
 
   return prompt;
 }

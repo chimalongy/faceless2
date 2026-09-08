@@ -37,6 +37,7 @@ export async function GET() {
         avatar_url AS "avatarUrl",
         default_voice AS "defaultVoice",
         postershive_api AS "postershiveApi",
+        script_structure AS "scriptStructure",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -102,6 +103,20 @@ export async function POST(request) {
     const postershiveApi = body.postershiveApi?.trim() || body.postershive_api?.trim() || null;
     const status = body.status || "Active";
 
+    let scriptStructure = null;
+    const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
+    if (rawStructure) {
+      if (typeof rawStructure === "string") {
+        try {
+          scriptStructure = JSON.stringify(JSON.parse(rawStructure.trim()));
+        } catch {
+          scriptStructure = JSON.stringify({ raw: rawStructure.trim() });
+        }
+      } else if (typeof rawStructure === "object") {
+        scriptStructure = JSON.stringify(rawStructure);
+      }
+    }
+
     const inserted = await sql`
       INSERT INTO channels (
         name,
@@ -124,6 +139,7 @@ export async function POST(request) {
         audio_theme,
         default_voice,
         postershive_api,
+        script_structure,
         status
       ) VALUES (
         ${name},
@@ -146,6 +162,7 @@ export async function POST(request) {
         ${audioTheme},
         ${body.defaultVoice || 'af_heart'},
         ${postershiveApi},
+        ${scriptStructure},
         ${status}
       )
       ON CONFLICT (slug) DO UPDATE SET
@@ -168,6 +185,7 @@ export async function POST(request) {
         audio_theme = EXCLUDED.audio_theme,
         default_voice = EXCLUDED.default_voice,
         postershive_api = EXCLUDED.postershive_api,
+        script_structure = COALESCE(EXCLUDED.script_structure, channels.script_structure),
         status = EXCLUDED.status,
         updated_at = NOW()
       RETURNING *;

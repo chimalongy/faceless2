@@ -902,7 +902,7 @@ export default function CompletedVideoTab({
               </div>
               <div className="flex items-center justify-between py-1 border-b border-line/60">
                 <span className="text-ink-muted">Frame Rate</span>
-                <span className="font-semibold text-ink">60.00 FPS (Cinematic)</span>
+                <span className="font-semibold text-ink">60.00 FPS</span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-line/60">
                 <span className="text-ink-muted">Codec</span>

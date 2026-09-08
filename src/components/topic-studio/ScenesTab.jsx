@@ -578,7 +578,7 @@ export default function ScenesTab({
                     setPastedJsonText(e.target.value);
                     if (pasteError) setPasteError("");
                   }}
-                  placeholder={`[\n  {\n    "scene_number": 1,\n    "audio_text": "Why does being broke cost so much more than having wealth?",\n    "image_prompt": "Cinematic 2D narrative frame: a worn leather wallet on a kitchen table next to an unpaid bill.",\n    "transition": "fade",\n    "ken_burns": {\n      "direction": "zoom-in"\n    }\n  },\n  {\n    "scene_number": 2,\n    "audio_text": "From overdraft fees to predatory loan interest, poverty carries a hidden tax.",\n    "image_prompt": "Cinematic visual breakdown: contrasting gold scales with floating interest percentages.",\n    "transition": "crossfade",\n    "ken_burns": {\n      "direction": "pan-right"\n    }\n  }\n]`}
+                  placeholder={`[\n  {\n    "scene_number": 1,\n    "audio_text": "Why does being broke cost so much more than having wealth?",\n    "image_prompt": "Visual narrative frame: a worn leather wallet on a kitchen table next to an unpaid bill.",\n    "transition": "fade",\n    "ken_burns": {\n      "direction": "zoom-in"\n    }\n  },\n  {\n    "scene_number": 2,\n    "audio_text": "From overdraft fees to predatory loan interest, poverty carries a hidden tax.",\n    "image_prompt": "Visual breakdown: contrasting gold scales with floating interest percentages.",\n    "transition": "crossfade",\n    "ken_burns": {\n      "direction": "pan-right"\n    }\n  }\n]`}
                   className="w-full flex-1 min-h-[220px] p-3.5 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
                 />
               </div>

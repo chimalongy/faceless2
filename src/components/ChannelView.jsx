@@ -1017,6 +1017,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
               ) : (
                 <div className="divide-y divide-line border border-line bg-paper-card">
                   {displayedTopics.map((topic) => {
+                    const hasScript = Boolean(topic.scriptContent && topic.scriptContent.trim());
                     const hasThumb = Boolean(topic.thumbnailUrl && topic.thumbnailUrl.trim() !== "" && topic.thumbnailUrl !== "generated");
                     const hasDesc = Boolean(topic.storyDescription && topic.storyDescription.trim() !== "");
                     const hasMaster = Boolean(topic.masterVideoUrl && topic.masterVideoUrl.trim() !== "" && topic.masterVideoUrl !== "generated");

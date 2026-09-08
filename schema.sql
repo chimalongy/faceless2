@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS channels (
     avatar_url TEXT,
     default_voice TEXT DEFAULT 'af_heart',
     postershive_api TEXT,
+    script_structure JSONB,
     status TEXT DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

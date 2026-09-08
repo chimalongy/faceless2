@@ -539,7 +539,7 @@ export default function TopicStudioPage() {
     }
 
     setIsGeneratingScenes(true);
-    triggerScenesNotice("Generating cinematic scenes & image prompts with AI...");
+    triggerScenesNotice("Generating scenes & image prompts with AI...");
     try {
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scenes`, {
         method: "POST",
