@@ -343,6 +343,7 @@ def prepare_scene(scene, fallback, job_dir, r2_client, bucket):
         "transition": normalize_transition(scene.get("transition", "fade")),
         "imagePath": image_paths[0],
         "imagePaths": image_paths,
+        "imageTimings": scene.get("imageTimings") or scene.get("image_timings") or [],
         "audioPath": audio_path,
         "outputPath": scene_dir / "final.mp4",
         "duration": get_audio_duration(audio_path),
@@ -390,8 +391,24 @@ def render_scene(scene, zoom_amount, pan_zoom, fps, width, height, threads):
             capture_output=True,
         )
     else:
-        base_frames = total_frames // num_images
-        remainder = total_frames % num_images
+        image_timings = scene.get("imageTimings") or []
+        seg_frames_list = []
+        if isinstance(image_timings, list) and len(image_timings) == num_images:
+            allocated = 0
+            for k in range(num_images):
+                if k == num_images - 1:
+                    seg_frames_list.append(max(2, total_frames - allocated))
+                else:
+                    item_dur = float(image_timings[k].get("duration") or (duration / num_images))
+                    sf = max(2, round(item_dur * fps))
+                    seg_frames_list.append(sf)
+                    allocated += sf
+        else:
+            base_frames = total_frames // num_images
+            remainder = total_frames % num_images
+            for k in range(num_images):
+                seg_frames_list.append(max(2, base_frames + (1 if k < remainder else 0)))
+
         segment_paths = []
 
         directions_pool = ["zoom-in", "pan-right", "zoom-out", "pan-left", "pan-up", "pan-down"]
@@ -399,7 +416,7 @@ def render_scene(scene, zoom_amount, pan_zoom, fps, width, height, threads):
         base_idx = directions_pool.index(base_dir) if base_dir in directions_pool else 0
 
         for k, img_p in enumerate(image_paths):
-            seg_frames = max(2, base_frames + (1 if k < remainder else 0))
+            seg_frames = seg_frames_list[k]
             seg_duration = seg_frames / fps
             seg_video_path = scene["outputPath"].parent / f"segment_{k}.mp4"
             dir_k = directions_pool[(base_idx + k) % len(directions_pool)]

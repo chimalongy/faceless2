@@ -13,6 +13,7 @@ import {
 } from "@/lib/ffmpeg-helper";
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { planSceneTiming } from "@/lib/scene-planner";
 
 const execAsync = promisify(exec);
 
@@ -38,6 +39,9 @@ async function renderSingleScene({
   sceneIndex = 1,
   imageUrl,
   imageUrls = [],
+  imagePrompts = [],
+  audioText = "",
+  timingPlan = null,
   audioUrl = null,
   fps = 60,
   width = 1376,
@@ -188,9 +192,56 @@ async function renderSingleScene({
         maxBuffer: 1024 * 1024 * 100,
       });
     } else {
-      // Multi-image rendering: distribute totalFrames across N images
-      const baseFrames = Math.floor(totalFrames / N);
-      const remainder = totalFrames % N;
+      // Multi-image rendering: obtain planned timings via Whisper + ScenePlanner LLM
+      let timings = timingPlan;
+      if (!timings || !Array.isArray(timings) || timings.length !== N) {
+        try {
+          const imagesInput = resolvedImageUrls.map((url, idx) => ({
+            image_number: idx + 1,
+            prompt: Array.isArray(imagePrompts) && imagePrompts[idx]
+              ? (typeof imagePrompts[idx] === "string" ? imagePrompts[idx] : imagePrompts[idx]?.prompt || `Scene image ${idx + 1}`)
+              : `Scene image ${idx + 1}`,
+            url,
+          }));
+
+          logger.log(`Planning scene timing with Whisper & ScenePlanner LLM for Scene ${sceneIndex} (${N} images)...`);
+          timings = await planSceneTiming({
+            sceneNumber: sceneIndex,
+            audioText,
+            audioUrl,
+            audioDuration: duration,
+            images: imagesInput,
+            channelSlug,
+            topicSlug,
+          });
+        } catch (planErr) {
+          logger.warn(`Scene timing planning failed for scene ${sceneIndex}, using proportional fallback:`, planErr.message);
+        }
+      }
+
+      // Calculate frame count per segment ensuring strict totalFrames match
+      const segFramesList = [];
+      if (timings && Array.isArray(timings) && timings.length === N) {
+        let allocatedFrames = 0;
+        for (let k = 0; k < N; k++) {
+          if (k === N - 1) {
+            const lastFrames = Math.max(2, totalFrames - allocatedFrames);
+            segFramesList.push(lastFrames);
+          } else {
+            const plannedDur = Number(timings[k]?.duration) || (duration / N);
+            const f = Math.max(2, Math.round(plannedDur * fps));
+            segFramesList.push(f);
+            allocatedFrames += f;
+          }
+        }
+      } else {
+        const baseFrames = Math.floor(totalFrames / N);
+        const remainder = totalFrames % N;
+        for (let k = 0; k < N; k++) {
+          segFramesList.push(Math.max(2, baseFrames + (k < remainder ? 1 : 0)));
+        }
+      }
+
       const segmentFiles = [];
 
       const directionsPool = [
@@ -205,7 +256,7 @@ async function renderSingleScene({
       const baseIdx = Math.max(0, directionsPool.indexOf(baseDir));
 
       for (let k = 0; k < N; k++) {
-        const segFrames = Math.max(2, baseFrames + (k < remainder ? 1 : 0));
+        const segFrames = segFramesList[k];
         const segDuration = segFrames / fps;
         const segImgPath = path.join(jobDir, `image_${k}.png`);
         const segVideoPath = path.join(jobDir, `segment_${k}.mp4`);
@@ -480,6 +531,9 @@ export const renderSceneFrameTask = task({
       sceneIndex = 1,
       imageUrl,
       imageUrls = [],
+      imagePrompts = [],
+      audioText = "",
+      timingPlan = null,
       audioUrl,
       fps = 60,
       width = 1376,
@@ -505,6 +559,9 @@ export const renderSceneFrameTask = task({
       sceneIndex,
       imageUrl,
       imageUrls,
+      imagePrompts,
+      audioText,
+      timingPlan,
       audioUrl,
       fps,
       width,
@@ -572,15 +629,22 @@ export const renderAllSceneFramesTask = task({
         sceneAudios[String(sceneIndex)] ||
         sceneAudios[Number(sceneIndex)];
 
-      // Collect all image URLs for this scene
+      // Collect all image URLs & prompts for this scene
       let imageUrls = [];
+      let imagePrompts = [];
       if (Array.isArray(imgData?.images) && imgData.images.length > 0) {
         imageUrls = imgData.images
           .map((img) => (typeof img === "string" ? img : img?.url))
           .filter(Boolean);
+        imagePrompts = imgData.images
+          .map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : ""))
+          .filter(Boolean);
       } else if (Array.isArray(scene?.images) && scene.images.length > 0) {
         imageUrls = scene.images
           .map((img) => (typeof img === "string" ? img : img?.url))
+          .filter(Boolean);
+        imagePrompts = scene.images
+          .map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : ""))
           .filter(Boolean);
       } else if (Array.isArray(scene?.imageUrls) && scene.imageUrls.length > 0) {
         imageUrls = scene.imageUrls.filter(Boolean);
@@ -591,6 +655,7 @@ export const renderAllSceneFramesTask = task({
         imageUrls = [imageUrl];
       }
       const audioUrl = audioData?.url || scene.audioUrl || null;
+      const audioText = scene.narration || scene.audio_text || scene.audioText || scene.text || "";
 
       if (!imageUrl || !audioUrl) {
         logger.warn(
@@ -612,6 +677,8 @@ export const renderAllSceneFramesTask = task({
           sceneIndex,
           imageUrl,
           imageUrls,
+          imagePrompts,
+          audioText,
           audioUrl,
           fps,
           width,

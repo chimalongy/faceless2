@@ -1355,6 +1355,10 @@ export default function TopicStudioPage() {
         ? imgData.images.map((img) => (typeof img === "string" ? img : img.url)).filter(Boolean)
         : [imgData.url];
 
+      const allPrompts = Array.isArray(imgData?.images) && imgData.images.length > 0
+        ? imgData.images.map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : "")).filter(Boolean)
+        : (Array.isArray(scene?.images) ? scene.images.map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : "")).filter(Boolean) : []);
+
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-scene-frames`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1362,6 +1366,8 @@ export default function TopicStudioPage() {
           sceneIndex: sceneNum,
           imageUrl: allUrls[0] || imgData.url,
           imageUrls: allUrls,
+          imagePrompts: allPrompts,
+          audioText: scene?.narration || scene?.audio_text || scene?.text || "",
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.10 },
           transition: scene?.transition || "fade",
@@ -1507,6 +1513,10 @@ export default function TopicStudioPage() {
         ? imgData.images.map((img) => (typeof img === "string" ? img : img.url)).filter(Boolean)
         : [imgData.url];
 
+      const allPrompts = Array.isArray(imgData?.images) && imgData.images.length > 0
+        ? imgData.images.map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : "")).filter(Boolean)
+        : (Array.isArray(scene?.images) ? scene.images.map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : "")).filter(Boolean) : []);
+
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/test-modal-scene-render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1514,6 +1524,8 @@ export default function TopicStudioPage() {
           sceneIndex: sceneNum,
           imageUrl: allUrls[0] || imgData.url,
           imageUrls: allUrls,
+          imagePrompts: allPrompts,
+          audioText: scene?.narration || scene?.audio_text || scene?.text || "",
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
           transition: scene?.transition || "fade",

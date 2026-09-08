@@ -1,5 +1,6 @@
 import { task, logger, wait } from "@trigger.dev/sdk";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { planSceneTiming } from "@/lib/scene-planner";
 
 const DEFAULT_MODAL_API_URL =
   process.env.MODAL_RENDERER_API_URL ||
@@ -162,6 +163,8 @@ export const renderFrameVideoModalTask = task({
           scene_number: Number.parseInt(sceneIndex, 10),
           imageUrl: resolvedImageUrls[0] || (imageUrl || "").trim(),
           imageUrls: resolvedImageUrls,
+          imagePrompts: payload.imagePrompts || [],
+          audioText: (payload.audioText || payload.narration || "").trim(),
           audioUrl: audioUrl.trim(),
           ken_burns: {
             direction: kenBurnsDirection,
@@ -230,6 +233,25 @@ export const renderFrameVideoModalTask = task({
             return null;
           }
 
+          let scenePrompts = [];
+          if (Array.isArray(scene?.images)) {
+            scenePrompts = scene.images
+              .map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : ""))
+              .filter(Boolean);
+          } else if (Array.isArray(imageAsset?.images)) {
+            scenePrompts = imageAsset.images
+              .map((img) => (typeof img === "object" ? (img.prompt || img.description || "") : ""))
+              .filter(Boolean);
+          }
+
+          const sceneAudioText = (
+            scene.narration ||
+            scene.audio_text ||
+            scene.audioText ||
+            scene.text ||
+            ""
+          ).trim();
+
           const sceneKenBurns =
             scene.ken_burns || scene.kenBurns;
 
@@ -242,6 +264,8 @@ export const renderFrameVideoModalTask = task({
             scene_number: Number.parseInt(sceneNumber, 10),
             imageUrl: resolvedImageUrl,
             imageUrls: resolvedImageUrls,
+            imagePrompts: scenePrompts,
+            audioText: sceneAudioText,
             audioUrl: resolvedAudioUrl,
             ken_burns: {
               direction: kenBurnsDirection,
@@ -291,6 +315,39 @@ export const renderFrameVideoModalTask = task({
       throw new Error(
         "Provide either sceneIndex for a single scene or a scenes array for batch rendering."
       );
+    }
+
+    // Plan timings for multi-image scenes using Whisper Modal & ScenePlanner LLM
+    for (const s of scenesToRender) {
+      if (Array.isArray(s.imageUrls) && s.imageUrls.length > 1) {
+        try {
+          logger.log(`Planning timing with Whisper & ScenePlanner LLM for Modal Scene ${s.scene_number} (${s.imageUrls.length} images)...`);
+          const imagesInput = s.imageUrls.map((url, idx) => ({
+            image_number: idx + 1,
+            prompt: Array.isArray(s.imagePrompts) && s.imagePrompts[idx]
+              ? s.imagePrompts[idx]
+              : `Scene image ${idx + 1}`,
+            url,
+          }));
+
+          const planned = await planSceneTiming({
+            sceneNumber: s.scene_number,
+            audioText: s.audioText || "",
+            audioUrl: s.audioUrl,
+            audioDuration: 5.0,
+            images: imagesInput,
+            channelSlug,
+            topicSlug,
+          });
+
+          if (planned && Array.isArray(planned) && planned.length === s.imageUrls.length) {
+            s.imageTimings = planned;
+            logger.log(`Assigned planned timings for Modal Scene ${s.scene_number}:`, planned);
+          }
+        } catch (planErr) {
+          logger.warn(`Could not plan timings for Modal Scene ${s.scene_number}:`, planErr?.message || planErr);
+        }
+      }
     }
 
     logger.log(
