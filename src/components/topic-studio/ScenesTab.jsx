@@ -110,10 +110,31 @@ export default function ScenesTab({
         const intensity = typeof kb.intensity === "number" ? kb.intensity : (parseFloat(kb.intensity) || 0.10);
         const transition = item.transition || "fade";
 
+        const rawImages = Array.isArray(item.images) ? item.images : [];
+        const normalizedImages = rawImages
+          .map((img, imgIdx) => ({
+            image_number: Number(img.image_number || img.number || imgIdx + 1),
+            image_prompt: String(img.image_prompt || img.prompt || img.visual_prompt || "").trim(),
+          }))
+          .filter((img) => Boolean(img.image_prompt));
+
+        const topLevelPrompt = String(item.image_prompt || item.visual_prompt || item.prompt || item.visual || item.image || "").trim();
+        if (normalizedImages.length === 0 && topLevelPrompt) {
+          normalizedImages.push({
+            image_number: 1,
+            image_prompt: topLevelPrompt,
+          });
+        }
+
+        const primaryPrompt = normalizedImages[0]?.image_prompt || topLevelPrompt;
+        const numberOfImages = Number(item.number_of_images) || normalizedImages.length || 1;
+
         return {
           scene_number: item.scene_number || item.sceneIndex || item.scene || idx + 1,
           audio_text: item.audio_text || item.narration || item.script || item.voiceover || item.text || "",
-          image_prompt: item.image_prompt || item.visual_prompt || item.prompt || item.visual || item.image || "",
+          number_of_images: numberOfImages,
+          images: normalizedImages,
+          image_prompt: primaryPrompt,
           transition,
           ken_burns: {
             direction,
@@ -137,15 +158,116 @@ export default function ScenesTab({
     try {
       const current = [...parsedScenes];
       if (current[sceneIndex]) {
-        current[sceneIndex] = {
+        const updated = {
           ...current[sceneIndex],
           [field]: value,
         };
+        if (field === "image_prompt") {
+          const imgs = Array.isArray(updated.images) ? [...updated.images] : [];
+          if (imgs.length > 0) {
+            imgs[0] = { ...imgs[0], image_prompt: value };
+          } else {
+            imgs.push({ image_number: 1, image_prompt: value });
+          }
+          updated.images = imgs;
+          updated.number_of_images = imgs.length;
+        }
+        current[sceneIndex] = updated;
         setScenesJson(JSON.stringify(current, null, 2));
         setJsonError("");
       }
     } catch (err) {
       setJsonError("Error updating scene: " + err.message);
+    }
+  }
+
+  // Update individual image prompt within scene.images array
+  function handleUpdateSceneImagePrompt(sceneIndex, imageIdx, value) {
+    try {
+      const current = [...parsedScenes];
+      if (current[sceneIndex]) {
+        const targetScene = current[sceneIndex];
+        const imgs = Array.isArray(targetScene.images) && targetScene.images.length > 0
+          ? [...targetScene.images]
+          : [{ image_number: 1, image_prompt: targetScene.image_prompt || "" }];
+
+        imgs[imageIdx] = {
+          ...imgs[imageIdx],
+          image_number: imageIdx + 1,
+          image_prompt: value,
+        };
+
+        current[sceneIndex] = {
+          ...targetScene,
+          images: imgs,
+          number_of_images: imgs.length,
+          image_prompt: imgs[0]?.image_prompt || "",
+        };
+        setScenesJson(JSON.stringify(current, null, 2));
+        setJsonError("");
+      }
+    } catch (err) {
+      setJsonError("Error updating scene image prompt: " + err.message);
+    }
+  }
+
+  // Add a new image prompt to a scene
+  function handleAddSceneImagePrompt(sceneIndex) {
+    try {
+      const current = [...parsedScenes];
+      if (current[sceneIndex]) {
+        const targetScene = current[sceneIndex];
+        const imgs = Array.isArray(targetScene.images) && targetScene.images.length > 0
+          ? [...targetScene.images]
+          : [{ image_number: 1, image_prompt: targetScene.image_prompt || "" }];
+
+        imgs.push({
+          image_number: imgs.length + 1,
+          image_prompt: "",
+        });
+
+        current[sceneIndex] = {
+          ...targetScene,
+          images: imgs,
+          number_of_images: imgs.length,
+          image_prompt: imgs[0]?.image_prompt || "",
+        };
+        setScenesJson(JSON.stringify(current, null, 2));
+        setJsonError("");
+      }
+    } catch (err) {
+      setJsonError("Error adding image prompt: " + err.message);
+    }
+  }
+
+  // Remove an image prompt from a scene
+  function handleRemoveSceneImagePrompt(sceneIndex, imageIdx) {
+    try {
+      const current = [...parsedScenes];
+      if (current[sceneIndex]) {
+        const targetScene = current[sceneIndex];
+        let imgs = Array.isArray(targetScene.images) && targetScene.images.length > 0
+          ? [...targetScene.images]
+          : [{ image_number: 1, image_prompt: targetScene.image_prompt || "" }];
+
+        if (imgs.length <= 1) {
+          imgs[0] = { image_number: 1, image_prompt: "" };
+        } else {
+          imgs.splice(imageIdx, 1);
+          imgs = imgs.map((img, i) => ({ ...img, image_number: i + 1 }));
+        }
+
+        current[sceneIndex] = {
+          ...targetScene,
+          images: imgs,
+          number_of_images: imgs.length,
+          image_prompt: imgs[0]?.image_prompt || "",
+        };
+        setScenesJson(JSON.stringify(current, null, 2));
+        setJsonError("");
+      }
+    } catch (err) {
+      setJsonError("Error removing image prompt: " + err.message);
     }
   }
 
@@ -166,7 +288,7 @@ export default function ScenesTab({
         setJsonError("");
       }
     } catch (err) {
-      setJsonError("Error updating Ken Burns effect: " + err.message);
+      setJsonError("Error updating Ken Burns: " + err.message);
     }
   }
 
@@ -178,6 +300,8 @@ export default function ScenesTab({
       current.push({
         scene_number: nextNum,
         audio_text: "",
+        number_of_images: 1,
+        images: [{ image_number: 1, image_prompt: "" }],
         image_prompt: "",
         transition: "fade",
         ken_burns: {
@@ -409,6 +533,11 @@ export default function ScenesTab({
                     <span className="font-mono text-xs font-semibold text-ink">
                       SCENE 0{sceneNum}
                     </span>
+                    {Array.isArray(scene.images) && scene.images.length > 1 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-signal bg-signal/10 border border-signal/20 rounded-sm">
+                        {scene.images.length} Images
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-sm">
                       <Move size={10} /> {kb.direction || "zoom-in"}
                     </span>
@@ -443,18 +572,72 @@ export default function ScenesTab({
                     />
                   </div>
 
-                  {/* Image Prompt Field */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-semibold text-ink-muted uppercase font-mono">
-                      Image Prompt (Visual Directive):
-                    </label>
-                    <textarea
-                      rows={4}
-                      value={scene.image_prompt || ""}
-                      onChange={(e) => handleUpdateSceneField(idx, "image_prompt", e.target.value)}
-                      placeholder="Enter visual imagery prompt and scenery details..."
-                      className="w-full p-3.5 border border-line bg-white font-sans text-xs text-ink leading-relaxed outline-none focus:border-signal resize-y"
-                    />
+                  {/* Image Prompt(s) Field */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-semibold text-ink-muted uppercase font-mono">
+                        {Array.isArray(scene.images) && scene.images.length > 1
+                          ? `Image Prompts (${scene.images.length} images):`
+                          : "Image Prompt (Visual Directive):"}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleAddSceneImagePrompt(idx)}
+                        className="text-[10px] font-mono text-signal hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        title="Add another image prompt to this scene"
+                      >
+                        <Plus size={11} /> Add Image
+                      </button>
+                    </div>
+
+                    {Array.isArray(scene.images) && scene.images.length > 1 ? (
+                      <div className="space-y-2.5">
+                        {scene.images.map((img, imgIdx) => (
+                          <div key={imgIdx} className="space-y-1 bg-paper-dark/30 p-2 border border-line/60 rounded-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono font-semibold text-signal">
+                                Image #{img.image_number || imgIdx + 1}
+                              </span>
+                              {scene.images.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSceneImagePrompt(idx, imgIdx)}
+                                  className="text-ink-muted hover:text-rose-600 transition-colors p-0.5 cursor-pointer"
+                                  title="Remove this image prompt"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              )}
+                            </div>
+                            <textarea
+                              rows={2}
+                              value={img.image_prompt || ""}
+                              onChange={(e) => handleUpdateSceneImagePrompt(idx, imgIdx, e.target.value)}
+                              placeholder={`Enter visual prompt for image #${imgIdx + 1}...`}
+                              className="w-full p-2 border border-line bg-white font-sans text-xs text-ink leading-relaxed outline-none focus:border-signal resize-y"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <textarea
+                        rows={4}
+                        value={
+                          scene.images?.[0]?.image_prompt !== undefined
+                            ? scene.images[0].image_prompt
+                            : scene.image_prompt || ""
+                        }
+                        onChange={(e) => {
+                          if (Array.isArray(scene.images) && scene.images.length > 0) {
+                            handleUpdateSceneImagePrompt(idx, 0, e.target.value);
+                          } else {
+                            handleUpdateSceneField(idx, "image_prompt", e.target.value);
+                          }
+                        }}
+                        placeholder="Enter visual imagery prompt and scenery details..."
+                        className="w-full p-3.5 border border-line bg-white font-sans text-xs text-ink leading-relaxed outline-none focus:border-signal resize-y"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -542,7 +725,7 @@ export default function ScenesTab({
                     Paste Scenes JSON
                   </h3>
                   <p className="text-xs text-ink-muted">
-                    Supports <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">scene_number</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">audio_text</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">image_prompt</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">transition</code>, and <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">ken_burns</code>.
+                    Supports <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">scene_number</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">audio_text</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">number_of_images</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">images</code> / <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">image_prompt</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">transition</code>, and <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">ken_burns</code>.
                   </p>
                 </div>
               </div>
@@ -578,7 +761,7 @@ export default function ScenesTab({
                     setPastedJsonText(e.target.value);
                     if (pasteError) setPasteError("");
                   }}
-                  placeholder={`[\n  {\n    "scene_number": 1,\n    "audio_text": "Why does being broke cost so much more than having wealth?",\n    "image_prompt": "Visual narrative frame: a worn leather wallet on a kitchen table next to an unpaid bill.",\n    "transition": "fade",\n    "ken_burns": {\n      "direction": "zoom-in"\n    }\n  },\n  {\n    "scene_number": 2,\n    "audio_text": "From overdraft fees to predatory loan interest, poverty carries a hidden tax.",\n    "image_prompt": "Visual breakdown: contrasting gold scales with floating interest percentages.",\n    "transition": "crossfade",\n    "ken_burns": {\n      "direction": "pan-right"\n    }\n  }\n]`}
+                  placeholder={`[\n  {\n    "scene_number": 1,\n    "audio_text": "Why does being broke cost so much more than having wealth?",\n    "number_of_images": 2,\n    "images": [\n      {\n        "image_number": 1,\n        "image_prompt": "Visual frame 1: worn wallet on a kitchen table."\n      },\n      {\n        "image_number": 2,\n        "image_prompt": "Visual frame 2: close-up on unpaid bill stamp."\n      }\n    ],\n    "transition": "fade",\n    "ken_burns": {\n      "direction": "zoom-in"\n    }\n  }\n]`}
                   className="w-full flex-1 min-h-[220px] p-3.5 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
                 />
               </div>

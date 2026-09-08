@@ -1098,7 +1098,7 @@ export default function TopicStudioPage() {
       parsed = [];
     }
     const scene = parsed.find((s) => Number(s.scene_number) === Number(sceneNum));
-    const prompt = scene?.image_prompt || "";
+    const prompt = scene?.image_prompt || scene?.images?.[0]?.image_prompt || "";
 
     if (!prompt) {
       toast.error(`Scene ${sceneNum} has no image prompt defined.`);

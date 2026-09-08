@@ -177,7 +177,11 @@ export default function ImagesTab({
       if (withAudio) {
         item.audio_text = s.audio_text || s.narration || s.script || s.voiceover || s.text || "";
       }
-      item.image_prompt = s.image_prompt || "";
+      if (Array.isArray(s.images) && s.images.length > 0) {
+        item.number_of_images = s.number_of_images || s.images.length;
+        item.images = s.images;
+      }
+      item.image_prompt = s.image_prompt || s.images?.[0]?.image_prompt || "";
       return item;
     });
   }
@@ -232,6 +236,8 @@ export default function ImagesTab({
           promptMap.set(Number(sNum), {
             image_prompt: item.image_prompt ?? item.visual_prompt ?? item.prompt,
             audio_text: item.audio_text ?? item.narration ?? item.script ?? item.voiceover ?? item.text,
+            number_of_images: item.number_of_images,
+            images: Array.isArray(item.images) ? item.images : undefined,
           });
         }
       });
@@ -242,6 +248,8 @@ export default function ImagesTab({
           const next = { ...s };
           if (item.image_prompt !== undefined) next.image_prompt = item.image_prompt;
           if (item.audio_text !== undefined) next.audio_text = item.audio_text;
+          if (item.number_of_images !== undefined) next.number_of_images = item.number_of_images;
+          if (item.images !== undefined) next.images = item.images;
           return next;
         }
         return s;
@@ -601,6 +609,11 @@ export default function ImagesTab({
                       <span className="font-mono text-xs font-semibold text-ink truncate">
                         SCENE 0{sceneNum}
                       </span>
+                      {Array.isArray(scene.images) && scene.images.length > 1 && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono text-signal bg-signal/10 border border-signal/20 rounded-xs shrink-0">
+                          {scene.images.length} images
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -665,13 +678,33 @@ export default function ImagesTab({
 
                   {/* Image Prompt Box (Accordion view) */}
                   {expandedPrompts[sceneNum] && (
-                    <div className="p-3 bg-paper-dark/60 border-t border-line space-y-1 animate-fade-in">
-                      <span className="text-[10px] font-semibold text-ink-muted uppercase font-mono">
-                        Prompt:
-                      </span>
-                      <p className="font-mono text-[11px] text-ink leading-relaxed break-words max-h-24 overflow-y-auto">
-                        {scene.image_prompt || "No visual prompt provided for this scene."}
-                      </p>
+                    <div className="p-3 bg-paper-dark/60 border-t border-line space-y-2 animate-fade-in">
+                      {Array.isArray(scene.images) && scene.images.length > 1 ? (
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-semibold text-ink-muted uppercase font-mono">
+                            Prompts ({scene.images.length} Images):
+                          </span>
+                          {scene.images.map((img, imgIdx) => (
+                            <div key={imgIdx} className="p-2 bg-paper-card border border-line space-y-1">
+                              <span className="text-[10px] font-mono font-semibold text-signal">
+                                Image #{img.image_number || imgIdx + 1}:
+                              </span>
+                              <p className="font-mono text-[11px] text-ink leading-relaxed break-words">
+                                {img.image_prompt || "No visual prompt provided."}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-semibold text-ink-muted uppercase font-mono">
+                            Prompt:
+                          </span>
+                          <p className="font-mono text-[11px] text-ink leading-relaxed break-words max-h-24 overflow-y-auto">
+                            {scene.image_prompt || scene.images?.[0]?.image_prompt || "No visual prompt provided for this scene."}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 

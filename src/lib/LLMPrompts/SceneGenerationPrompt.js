@@ -24,29 +24,50 @@ If enabled, keep character appearance (face, hair, age, clothing) consistent acr
 {ACTIVE_SCRIPT}
 
 ## RULES
-1. AUDIO TEXT (EXACT PRESERVATION):
-   Divide the script into logical scenes (roughly 1–3 short sentences per scene).
-   \`audio_text\` must contain the exact, verbatim narration for that scene without any rewriting, omission, or duplication. All script words must be accounted for once in exact sequence.
 
-2. IMAGE PROMPTS:
+Break the script into as many scenes as naturally fit — do not force a fixed number.
+Each scene should cover ONE coherent visual moment or narrative beat from the script.
+Determine the number of images required to visualize each scene.
+Distribute screen time intentionally: high-tension or emotionally heavy moments get more images and longer durations.
+Images must align with the content/context of the voice text (what is being spoken in the scene).
+
+Each scene must have:
+
+1. AUDIO TEXT (EXACT PRESERVATION):
+   \`audio_text\` must contain the exact, verbatim narration for that scene without any rewriting, omission, or duplication. All script words must be accounted for once, in exact sequence.
+
+2. NUMBER OF IMAGES (number_of_images):
+   The total count of images for this scene, matching the length of the \`images\` array.
+
+3. IMAGE PROMPTS:
    Each \`image_prompt\` must be a concise, vivid image prompt that visualizes the spoken words.
    Include subject, action/expression, environment, camera angle/framing, and lighting matching the Image Theme.
    Do not include text, subtitles, captions, headlines, or watermarks.
 
-3. TRANSITIONS:
+4. TRANSITIONS (for each scene):
    Choose from: \`fade\` (default), \`crossfade\`, \`fade-to-black\`, \`fade-to-white\`, \`fade-in\`, \`fade-out\`, or \`cut\` (use \`cut\` when the next scene directly continues the current thought).
 
-4. KEN BURNS:
+5. KEN BURNS:
    Choose one motion direction: \`zoom-in\`, \`zoom-out\`, \`pan-left\`, \`pan-right\`, \`pan-up\`, or \`pan-down\`.
 
 ## OUTPUT FORMAT
-Return ONLY a valid raw JSON array. Start directly with [ and end with ]. No markdown fences, no explanation.
+Return ONLY a valid raw JSON array. Start directly with [ and end with ]. No markdown fences, no comments, no trailing commas, no explanation — the output must pass a strict JSON parser as-is.
 
 [
   {
     "scene_number": 1,
     "audio_text": "Exact verbatim narration from script...",
-    "image_prompt": "Visual prompt matching the scene...",
+    "number_of_images": 2,
+    "images": [
+      {
+        "image_number": 1,
+        "image_prompt": "Visual prompt matching the scene..."
+      },
+      {
+        "image_number": 2,
+        "image_prompt": "Visual prompt matching the scene..."
+      }
+    ],
     "transition": "fade",
     "ken_burns": {
       "direction": "zoom-in"
@@ -108,16 +129,28 @@ export function getSceneGenerationPrompt({
       ? mainCharacterDescription.trim()
       : "None";
 
-  return SCENE_GENERATION_SYSTEM_PROMPT.replaceAll("{CHANNEL_NAME}", effectiveChannelName)
-    .replaceAll("{CHANNEL_NICHE}", effectiveNiche)
-    .replaceAll("{CHANNEL_DESCRIPTION}", effectiveDescription)
-    .replaceAll("{CHANNEL_MISSION}", effectiveMission)
-    .replaceAll("{CHANNEL_IMAGE_THEME}", effectiveImageTheme)
-    .replaceAll("{CONTENT_PILLAR_NAME}", effectivePillarName)
-    .replaceAll("{CONTENT_PILLAR_CATEGORY_TAG}", effectivePillarTag)
-    .replaceAll("{CONTENT_PILLAR_TONE}", effectivePillarTone)
-    .replaceAll("{CONTENT_PILLAR_DESCRIPTION}", effectivePillarDescription)
-    .replaceAll("{USE_MAIN_CHARACTER}", useMainCharacter ? "Yes" : "No")
-    .replaceAll("{MAIN_CHARACTER_DESCRIPTION}", resolvedMainCharDesc)
-    .replaceAll("{ACTIVE_SCRIPT}", effectiveScript);
+  const placeholderMap = {
+    "{CHANNEL_NAME}": effectiveChannelName,
+    "{CHANNEL_NICHE}": effectiveNiche,
+    "{CHANNEL_DESCRIPTION}": effectiveDescription,
+    "{CHANNEL_MISSION}": effectiveMission,
+    "{CHANNEL_IMAGE_THEME}": effectiveImageTheme,
+    "{CONTENT_PILLAR_NAME}": effectivePillarName,
+    "{CONTENT_PILLAR_CATEGORY_TAG}": effectivePillarTag,
+    "{CONTENT_PILLAR_TONE}": effectivePillarTone,
+    "{CONTENT_PILLAR_DESCRIPTION}": effectivePillarDescription,
+    "{USE_MAIN_CHARACTER}": useMainCharacter ? "Yes" : "No",
+    "{MAIN_CHARACTER_DESCRIPTION}": resolvedMainCharDesc,
+    "{ACTIVE_SCRIPT}": effectiveScript,
+  };
+
+  // Use split/join (not replaceAll(str, str)) so values containing "$&", "$$",
+  // "$`", "$'" — e.g. a script mentioning a dollar amount — are inserted
+  // literally instead of being interpreted as special replacement patterns.
+  let prompt = SCENE_GENERATION_SYSTEM_PROMPT;
+  for (const [placeholder, value] of Object.entries(placeholderMap)) {
+    prompt = prompt.split(placeholder).join(value);
+  }
+
+  return prompt;
 }

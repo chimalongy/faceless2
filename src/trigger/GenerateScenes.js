@@ -294,7 +294,7 @@ export const generateScenesTask = task({
           messages: [
             {
               role: "system",
-              content: "You are an expert storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, image_prompt, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
+              content: "You are an expert storyboard director and AI image prompt engineer. Return ONLY a valid, complete raw JSON array of structured scenes covering the entire script from beginning to end with scene_number, audio_text, number_of_images, images, and ken_burns. Output NO markdown fences, explanations, reasoning, or commentary.",
             },
             {
               role: "user",
@@ -312,17 +312,41 @@ export const generateScenesTask = task({
 
         const parsed = parseScenesJson(textResult);
 
-        // Format and validate scene properties
-        parsedScenes = parsed.map((sc, idx) => ({
-          scene_number: Number(sc.scene_number || sc.scene_index || idx + 1),
-          audio_text: String(sc.audio_text || sc.narration || sc.text || "").trim(),
-          image_prompt: String(sc.image_prompt || sc.prompt || sc.visual_prompt || "").trim(),
-          transition: String(sc.transition || sc.Transition || "fade").toLowerCase().trim(),
-          ken_burns: {
-            direction: sc.ken_burns?.direction || "zoom-in",
-            intensity: sc.ken_burns?.intensity || 0.10,
-          },
-        }));
+        // Format and validate scene properties (supporting both single image_prompt and new images array)
+        parsedScenes = parsed.map((sc, idx) => {
+          const rawImages = Array.isArray(sc.images) ? sc.images : [];
+          const normalizedImages = rawImages
+            .map((img, imgIdx) => ({
+              image_number: Number(img.image_number || img.number || imgIdx + 1),
+              image_prompt: String(img.image_prompt || img.prompt || img.visual_prompt || "").trim(),
+            }))
+            .filter((img) => Boolean(img.image_prompt));
+
+          // If no images array was provided or parsed, fallback to sc.image_prompt
+          const topLevelPrompt = String(sc.image_prompt || sc.prompt || sc.visual_prompt || "").trim();
+          if (normalizedImages.length === 0 && topLevelPrompt) {
+            normalizedImages.push({
+              image_number: 1,
+              image_prompt: topLevelPrompt,
+            });
+          }
+
+          const primaryImagePrompt = normalizedImages[0]?.image_prompt || topLevelPrompt;
+          const numberOfImages = Number(sc.number_of_images) || normalizedImages.length || 1;
+
+          return {
+            scene_number: Number(sc.scene_number || sc.scene_index || idx + 1),
+            audio_text: String(sc.audio_text || sc.narration || sc.text || "").trim(),
+            number_of_images: numberOfImages,
+            images: normalizedImages,
+            image_prompt: primaryImagePrompt,
+            transition: String(sc.transition || sc.Transition || "fade").toLowerCase().trim(),
+            ken_burns: {
+              direction: sc.ken_burns?.direction || "zoom-in",
+              intensity: sc.ken_burns?.intensity || 0.10,
+            },
+          };
+        });
 
         successfulAccount = `${email} (${accountSource})`;
         logger.log(`[GenerateScenes] Successfully generated and parsed ${parsedScenes.length} scenes using account ${successfulAccount}.`);

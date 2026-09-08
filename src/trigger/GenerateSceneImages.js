@@ -70,7 +70,13 @@ export const generateSceneImagesTask = task({
         };
       }
 
-      const scenePromptText = scene.image_prompt || scene.prompt || scene.visual_prompt || scene.description || "";
+      const scenePromptText =
+        scene.image_prompt ||
+        scene.images?.[0]?.image_prompt ||
+        scene.prompt ||
+        scene.visual_prompt ||
+        scene.description ||
+        "";
       const fullPrompt = `${globalThemePrompt} ${scenePromptText}`.trim();
 
       if (!fullPrompt) {
