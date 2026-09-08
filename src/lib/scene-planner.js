@@ -264,38 +264,48 @@ export async function planSceneTiming({
 
     const baseURL = source === "openrouter" ? openRouterBaseUrl : gemmaBaseUrl;
 
-    try {
-      console.log(`[ScenePlanner] Calling LLM (${configuredModel}) via ${source} for Scene ${sceneNumber}...`);
-      const openai = new OpenAI({
-        apiKey: token,
-        baseURL,
-      });
-
-      const completion = await openai.chat.completions.create({
-        model: configuredModel,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert video director. Return ONLY a valid JSON array of image timing objects with image_number, start_time, end_time, duration. Do not include markdown code fences or any conversational text.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.2,
-      });
-
-      const rawContent = completion.choices?.[0]?.message?.content || "";
-      const parsed = extractJsonArray(rawContent);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const validated = normalizeTimings(parsed, images, safeDuration);
-        console.log(`[ScenePlanner] Successfully planned Scene ${sceneNumber} image timings:`, validated);
-        return validated;
+    const candidateModels = [configuredModel];
+    if (source === "gemini") {
+      for (const m of ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]) {
+        if (!candidateModels.includes(m)) candidateModels.push(m);
       }
-      throw new Error(`Could not parse valid JSON array from LLM response: ${rawContent.slice(0, 100)}...`);
-    } catch (llmErr) {
-      console.warn(`[ScenePlanner] LLM account attempt ${i + 1} failed for Scene ${sceneNumber}:`, llmErr?.message || llmErr);
+    }
+
+    const openai = new OpenAI({
+      apiKey: token,
+      baseURL,
+    });
+
+    for (const currentModel of candidateModels) {
+      try {
+        console.log(`[ScenePlanner] Calling LLM (${currentModel}) via ${source} for Scene ${sceneNumber}...`);
+        const completion = await openai.chat.completions.create({
+          model: currentModel,
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert video director. Return ONLY a valid JSON array of image timing objects with image_number, start_time, end_time, duration. Do not include markdown code fences or any conversational text.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.2,
+        });
+
+        const rawContent = completion.choices?.[0]?.message?.content || "";
+        const parsed = extractJsonArray(rawContent);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const validated = normalizeTimings(parsed, images, safeDuration);
+          console.log(`[ScenePlanner] Successfully planned Scene ${sceneNumber} image timings:`, validated);
+          return validated;
+        }
+        throw new Error(`Could not parse valid JSON array from LLM response: ${rawContent.slice(0, 100)}...`);
+      } catch (llmErr) {
+        console.warn(`[ScenePlanner] Attempt with ${currentModel} on account ${i + 1} failed for Scene ${sceneNumber}:`, llmErr?.message || llmErr);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
     }
   }
 
