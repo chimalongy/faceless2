@@ -26,27 +26,38 @@ Map each visual image to the exact moment in the spoken audio when the subject o
    - Look at the ASS timestamp lines [Events] to see when key words from the image prompt are spoken.
    - Transition to the next image at the natural spoken phrase or clause boundary where the topic shifts.
 
-## OUTPUT FORMAT
-Return ONLY a valid raw JSON array of objects. No markdown code blocks, no commentary, no explanation.
-Each object must have:
-- "image_number": Integer (1, 2, 3...)
-- "start_time": Float (seconds, rounded to 2 decimal places)
-- "end_time": Float (seconds, rounded to 2 decimal places)
-- "duration": Float (seconds, rounded to 2 decimal places)
+## OUTPUT FORMAT (STRICT)
+You MUST return a valid top-level raw JSON ARRAY starting with "[" and ending with "]".
+DO NOT wrap the response in a JSON object (DO NOT use "{" as the outer wrapper).
+DO NOT use numeric string keys (DO NOT output {"0": {...}, "1": {...}}).
+DO NOT wrap the array in a parent object (DO NOT output {"timings": [...]}).
+DO NOT include markdown code blocks (no \`\`\`json or \`\`\`), no conversational filler, and no commentary.
 
-Example Output:
+### INCORRECT FORMAT (NEVER DO THIS):
+{
+  "0": { "image_number": 1, "start_time": 0.0, "end_time": 1.8, "duration": 1.8 },
+  "1": { "image_number": 2, "start_time": 1.8, "end_time": 3.4, "duration": 1.6 }
+}
+
+### CORRECT FORMAT (YOU MUST DO THIS):
 [
   {
     "image_number": 1,
     "start_time": 0.0,
-    "end_time": 3.65,
-    "duration": 3.65
+    "end_time": 1.8,
+    "duration": 1.8
   },
   {
     "image_number": 2,
-    "start_time": 3.65,
-    "end_time": 7.40,
-    "duration": 3.75
+    "start_time": 1.8,
+    "end_time": 3.4,
+    "duration": 1.6
+  },
+  {
+    "image_number": 3,
+    "start_time": 3.4,
+    "end_time": 5.0,
+    "duration": 1.6
   }
 ]
 `;
@@ -82,5 +93,11 @@ ${assContent.trim() || "(No transcription lines available, distribute based on t
 ## SCENE IMAGE PROMPTS
 ${imagesListText}
 
-Remember: Return ONLY the raw JSON array with image_number, start_time, end_time, duration.`;
+## FINAL INSTRUCTION
+Return EXACTLY ${images.length} JSON objects in a TOP-LEVEL JSON ARRAY starting with "[" and ending with "]".
+DO NOT return a JSON object with keys like "0", "1", "2". Return ONLY:
+[
+  { "image_number": 1, "start_time": ..., "end_time": ..., "duration": ... }
+]`;
 }
+

@@ -15,47 +15,56 @@ export function extractJsonArray(text) {
   try {
     const direct = JSON.parse(str);
     if (Array.isArray(direct)) return direct;
+    if (direct && typeof direct === "object") {
+      if (Array.isArray(direct.timings)) return direct.timings;
+      if (Array.isArray(direct.images)) return direct.images;
+      if (Array.isArray(direct.scenes)) return direct.scenes;
+      const vals = Object.values(direct);
+      if (vals.length > 0 && typeof vals[0] === "object" && (vals[0].duration !== undefined || vals[0].start_time !== undefined || vals[0].image_number !== undefined)) {
+        return vals;
+      }
+    }
   } catch (_) {}
 
   const startIdx = str.indexOf("[");
-  if (startIdx === -1) return null;
+  if (startIdx !== -1) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
 
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-
-  for (let i = startIdx; i < str.length; i++) {
-    const char = str[i];
-    if (escape) {
-      escape = false;
-      continue;
-    }
-    if (char === "\\") {
-      escape = true;
-      continue;
-    }
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (!inString) {
-      if (char === "[") {
-        depth++;
-      } else if (char === "]") {
-        depth--;
-        if (depth === 0) {
-          const candidate = str.slice(startIdx, i + 1);
-          try {
-            const parsed = JSON.parse(candidate);
-            if (Array.isArray(parsed)) return parsed;
-          } catch (e) {
+    for (let i = startIdx; i < str.length; i++) {
+      const char = str[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (char === "\\") {
+        escape = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (char === "[") {
+          depth++;
+        } else if (char === "]") {
+          depth--;
+          if (depth === 0) {
+            const candidate = str.slice(startIdx, i + 1);
             try {
-              const cleaned = candidate
-                .replace(/,\s*]/g, "]")
-                .replace(/,\s*}/g, "}");
-              const p2 = JSON.parse(cleaned);
-              if (Array.isArray(p2)) return p2;
-            } catch (_) {}
+              const parsed = JSON.parse(candidate);
+              if (Array.isArray(parsed)) return parsed;
+            } catch (e) {
+              try {
+                const cleaned = candidate
+                  .replace(/,\s*]/g, "]")
+                  .replace(/,\s*}/g, "}");
+                const p2 = JSON.parse(cleaned);
+                if (Array.isArray(p2)) return p2;
+              } catch (_) {}
+            }
           }
         }
       }
@@ -74,6 +83,22 @@ export function extractJsonArray(text) {
         if (Array.isArray(p2)) return p2;
       } catch (_) {}
     }
+  }
+
+  // Fallback: Check if the model wrapped output in an object like { "0": {...}, "1": {...} }
+  const objMatch = str.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      const pObj = JSON.parse(objMatch[0]);
+      if (pObj && typeof pObj === "object" && !Array.isArray(pObj)) {
+        if (Array.isArray(pObj.timings)) return pObj.timings;
+        if (Array.isArray(pObj.images)) return pObj.images;
+        const vals = Object.values(pObj);
+        if (vals.length > 0 && typeof vals[0] === "object" && (vals[0].duration !== undefined || vals[0].start_time !== undefined || vals[0].image_number !== undefined)) {
+          return vals;
+        }
+      }
+    } catch (_) {}
   }
 
   return null;
@@ -107,10 +132,15 @@ export function generateProportionalTimings(images, totalDuration) {
  * and the entire audio duration is covered accurately.
  */
 export function normalizeTimings(rawTimings, images, totalDuration) {
+  let list = rawTimings;
+  if (list && typeof list === "object" && !Array.isArray(list)) {
+    list = Object.values(list);
+  }
+
   const N = images.length;
   const dur = Math.max(1.0, Number(totalDuration) || 5.0);
 
-  if (!Array.isArray(rawTimings) || rawTimings.length !== N) {
+  if (!Array.isArray(list) || list.length !== N) {
     return generateProportionalTimings(images, dur);
   }
 
@@ -284,7 +314,7 @@ export async function planSceneTiming({
           messages: [
             {
               role: "system",
-              content: "You are an expert video director. Return ONLY a valid JSON array of image timing objects with image_number, start_time, end_time, duration. Do not include markdown code fences or any conversational text.",
+              content: "You are an expert video director. You MUST return ONLY a top-level raw JSON array starting with '[' and ending with ']'. Never return a JSON object with numeric keys like {\"0\": ...} or wrapper objects. Return ONLY: [ { \"image_number\": 1, \"start_time\": 0.0, \"end_time\": ..., \"duration\": ... } ]. No markdown fences.",
             },
             {
               role: "user",
