@@ -214,8 +214,8 @@ export async function planSceneTiming({
 
       if (generalRows?.[0]) {
         const g = generalRows[0];
-        sceneGenSource = (g.sceneGenSource || g.defaultLlmSource || "gemini").trim().toLowerCase();
-        configuredModel = (g.sceneGenModel || g.defaultLlmModel || "gemini-2.5-flash").trim();
+        sceneGenSource = (g.defaultLlmSource || g.sceneGenSource || "gemini").trim().toLowerCase();
+        configuredModel = (g.defaultLlmModel || g.sceneGenModel || "gemini-2.5-flash-lite").trim();
         if (g.gemmaBaseUrl) gemmaBaseUrl = g.gemmaBaseUrl;
         if (g.openRouterBaseUrl) openRouterBaseUrl = g.openRouterBaseUrl;
       }
@@ -266,7 +266,7 @@ export async function planSceneTiming({
 
     const candidateModels = [configuredModel];
     if (source === "gemini") {
-      for (const m of ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]) {
+      for (const m of ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]) {
         if (!candidateModels.includes(m)) candidateModels.push(m);
       }
     }
