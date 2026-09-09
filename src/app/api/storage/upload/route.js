@@ -19,6 +19,7 @@ export async function POST(request) {
     const topicSlug = formData.get("topicSlug") || "general";
     const assetType = formData.get("assetType") || "media"; // 'thumbnail', 'audio', 'image', 'video', 'completedvideo'
     const sceneIndex = formData.get("sceneIndex") ? parseInt(formData.get("sceneIndex"), 10) : null;
+    const imageIndex = formData.get("imageIndex") ? parseInt(formData.get("imageIndex"), 10) : null;
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const originalName = file.name || "file";
@@ -27,7 +28,10 @@ export async function POST(request) {
     const randomSuffix = Math.random().toString(36).substring(2, 8);
 
     // Clean key hierarchy in Cloudflare R2 bucket
-    const key = `channels/${channelSlug}/topics/${topicSlug}/${assetType}/${timestamp}-${randomSuffix}.${extension}`;
+    const imageSuffix = imageIndex && imageIndex > 1 ? `-${imageIndex}` : "";
+    const key = assetType === "image" && sceneIndex !== null
+      ? `channels/${channelSlug}/topics/${topicSlug}/images/scene-${sceneIndex}${imageSuffix}-${timestamp}-${randomSuffix}.${extension}`
+      : `channels/${channelSlug}/topics/${topicSlug}/${assetType}/${timestamp}-${randomSuffix}.${extension}`;
     const mimeType = file.type || "application/octet-stream";
 
     const uploadResult = await uploadToR2({
@@ -39,8 +43,14 @@ export async function POST(request) {
         topicSlug,
         assetType,
         originalName,
+        ...(sceneIndex !== null ? { sceneIndex: String(sceneIndex) } : {}),
+        ...(imageIndex !== null ? { imageIndex: String(imageIndex) } : {}),
       },
     });
+
+    const assetFileName = assetType === "image" && sceneIndex !== null
+      ? (imageIndex !== null ? `scene-${sceneIndex}${imageIndex > 1 ? `-${imageIndex}` : ""}.${extension}` : originalName)
+      : originalName;
 
     // Record in topic_assets and update topic row if database is connected
     try {
@@ -54,6 +64,27 @@ export async function POST(request) {
         const topicId = tRows?.[0]?.id || null;
 
         if (channelId) {
+          // If replacing an existing frame of a scene, clean up the previous asset for this frame
+          if (assetType === "image" && sceneIndex !== null && imageIndex !== null && topicId) {
+            try {
+              const searchPattern = imageIndex > 1 ? `%scene-${sceneIndex}-${imageIndex}.%` : `%scene-${sceneIndex}.%`;
+              const existingRows = await sql`
+                SELECT id, file_key FROM topic_assets
+                WHERE topic_id = ${topicId} AND asset_type = 'image' AND scene_index = ${sceneIndex}
+                AND (file_name LIKE ${searchPattern} OR file_key LIKE ${searchPattern});
+              `;
+              if (existingRows && existingRows.length > 0) {
+                const { deleteFromR2 } = await import("@/lib/storage");
+                for (const row of existingRows) {
+                  if (row.file_key) await deleteFromR2(row.file_key).catch(() => {});
+                  await sql`DELETE FROM topic_assets WHERE id = ${row.id};`;
+                }
+              }
+            } catch (cleanupErr) {
+              console.warn("Could not clean up previous frame asset:", cleanupErr);
+            }
+          }
+
           await sql`
             INSERT INTO topic_assets (
               topic_id,
@@ -72,7 +103,7 @@ export async function POST(request) {
               ${sceneIndex},
               ${uploadResult.publicUrl},
               ${uploadResult.key},
-              ${originalName},
+              ${assetFileName},
               ${mimeType},
               ${buffer.length}
             );

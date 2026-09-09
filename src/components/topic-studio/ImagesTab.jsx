@@ -19,7 +19,12 @@ import {
   Copy,
   Check,
   Code,
-  FolderArchive
+  FolderArchive,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Grid
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -50,6 +55,12 @@ export default function ImagesTab({
   const [includeAudioText, setIncludeAudioText] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Active view per scene card: "all" (grid/filmstrip of all frames) or a number (1, 2, 3...) for focused frame
+  const [sceneFrameView, setSceneFrameView] = useState({});
+
+  // Fullscreen Lightbox Modal state: { sceneNum, frameIndex, totalFrames, url, name, prompt, sceneImagesList }
+  const [lightbox, setLightbox] = useState(null);
+
   // Live ZIP upload & extraction progress state
   const [zipProgress, setZipProgress] = useState({
     active: false,
@@ -61,6 +72,38 @@ export default function ImagesTab({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Keyboard navigation for Lightbox modal
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (!lightbox) return;
+      if (e.key === "Escape") {
+        setLightbox(null);
+      } else if (e.key === "ArrowLeft") {
+        navigateLightbox(-1);
+      } else if (e.key === "ArrowRight") {
+        navigateLightbox(1);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lightbox]);
+
+  function navigateLightbox(direction) {
+    if (!lightbox || !Array.isArray(lightbox.frames) || lightbox.frames.length <= 1) return;
+    const currentIndex = lightbox.frameIndex - 1;
+    const nextIndex = (currentIndex + direction + lightbox.frames.length) % lightbox.frames.length;
+    const nextFrame = lightbox.frames[nextIndex];
+    if (nextFrame) {
+      setLightbox({
+        ...lightbox,
+        frameIndex: nextIndex + 1,
+        url: nextFrame.url,
+        name: nextFrame.name,
+        prompt: nextFrame.prompt,
+      });
+    }
+  }
 
   let parsedScenes = [];
   try {
@@ -91,7 +134,7 @@ export default function ImagesTab({
   const ungeneratedScenes = parsedScenes.filter((s) => {
     const sNum = s.scene_number;
     const imgData = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
-    return !imgData?.url;
+    return !imgData?.url && (!Array.isArray(imgData?.images) || imgData.images.length === 0);
   });
 
   const isAllUngeneratedSelected =
@@ -228,7 +271,6 @@ export default function ImagesTab({
         throw new Error("Prompt JSON must be an array of objects: [{ scene_number, image_prompt, audio_text? }]");
       }
 
-      // Map incoming prompts into parsedScenes
       const promptMap = new Map();
       parsed.forEach((item) => {
         const sNum = item.scene_number || item.sceneIndex || item.scene;
@@ -267,7 +309,8 @@ export default function ImagesTab({
 
   async function handleDownloadImage(sceneNum, url, imageName) {
     if (!url) return;
-    setDownloadingScenes((prev) => ({ ...prev, [sceneNum]: true }));
+    const downloadKey = `${sceneNum}_${imageName || url}`;
+    setDownloadingScenes((prev) => ({ ...prev, [downloadKey]: true }));
     const filename = imageName || `scene-${sceneNum}-visual.png`;
     try {
       const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
@@ -291,7 +334,7 @@ export default function ImagesTab({
       link.click();
       document.body.removeChild(link);
     } finally {
-      setDownloadingScenes((prev) => ({ ...prev, [sceneNum]: false }));
+      setDownloadingScenes((prev) => ({ ...prev, [downloadKey]: false }));
     }
   }
 
@@ -302,10 +345,10 @@ export default function ImagesTab({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
           <div>
             <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
-              <Film size={16} className="text-signal" /> Scene Visual Assets & Imagery
+              <Film size={16} className="text-signal" /> Scene Visual Assets & Multi-Image Manager
             </h3>
             <p className="text-xs text-ink-muted mt-0.5">
-              Upload single files, extract a batch ZIP by scene number, manage prompts in JSON format, or generate AI visuals.
+              Review multiple frames per scene, inspect individual image prompts, upload archives, or synthesize AI visuals.
             </p>
           </div>
 
@@ -315,7 +358,7 @@ export default function ImagesTab({
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 border border-line bg-white hover:bg-ink/5 text-xs font-semibold text-ink transition-all cursor-pointer ${
                 isExtractingZip || zipProgress.active ? "opacity-60 pointer-events-none" : ""
               }`}
-              title="Upload ZIP archive of scene images (e.g. 1.png_timestamp, 2.jpg)"
+              title="Upload ZIP archive of scene images (e.g. 1_1.jfif, 1_2.jfif, 2.jpg)"
             >
               {isExtractingZip || zipProgress.active ? (
                 <>
@@ -441,7 +484,6 @@ export default function ImagesTab({
               </span>
             </div>
 
-            {/* Progress Track */}
             <div className="w-full h-2 bg-line rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ease-out ${
@@ -483,7 +525,6 @@ export default function ImagesTab({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Option to include audio text toggle */}
               <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-line text-[11px] font-semibold text-ink cursor-pointer select-none rounded-sm hover:bg-ink/5">
                 <input
                   type="checkbox"
@@ -494,7 +535,6 @@ export default function ImagesTab({
                 <span>Include Audio Text</span>
               </label>
 
-              {/* Option 1: Copy Selected Prompts as JSON */}
               <button
                 type="button"
                 onClick={handleCopyPromptsJson}
@@ -505,7 +545,6 @@ export default function ImagesTab({
                 <span>Copy Prompts JSON</span>
               </button>
 
-              {/* Option 2: View / Edit Selected Prompts in JSON Modal */}
               <button
                 type="button"
                 onClick={() => handleOpenPromptJsonModal(true)}
@@ -516,7 +555,6 @@ export default function ImagesTab({
                 <span>Edit / View Prompts JSON</span>
               </button>
 
-              {/* Option 3: Delete Selected Images */}
               <button
                 type="button"
                 onClick={onDeleteBatchClick}
@@ -527,7 +565,6 @@ export default function ImagesTab({
                 <span>Delete Selected Images</span>
               </button>
 
-              {/* Clear Selection */}
               <button
                 type="button"
                 onClick={handleDeselectAll}
@@ -541,18 +578,20 @@ export default function ImagesTab({
         )}
       </div>
 
-      {/* Responsive Grid for Scene Visuals */}
+      {/* Grid of Scene Cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-line">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-mono font-semibold uppercase tracking-wider text-ink">
               Scene Visuals ({parsedScenes.length} Scenes)
             </h4>
-            <span className={`px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded border ${
-              isShort 
-                ? "text-signal bg-signal/10 border-signal/30" 
-                : "text-ink-muted bg-ink/5 border-line"
-            }`}>
+            <span
+              className={`px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded border ${
+                isShort
+                  ? "text-signal bg-signal/10 border-signal/30"
+                  : "text-ink-muted bg-ink/5 border-line"
+              }`}
+            >
               {isShort ? "9:16 Short Format" : "16:9 Landscape"}
             </span>
           </div>
@@ -567,32 +606,96 @@ export default function ImagesTab({
             </p>
           </div>
         ) : (
-          <div className={`grid gap-4 sm:gap-5 ${
-            isShort
-              ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
-              : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-          }`}>
+          <div
+            className={`grid gap-5 ${
+              isShort
+                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                : "grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3"
+            }`}
+          >
             {parsedScenes.map((scene) => {
               const sceneNum = scene.scene_number;
-              const imgData = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
-              const hasImage = !!imgData?.url;
+              const imgData =
+                sceneImages[sceneNum] ||
+                sceneImages[String(sceneNum)] ||
+                sceneImages[Number(sceneNum)];
+
               const isSelected = selectedScenes.has(sceneNum);
-              const isGeneratingThis = !!generatingSceneImages[sceneNum] || isGeneratingAllImages;
-              const isDownloading = !!downloadingScenes[sceneNum];
+
+              // 1. Gather all prompt definitions for this scene
+              const definedPrompts = Array.isArray(scene.images) && scene.images.length > 0
+                ? scene.images.map((img, i) => ({
+                    image_number: img.image_number || i + 1,
+                    image_prompt: img.image_prompt || img.prompt || "",
+                  }))
+                : [
+                    {
+                      image_number: 1,
+                      image_prompt: scene.image_prompt || "",
+                    },
+                  ];
+
+              // 2. Gather all existing uploaded/generated image assets for this scene
+              const uploadedImagesList = Array.isArray(imgData?.images) && imgData.images.length > 0
+                ? imgData.images
+                : imgData?.url
+                ? [
+                    {
+                      url: imgData.url,
+                      key: imgData.key,
+                      name: imgData.name,
+                      endpointUsed: imgData.endpointUsed,
+                    },
+                  ]
+                : [];
+
+              // 3. Determine total frames: maximum of defined prompts, number_of_images field, and uploaded files
+              const totalFrames = Math.max(
+                definedPrompts.length,
+                Number(scene.number_of_images) || 0,
+                uploadedImagesList.length,
+                1
+              );
+
+              const isMultiImage = totalFrames > 1;
+
+              // Build normalized list of frames for this scene
+              const frames = Array.from({ length: totalFrames }, (_, idx) => {
+                const frameNum = idx + 1;
+                const asset = uploadedImagesList[idx] || null;
+                const promptObj = definedPrompts[idx] || definedPrompts[0] || {};
+                const promptText = promptObj.image_prompt || scene.image_prompt || "";
+
+                return {
+                  frameNumber: frameNum,
+                  url: asset?.url || null,
+                  key: asset?.key || null,
+                  name: asset?.name || `scene-${sceneNum}-${frameNum}.png`,
+                  endpointUsed: asset?.endpointUsed || imgData?.endpointUsed || null,
+                  prompt: promptText,
+                  hasImage: !!asset?.url,
+                };
+              });
+
+              const uploadedCount = frames.filter((f) => f.hasImage).length;
+              const isFullyLoaded = uploadedCount >= totalFrames && totalFrames > 0;
+              const currentView = sceneFrameView[sceneNum] || "all"; // "all" or 1, 2, 3...
+              const isGeneratingOverall =
+                !!generatingSceneImages[sceneNum] || isGeneratingAllImages;
 
               return (
                 <div
                   key={sceneNum}
-                  className={`border bg-paper-card flex flex-col justify-between transition-all overflow-hidden ${
+                  className={`border bg-paper-card flex flex-col justify-between transition-all overflow-hidden rounded-xs ${
                     isSelected
                       ? "border-signal ring-2 ring-signal/20 bg-signal/5 shadow-sm"
                       : "border-line hover:border-signal/40"
                   }`}
                 >
-                  {/* Top Bar of Card */}
-                  <div className="p-3 border-b border-line/60 bg-paper-dark/30 flex items-center justify-between gap-2">
+                  {/* Scene Card Header */}
+                  <div className="p-3 border-b border-line/60 bg-paper-dark/40 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      {/* Selection Checkbox */}
+                      {/* Checkbox */}
                       <label className="flex items-center cursor-pointer select-none shrink-0">
                         <input
                           type="checkbox"
@@ -609,10 +712,27 @@ export default function ImagesTab({
                       <span className="font-mono text-xs font-semibold text-ink truncate">
                         SCENE 0{sceneNum}
                       </span>
-                      {Array.isArray(scene.images) && scene.images.length > 1 && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-mono text-signal bg-signal/10 border border-signal/20 rounded-xs shrink-0">
-                          {scene.images.length} images
+
+                      {/* Multi-Image Indicator Badge */}
+                      {isMultiImage ? (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-semibold rounded-xs shrink-0 ${
+                            isFullyLoaded
+                              ? "text-emerald-800 bg-emerald-50 border border-emerald-300"
+                              : uploadedCount > 0
+                              ? "text-amber-800 bg-amber-50 border border-amber-300"
+                              : "text-ink-muted bg-ink/5 border border-line"
+                          }`}
+                        >
+                          <Layers size={11} className={isFullyLoaded ? "text-emerald-600" : "text-signal"} />
+                          <span>
+                            {uploadedCount}/{totalFrames} Images
+                          </span>
                         </span>
+                      ) : (
+                        uploadedCount > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Image uploaded" />
+                        )
                       )}
                     </div>
 
@@ -628,13 +748,13 @@ export default function ImagesTab({
                         <span>{expandedPrompts[sceneNum] ? "Hide" : "Prompt"}</span>
                       </button>
 
-                      {/* Delete Button */}
-                      {hasImage && (
+                      {/* Clear All Images for Scene */}
+                      {uploadedCount > 0 && (
                         <button
                           type="button"
                           onClick={() => handleDeleteSceneImage(sceneNum)}
                           className="p-1 rounded-sm text-ink-muted hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete image for this scene"
+                          title="Delete all images for this scene"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -642,132 +762,525 @@ export default function ImagesTab({
                     </div>
                   </div>
 
-                  {/* Image Preview Box (9:16 for Shorts, 16:9 for Long-Form) */}
-                  <div className={`relative ${isShort ? "aspect-[9/16]" : "aspect-video"} w-full bg-ink text-white overflow-hidden flex items-center justify-center`}>
-                    {/* Aspect Ratio Indicator Badge */}
-                    <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black/70 text-white/90 backdrop-blur-xs rounded border border-white/10 pointer-events-none z-10 shadow-xs">
-                      {isShort ? "9:16" : "16:9"}
-                    </span>
+                  {/* Multi-Frame Navigation Sub-header (only when multiple images) */}
+                  {isMultiImage && (
+                    <div className="px-3 py-1.5 bg-paper-dark/70 border-b border-line/40 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSceneFrameView((prev) => ({ ...prev, [sceneNum]: "all" }))
+                          }
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors cursor-pointer shrink-0 ${
+                            currentView === "all"
+                              ? "bg-signal text-white shadow-2xs"
+                              : "bg-white text-ink border border-line hover:bg-ink/5"
+                          }`}
+                        >
+                          <Grid size={11} />
+                          <span>All ({totalFrames})</span>
+                        </button>
 
-                    {generatingSceneImages[sceneNum] || (isGeneratingAllImages && !hasImage) ? (
-                      <div className="relative w-full h-full flex items-center justify-center bg-slate-900 text-center p-3 space-y-1.5">
-                        <div className="space-y-1.5">
-                          <Loader2 size={24} className="animate-spin text-signal mx-auto" />
-                          <p className="text-[11px] font-mono text-white/90 font-semibold">Generating Scene 0{sceneNum}...</p>
-                        </div>
+                        {frames.map((f) => (
+                          <button
+                            key={f.frameNumber}
+                            type="button"
+                            onClick={() =>
+                              setSceneFrameView((prev) => ({
+                                ...prev,
+                                [sceneNum]: f.frameNumber,
+                              }))
+                            }
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors cursor-pointer shrink-0 ${
+                              currentView === f.frameNumber
+                                ? "bg-signal text-white shadow-2xs"
+                                : "bg-white text-ink border border-line hover:bg-ink/5"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                f.hasImage ? "bg-emerald-500" : "bg-amber-400"
+                              }`}
+                            />
+                            <span>#{f.frameNumber}</span>
+                          </button>
+                        ))}
                       </div>
-                    ) : hasImage ? (
-                      <img
-                        src={imgData.url}
-                        alt={`Scene ${sceneNum}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="text-center space-y-1.5 p-4 text-white/50">
-                        <ImageIcon size={24} className="mx-auto opacity-40 text-white" />
-                        <p className="text-[11px] font-mono text-white/70">No image yet</p>
-                      </div>
-                    )}
 
-                    {imgData?.endpointUsed && hasImage && (
-                      <span className="absolute bottom-2 left-2 px-1.5 py-0.5 text-[9px] font-mono text-emerald-900 bg-emerald-100/90 backdrop-blur-xs border border-emerald-300 max-w-[120px] truncate" title={imgData.endpointUsed}>
-                        {imgData.endpointUsed}
+                      <span className="text-[10px] font-mono text-ink-muted shrink-0">
+                        {currentView === "all" ? "Multi-View" : `Frame ${currentView}/${totalFrames}`}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Visual Content Display Area */}
+                  <div className="p-3 bg-paper-dark/20 flex-1 flex flex-col justify-center">
+                    {/* CASE 1: All Frames Grid View */}
+                    {isMultiImage && currentView === "all" ? (
+                      <div
+                        className={`grid gap-2.5 ${
+                          frames.length === 2
+                            ? "grid-cols-2"
+                            : frames.length === 3
+                            ? "grid-cols-3"
+                            : frames.length === 4
+                            ? "grid-cols-2 sm:grid-cols-4"
+                            : "grid-cols-3 sm:grid-cols-5"
+                        }`}
+                      >
+                        {frames.map((f) => {
+                          const isGenThisFrame =
+                            generatingSceneImages[`${sceneNum}_${f.frameNumber}`] ||
+                            (isGeneratingOverall && !f.hasImage);
+                          const isDown = downloadingScenes[`${sceneNum}_${f.name}`];
+
+                          return (
+                            <div
+                              key={f.frameNumber}
+                              className="group relative border border-line bg-paper-card overflow-hidden flex flex-col justify-between shadow-2xs hover:border-signal/50 transition-all"
+                            >
+                              {/* Frame Card Header Pill */}
+                              <div className="px-2 py-1 bg-paper-dark/80 border-b border-line/50 flex items-center justify-between text-[10px] font-mono">
+                                <span className="font-bold text-ink">#{f.frameNumber}</span>
+                                <span
+                                  className={`text-[9px] px-1 rounded ${
+                                    f.hasImage
+                                      ? "text-emerald-800 bg-emerald-100/80"
+                                      : "text-amber-800 bg-amber-100/80"
+                                  }`}
+                                >
+                                  {f.hasImage ? "Loaded" : "Empty"}
+                                </span>
+                              </div>
+
+                              {/* Frame Preview Image Box */}
+                              <div
+                                className={`relative w-full ${
+                                  isShort ? "aspect-[9/16]" : "aspect-video"
+                                } bg-slate-950 flex items-center justify-center overflow-hidden cursor-pointer`}
+                                onClick={() => {
+                                  if (f.hasImage) {
+                                    setLightbox({
+                                      sceneNum,
+                                      frameIndex: f.frameNumber,
+                                      totalFrames,
+                                      url: f.url,
+                                      name: f.name,
+                                      prompt: f.prompt,
+                                      frames,
+                                    });
+                                  } else {
+                                    setSceneFrameView((prev) => ({
+                                      ...prev,
+                                      [sceneNum]: f.frameNumber,
+                                    }));
+                                  }
+                                }}
+                              >
+                                {isGenThisFrame ? (
+                                  <div className="w-full h-full flex items-center justify-center bg-slate-900 text-center p-2">
+                                    <div className="space-y-1">
+                                      <Loader2 size={16} className="animate-spin text-signal mx-auto" />
+                                      <p className="text-[9px] font-mono text-white/80 font-semibold">
+                                        Generating #{f.frameNumber}...
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : f.hasImage ? (
+                                  <>
+                                    <img
+                                      src={f.url}
+                                      alt={`Scene ${sceneNum} Frame ${f.frameNumber}`}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    {/* Hover overlay with zoom icon */}
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setLightbox({
+                                            sceneNum,
+                                            frameIndex: f.frameNumber,
+                                            totalFrames,
+                                            url: f.url,
+                                            name: f.name,
+                                            prompt: f.prompt,
+                                            frames,
+                                          });
+                                        }}
+                                        className="p-1.5 rounded-full bg-white/90 hover:bg-white text-ink shadow-sm transition-transform active:scale-95"
+                                        title="View Fullscreen"
+                                      >
+                                        <Maximize2 size={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadImage(sceneNum, f.url, f.name);
+                                        }}
+                                        className="p-1.5 rounded-full bg-white/90 hover:bg-white text-ink shadow-sm transition-transform active:scale-95"
+                                        title="Download Frame"
+                                      >
+                                        <Download size={12} />
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="p-2 text-center text-white/40 space-y-1">
+                                    <ImageIcon size={18} className="mx-auto opacity-50" />
+                                    <p className="text-[9px] font-mono">No visual</p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Frame Action Toolbar */}
+                              <div className="p-1.5 bg-paper-card border-t border-line/60 flex items-center justify-between gap-1">
+                                {/* Upload / Replace Frame */}
+                                <label
+                                  className="p-1 rounded text-ink-muted hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer shrink-0"
+                                  title={`Upload / Replace Frame #${f.frameNumber}`}
+                                >
+                                  <Upload size={11} />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        handleUploadSceneImage(sceneNum, file, f.frameNumber);
+                                      }
+                                      e.target.value = "";
+                                    }}
+                                    className="hidden"
+                                  />
+                                </label>
+
+                                {/* Generate single frame */}
+                                <button
+                                  type="button"
+                                  disabled={isGenThisFrame}
+                                  onClick={() => handleGenerateSceneImage(sceneNum, f.frameNumber)}
+                                  className="p-1 rounded text-signal hover:bg-signal/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                                  title={`Generate Frame #${f.frameNumber} with AI`}
+                                >
+                                  <Sparkles size={11} />
+                                </button>
+
+                                {/* Delete single frame */}
+                                {f.hasImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleDeleteSceneImage(sceneNum, f.frameNumber, f.key, f.url)
+                                    }
+                                    className="p-1 rounded text-ink-muted hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                                    title={`Delete Frame #${f.frameNumber}`}
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      /* CASE 2: Single Frame Focused View (or standard single image scene) */
+                      (() => {
+                        const activeFrameIndex =
+                          typeof currentView === "number" ? currentView : 1;
+                        const activeFrame =
+                          frames[activeFrameIndex - 1] || frames[0] || {};
+                        const isGenActive =
+                          generatingSceneImages[`${sceneNum}_${activeFrameIndex}`] ||
+                          (isGeneratingOverall && !activeFrame.hasImage);
+                        const isDownActive = downloadingScenes[`${sceneNum}_${activeFrame.name}`];
+
+                        return (
+                          <div className="space-y-2">
+                            {/* Featured Image Box */}
+                            <div
+                              className={`relative ${
+                                isShort ? "aspect-[9/16]" : "aspect-video"
+                              } w-full bg-slate-950 text-white overflow-hidden flex items-center justify-center rounded-xs group shadow-inner`}
+                            >
+                              {/* Aspect Ratio Badge */}
+                              <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-black/75 text-white/90 backdrop-blur-xs rounded border border-white/10 pointer-events-none z-10">
+                                {isShort ? "9:16" : "16:9"}
+                              </span>
+
+                              {/* Frame Position Badge (if multi-image) */}
+                              {isMultiImage && (
+                                <span className="absolute top-2 left-2 px-1.5 py-0.5 text-[9px] font-mono font-bold bg-signal text-white backdrop-blur-xs rounded pointer-events-none z-10 shadow-sm">
+                                  Frame {activeFrameIndex} / {totalFrames}
+                                </span>
+                              )}
+
+                              {isGenActive ? (
+                                <div className="relative w-full h-full flex items-center justify-center bg-slate-900 text-center p-3 space-y-1.5">
+                                  <div className="space-y-1.5">
+                                    <Loader2 size={24} className="animate-spin text-signal mx-auto" />
+                                    <p className="text-[11px] font-mono text-white/90 font-semibold">
+                                      Generating Scene 0{sceneNum}
+                                      {isMultiImage ? ` Frame #${activeFrameIndex}` : ""}...
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : activeFrame.hasImage ? (
+                                <>
+                                  <img
+                                    src={activeFrame.url}
+                                    alt={`Scene ${sceneNum} Frame ${activeFrameIndex}`}
+                                    className="w-full h-full object-cover"
+                                  />
+
+                                  {/* Fullscreen zoom overlay button */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLightbox({
+                                        sceneNum,
+                                        frameIndex: activeFrameIndex,
+                                        totalFrames,
+                                        url: activeFrame.url,
+                                        name: activeFrame.name,
+                                        prompt: activeFrame.prompt,
+                                        frames,
+                                      })
+                                    }
+                                    className="absolute inset-0 w-full h-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                                  >
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-ink text-xs font-semibold rounded shadow-md transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                                      <Maximize2 size={13} />
+                                      <span>View Fullscreen</span>
+                                    </span>
+                                  </button>
+                                </>
+                              ) : (
+                                <div className="text-center space-y-1.5 p-4 text-white/50">
+                                  <ImageIcon size={28} className="mx-auto opacity-40 text-white" />
+                                  <p className="text-[11px] font-mono text-white/70">
+                                    {isMultiImage
+                                      ? `Frame #${activeFrameIndex} not generated yet`
+                                      : "No image yet"}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Multi-Image Previous / Next Overlay Navigation Arrows */}
+                              {isMultiImage && frames.length > 1 && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const prevIdx =
+                                        activeFrameIndex > 1
+                                          ? activeFrameIndex - 1
+                                          : totalFrames;
+                                      setSceneFrameView((prev) => ({
+                                        ...prev,
+                                        [sceneNum]: prevIdx,
+                                      }));
+                                    }}
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer shadow-md z-10"
+                                    title="Previous Frame"
+                                  >
+                                    <ChevronLeft size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextIdx =
+                                        activeFrameIndex < totalFrames
+                                          ? activeFrameIndex + 1
+                                          : 1;
+                                      setSceneFrameView((prev) => ({
+                                        ...prev,
+                                        [sceneNum]: nextIdx,
+                                      }));
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer shadow-md z-10"
+                                    title="Next Frame"
+                                  >
+                                    <ChevronRight size={16} />
+                                  </button>
+                                </>
+                              )}
+
+                              {activeFrame.endpointUsed && activeFrame.hasImage && (
+                                <span
+                                  className="absolute bottom-2 left-2 px-1.5 py-0.5 text-[9px] font-mono text-emerald-900 bg-emerald-100/90 backdrop-blur-xs border border-emerald-300 max-w-[140px] truncate"
+                                  title={activeFrame.endpointUsed}
+                                >
+                                  {activeFrame.endpointUsed}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Focused Frame Controls Bar */}
+                            <div className="p-2 bg-paper-card border border-line flex flex-wrap items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5">
+                                {/* Upload / Replace Frame */}
+                                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-line bg-white hover:bg-ink/5 text-[10px] font-semibold text-ink transition-all cursor-pointer">
+                                  <Upload size={11} />
+                                  <span>
+                                    {activeFrame.hasImage
+                                      ? isMultiImage
+                                        ? `Replace #${activeFrameIndex}`
+                                        : "Replace"
+                                      : isMultiImage
+                                      ? `Upload #${activeFrameIndex}`
+                                      : "Upload"}
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        handleUploadSceneImage(
+                                          sceneNum,
+                                          file,
+                                          isMultiImage ? activeFrameIndex : null
+                                        );
+                                      }
+                                      e.target.value = "";
+                                    }}
+                                    className="hidden"
+                                  />
+                                </label>
+
+                                {/* Download */}
+                                {activeFrame.hasImage && (
+                                  <button
+                                    type="button"
+                                    disabled={isDownActive}
+                                    onClick={() =>
+                                      handleDownloadImage(
+                                        sceneNum,
+                                        activeFrame.url,
+                                        activeFrame.name
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-line bg-white hover:bg-ink/5 text-ink text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-60"
+                                    title="Download image"
+                                  >
+                                    {isDownActive ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <Download size={11} />
+                                    )}
+                                    <span>Download</span>
+                                  </button>
+                                )}
+
+                                {/* Delete single frame */}
+                                {activeFrame.hasImage && isMultiImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleDeleteSceneImage(
+                                        sceneNum,
+                                        activeFrameIndex,
+                                        activeFrame.key,
+                                        activeFrame.url
+                                      )
+                                    }
+                                    className="p-1 rounded-sm text-ink-muted hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                    title={`Delete Frame #${activeFrameIndex}`}
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Generate single frame */}
+                              <button
+                                type="button"
+                                disabled={isGenActive}
+                                onClick={() =>
+                                  handleGenerateSceneImage(
+                                    sceneNum,
+                                    isMultiImage ? activeFrameIndex : null
+                                  )
+                                }
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-sm border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-60"
+                                title={`Generate ${
+                                  isMultiImage ? `Frame #${activeFrameIndex}` : "image"
+                                } with AI`}
+                              >
+                                {isGenActive ? (
+                                  <>
+                                    <Loader2 size={11} className="animate-spin" />
+                                    <span>Generating...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles size={11} />
+                                    <span>
+                                      {activeFrame.hasImage ? "Regenerate" : "Generate"}
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()
                     )}
                   </div>
 
                   {/* Image Prompt Box (Accordion view) */}
                   {expandedPrompts[sceneNum] && (
-                    <div className="p-3 bg-paper-dark/60 border-t border-line space-y-2 animate-fade-in">
-                      {Array.isArray(scene.images) && scene.images.length > 1 ? (
-                        <div className="space-y-2">
-                          <span className="text-[10px] font-semibold text-ink-muted uppercase font-mono">
-                            Prompts ({scene.images.length} Images):
-                          </span>
-                          {scene.images.map((img, imgIdx) => (
-                            <div key={imgIdx} className="p-2 bg-paper-card border border-line space-y-1">
-                              <span className="text-[10px] font-mono font-semibold text-signal">
-                                Image #{img.image_number || imgIdx + 1}:
+                    <div className="p-3 bg-paper-dark/60 border-t border-line space-y-2.5 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-ink-muted uppercase font-mono">
+                          Visual Directives ({definedPrompts.length} Prompt{definedPrompts.length > 1 ? "s" : ""}):
+                        </span>
+                      </div>
+
+                      {definedPrompts.map((p, pIdx) => {
+                        const frameNum = p.image_number || pIdx + 1;
+                        const matchingFrame = frames[pIdx];
+
+                        return (
+                          <div
+                            key={pIdx}
+                            className="p-2.5 bg-paper-card border border-line space-y-1.5 rounded-xs"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono font-semibold text-signal flex items-center gap-1.5">
+                                <span>Image #{frameNum}</span>
+                                {matchingFrame?.hasImage && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Image uploaded" />
+                                )}
                               </span>
-                              <p className="font-mono text-[11px] text-ink leading-relaxed break-words">
-                                {img.image_prompt || "No visual prompt provided."}
-                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(p.image_prompt || "");
+                                  toast.success(`Copied Frame #${frameNum} prompt!`);
+                                }}
+                                className="text-[10px] font-mono text-ink-muted hover:text-signal inline-flex items-center gap-1 cursor-pointer"
+                                title="Copy prompt to clipboard"
+                              >
+                                <Copy size={11} />
+                                <span>Copy</span>
+                              </button>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-semibold text-ink-muted uppercase font-mono">
-                            Prompt:
-                          </span>
-                          <p className="font-mono text-[11px] text-ink leading-relaxed break-words max-h-24 overflow-y-auto">
-                            {scene.image_prompt || scene.images?.[0]?.image_prompt || "No visual prompt provided for this scene."}
-                          </p>
-                        </div>
-                      )}
+                            <p className="font-mono text-[11px] text-ink leading-relaxed break-words">
+                              {p.image_prompt || "No visual prompt provided."}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
-
-                  {/* Bottom Action Footer */}
-                  <div className="p-2.5 bg-paper-card border-t border-line/60 flex flex-wrap items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-1.5">
-                      {/* Upload / Replace Image File */}
-                      <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-line bg-white hover:bg-ink/5 text-[10px] font-semibold text-ink transition-all cursor-pointer">
-                        <Upload size={11} />
-                        <span>{hasImage ? "Replace" : "Upload"}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              handleUploadSceneImage(sceneNum, file);
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-
-                      {/* Download Scene Image Button */}
-                      {hasImage && (
-                        <button
-                          type="button"
-                          disabled={isDownloading}
-                          onClick={() => handleDownloadImage(sceneNum, imgData.url, imgData.name)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-line bg-white hover:bg-ink/5 text-ink text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-60"
-                          title="Download image"
-                        >
-                          {isDownloading ? (
-                            <Loader2 size={11} className="animate-spin" />
-                          ) : (
-                            <Download size={11} />
-                          )}
-                          <span>Download</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Generate Button for Individual Scene */}
-                    <button
-                      type="button"
-                      disabled={isGeneratingThis}
-                      onClick={() => handleGenerateSceneImage(sceneNum)}
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-sm border border-signal/30 bg-signal/10 hover:bg-signal hover:text-white text-signal text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-60"
-                      title="Generate image for this scene"
-                    >
-                      {generatingSceneImages[sceneNum] ? (
-                        <>
-                          <Loader2 size={11} className="animate-spin" />
-                          <span>Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={11} />
-                          <span>{hasImage ? "Regenerate" : "Generate"}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
               );
             })}
@@ -775,7 +1288,7 @@ export default function ImagesTab({
         )}
       </div>
 
-      {/* Prompts JSON Modal (View / Copy / Edit & Apply Prompts with Audio Text Toggle) */}
+      {/* Prompts JSON Modal (View / Copy / Edit & Apply Prompts) */}
       {mounted && promptModalOpen && createPortal(
         <div
           className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
@@ -811,7 +1324,6 @@ export default function ImagesTab({
             <form onSubmit={handleApplyPromptJson} className="space-y-4 flex-1 flex flex-col min-h-0">
               <div className="flex-1 flex flex-col min-h-0">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs">
-                  {/* Toggle Include Audio Text inside modal */}
                   <label className="flex items-center gap-1.5 font-semibold text-ink/80 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -892,6 +1404,143 @@ export default function ImagesTab({
                 </div>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Full-Screen Image Lightbox Modal */}
+      {mounted && lightbox && createPortal(
+        <div
+          className="fixed inset-0 z-[999999] w-screen h-screen bg-slate-950/95 backdrop-blur-md flex flex-col justify-between p-4 sm:p-6 overflow-hidden animate-fade-in"
+          style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", zIndex: 999999 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLightbox(null);
+          }}
+        >
+          {/* Top Bar of Lightbox */}
+          <div className="flex items-center justify-between gap-4 text-white z-10">
+            <div className="flex items-center gap-3">
+              <span className="w-6 h-6 bg-signal text-white font-mono text-xs font-bold flex items-center justify-center rounded">
+                {lightbox.sceneNum}
+              </span>
+              <div>
+                <h4 className="font-mono text-sm font-semibold">
+                  Scene 0{lightbox.sceneNum}
+                  {lightbox.totalFrames > 1 ? ` • Frame ${lightbox.frameIndex} of ${lightbox.totalFrames}` : ""}
+                </h4>
+                <p className="text-[11px] text-white/60 font-mono truncate max-w-sm sm:max-w-md">
+                  {lightbox.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleDownloadImage(lightbox.sceneNum, lightbox.url, lightbox.name)}
+                className="p-2 rounded bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                title="Download High-Res Image"
+              >
+                <Download size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightbox(null)}
+                className="p-2 rounded bg-white/10 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                title="Close (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Central Image Viewport with Previous & Next navigation */}
+          <div className="relative flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0">
+            {lightbox.frames && lightbox.frames.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigateLightbox(-1)}
+                  className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg z-20 backdrop-blur-xs"
+                  title="Previous Frame (Left Arrow)"
+                >
+                  <ChevronLeft size={22} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateLightbox(1)}
+                  className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg z-20 backdrop-blur-xs"
+                  title="Next Frame (Right Arrow)"
+                >
+                  <ChevronRight size={22} />
+                </button>
+              </>
+            )}
+
+            <img
+              src={lightbox.url}
+              alt={`Scene ${lightbox.sceneNum} Frame ${lightbox.frameIndex}`}
+              className="max-w-full max-h-full object-contain rounded shadow-2xl animate-scale-in"
+            />
+          </div>
+
+          {/* Bottom Bar: Prompt Info & Frame Strip */}
+          <div className="p-3 sm:p-4 bg-slate-900/90 border border-white/10 rounded-md backdrop-blur-md max-w-4xl mx-auto w-full text-white space-y-2.5 z-10">
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-signal">
+                Visual Directive {lightbox.totalFrames > 1 ? `(Frame #${lightbox.frameIndex})` : ""}:
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(lightbox.prompt || "");
+                  toast.success("Prompt copied to clipboard!");
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-mono text-white/80 hover:text-white cursor-pointer hover:underline"
+              >
+                <Copy size={12} />
+                <span>Copy Prompt</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-white/90 font-mono leading-relaxed max-h-20 overflow-y-auto pr-1">
+              {lightbox.prompt || "No visual prompt description provided for this frame."}
+            </p>
+
+            {/* Thumbnail Strip inside Lightbox */}
+            {lightbox.frames && lightbox.frames.length > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                {lightbox.frames.map((f, fIdx) => (
+                  <button
+                    key={fIdx}
+                    type="button"
+                    onClick={() => {
+                      setLightbox({
+                        ...lightbox,
+                        frameIndex: f.frameNumber,
+                        url: f.url,
+                        name: f.name,
+                        prompt: f.prompt,
+                      });
+                    }}
+                    className={`w-12 h-8 rounded border overflow-hidden transition-all cursor-pointer ${
+                      lightbox.frameIndex === f.frameNumber
+                        ? "border-signal ring-2 ring-signal/50 scale-105"
+                        : "border-white/20 opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    {f.hasImage ? (
+                      <img src={f.url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-slate-800 flex items-center justify-center text-[9px] font-mono text-white/50">
+                        #{f.frameNumber}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>,
         document.body

@@ -156,13 +156,14 @@ export default function TopicStudioPage() {
   }
 
   // Helper: Upload file to Cloudflare R2 via storage API
-  async function uploadFileToR2(file, assetType, sceneIndex = null) {
+  async function uploadFileToR2(file, assetType, sceneIndex = null, imageIndex = null) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("channelSlug", channelSlug);
     formData.append("topicSlug", topicSlug);
     formData.append("assetType", assetType);
-    if (sceneIndex !== null) formData.append("sceneIndex", sceneIndex.toString());
+    if (sceneIndex !== null && sceneIndex !== undefined) formData.append("sceneIndex", sceneIndex.toString());
+    if (imageIndex !== null && imageIndex !== undefined) formData.append("imageIndex", imageIndex.toString());
 
     const res = await fetch("/api/storage/upload", {
       method: "POST",
@@ -272,6 +273,25 @@ export default function TopicStudioPage() {
                   };
                 }
               });
+              // Ensure images are strictly ordered by frame index (e.g. 1, 2, 3...)
+              Object.keys(images).forEach((sNum) => {
+                if (Array.isArray(images[sNum]?.images) && images[sNum].images.length > 1) {
+                  images[sNum].images.sort((a, b) => {
+                    const getNum = (name) => {
+                      if (!name) return 1;
+                      const match = name.match(/scene[-_]\d+[-_](\d+)/i) || name.match(/[-_](\d+)\.[a-zA-Z0-9]+$/);
+                      return match ? parseInt(match[1], 10) : 1;
+                    };
+                    return getNum(a.name) - getNum(b.name);
+                  });
+                  if (images[sNum].images[0]) {
+                    images[sNum].url = images[sNum].images[0].url;
+                    images[sNum].key = images[sNum].images[0].key;
+                    images[sNum].name = images[sNum].images[0].name;
+                  }
+                }
+              });
+
               if (Object.keys(audios).length > 0) setSceneAudios(audios);
               if (Object.keys(images).length > 0) setSceneImages(images);
               if (Object.keys(videos).length > 0) setSceneVideos(videos);
@@ -838,71 +858,162 @@ export default function TopicStudioPage() {
   }
 
   // Images Handlers
-  async function handleUploadSceneImage(sceneNum, file) {
+  async function handleUploadSceneImage(sceneNum, file, imageIndex = null) {
     if (!file) return;
     try {
-      const result = await uploadFileToR2(file, "image", sceneNum);
-      setSceneImages((prev) => ({
-        ...prev,
-        [sceneNum]: {
+      const result = await uploadFileToR2(file, "image", sceneNum, imageIndex);
+      setSceneImages((prev) => {
+        const next = { ...prev };
+        const current = next[sceneNum] || {
           url: result.publicUrl,
           key: result.key,
           name: file.name,
-        },
-      }));
-      toast.success(`Scene ${sceneNum} image uploaded.`);
-    } catch {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSceneImages((prev) => ({
-          ...prev,
-          [sceneNum]: {
-            url: e.target?.result,
-            name: file.name,
-          },
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  }
+          images: [],
+        };
 
-  function handleDeleteSceneImage(sceneNum) {
-    requestDelete({
-      title: `Delete Scene ${sceneNum} Image`,
-      description: `Are you sure you want to delete the image for Scene ${sceneNum}?`,
-      confirmLabel: "Delete Image",
-      onConfirm: async () => {
-        const imgData = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
-        
-        // Physical file deletion from R2 and database cleanup
-        if (imgData?.key || imgData?.url) {
-          try {
-            await fetch("/api/storage/delete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                key: imgData?.key,
-                url: imgData?.url,
-                channelSlug,
-                topicSlug,
-                assetType: "image",
-                sceneIndex: sceneNum,
-              }),
-            });
-          } catch (err) {
-            console.warn("Could not delete file from R2:", err);
+        let newImages = Array.isArray(current.images) ? [...current.images] : [];
+        const newImgObj = {
+          url: result.publicUrl,
+          key: result.key,
+          name: result.fileName || file.name,
+        };
+
+        if (imageIndex !== null && imageIndex !== undefined) {
+          const targetIdx = imageIndex - 1;
+          if (targetIdx >= 0 && targetIdx < newImages.length) {
+            newImages[targetIdx] = newImgObj;
+          } else {
+            while (newImages.length < targetIdx) {
+              newImages.push(null);
+            }
+            newImages[targetIdx] = newImgObj;
+          }
+          newImages = newImages.filter(Boolean);
+        } else {
+          if (newImages.length === 0) {
+            newImages = [newImgObj];
+          } else {
+            newImages[0] = newImgObj;
           }
         }
 
-        setSceneImages((prev) => {
-          const next = { ...prev };
-          delete next[sceneNum];
-          delete next[String(sceneNum)];
-          delete next[Number(sceneNum)];
-          return next;
-        });
+        next[sceneNum] = {
+          ...current,
+          url: newImages[0]?.url || result.publicUrl,
+          key: newImages[0]?.key || result.key,
+          name: newImages[0]?.name || file.name,
+          images: newImages,
+        };
+        return next;
+      });
+      toast.success(`Scene ${sceneNum} ${imageIndex ? `Frame ${imageIndex}` : "image"} uploaded.`);
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast.error(`Upload failed: ${err.message}`);
+    }
+  }
 
-        toast.success(`Scene ${sceneNum} image deleted.`);
+  function handleDeleteSceneImage(sceneNum, imageIndex = null, imageKey = null, imageUrl = null) {
+    const isSingleFrame = imageIndex !== null && imageIndex !== undefined;
+    requestDelete({
+      title: isSingleFrame ? `Delete Scene ${sceneNum} Frame ${imageIndex}` : `Delete Scene ${sceneNum} Images`,
+      description: isSingleFrame
+        ? `Are you sure you want to delete Frame #${imageIndex} for Scene ${sceneNum}?`
+        : `Are you sure you want to delete all visual assets for Scene ${sceneNum}?`,
+      confirmLabel: isSingleFrame ? `Delete Frame ${imageIndex}` : "Delete All Images",
+      onConfirm: async () => {
+        const current = sceneImages[sceneNum] || sceneImages[String(sceneNum)] || sceneImages[Number(sceneNum)];
+        
+        if (isSingleFrame) {
+          const targetImg = current?.images?.[imageIndex - 1];
+          const targetKey = imageKey || targetImg?.key;
+          const targetUrl = imageUrl || targetImg?.url;
+          
+          if (targetKey || targetUrl) {
+            try {
+              await fetch("/api/storage/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  key: targetKey,
+                  url: targetUrl,
+                  channelSlug,
+                  topicSlug,
+                  assetType: "image",
+                  sceneIndex: sceneNum,
+                }),
+              });
+            } catch (err) {
+              console.warn("Could not delete frame from R2:", err);
+            }
+          }
+
+          setSceneImages((prev) => {
+            const next = { ...prev };
+            const sData = next[sceneNum];
+            if (!sData) return next;
+            const updatedImages = (sData.images || []).filter((_, idx) => idx !== (imageIndex - 1));
+            if (updatedImages.length === 0) {
+              delete next[sceneNum];
+              delete next[String(sceneNum)];
+              delete next[Number(sceneNum)];
+            } else {
+              next[sceneNum] = {
+                ...sData,
+                url: updatedImages[0]?.url,
+                key: updatedImages[0]?.key,
+                name: updatedImages[0]?.name,
+                images: updatedImages,
+              };
+            }
+            return next;
+          });
+          toast.success(`Scene ${sceneNum} Frame #${imageIndex} deleted.`);
+        } else {
+          // Delete all images for this scene
+          const keysToDelete = (current?.images || []).map(img => img.key).filter(Boolean);
+          if (keysToDelete.length > 0) {
+            for (const k of keysToDelete) {
+              try {
+                await fetch("/api/storage/delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    key: k,
+                    channelSlug,
+                    topicSlug,
+                    assetType: "image",
+                    sceneIndex: sceneNum,
+                  }),
+                });
+              } catch {}
+            }
+          } else if (current?.key || current?.url) {
+            try {
+              await fetch("/api/storage/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  key: current?.key,
+                  url: current?.url,
+                  channelSlug,
+                  topicSlug,
+                  assetType: "image",
+                  sceneIndex: sceneNum,
+                }),
+              });
+            } catch {}
+          }
+
+          setSceneImages((prev) => {
+            const next = { ...prev };
+            delete next[sceneNum];
+            delete next[String(sceneNum)];
+            delete next[Number(sceneNum)];
+            return next;
+          });
+          toast.success(`Scene ${sceneNum} images deleted.`);
+        }
       },
     });
   }
@@ -1119,6 +1230,25 @@ export default function TopicStudioPage() {
                 });
               }
             });
+            // Ensure extracted images are sorted by frame index
+            Object.keys(next).forEach((sIdx) => {
+              if (Array.isArray(next[sIdx]?.images) && next[sIdx].images.length > 1) {
+                next[sIdx].images.sort((a, b) => {
+                  const getNum = (name) => {
+                    if (!name) return 1;
+                    const match = name.match(/scene[-_]\d+[-_](\d+)/i) || name.match(/[-_](\d+)\.[a-zA-Z0-9]+$/);
+                    return match ? parseInt(match[1], 10) : 1;
+                  };
+                  return getNum(a.name) - getNum(b.name);
+                });
+                if (next[sIdx].images[0]) {
+                  next[sIdx].url = next[sIdx].images[0].url;
+                  next[sIdx].key = next[sIdx].images[0].key;
+                  next[sIdx].name = next[sIdx].images[0].name;
+                }
+              }
+            });
+
             return next;
           });
         }
@@ -1138,7 +1268,7 @@ export default function TopicStudioPage() {
     }
   }
 
-  async function handleGenerateSceneImage(sceneNum) {
+  async function handleGenerateSceneImage(sceneNum, imageIndex = null) {
     let parsed = [];
     try {
       parsed = JSON.parse(scenesJson);
@@ -1146,14 +1276,20 @@ export default function TopicStudioPage() {
       parsed = [];
     }
     const scene = parsed.find((s) => Number(s.scene_number) === Number(sceneNum));
-    const prompt = scene?.image_prompt || scene?.images?.[0]?.image_prompt || "";
+    let prompt = "";
+    if (imageIndex !== null && imageIndex !== undefined && Array.isArray(scene?.images) && scene.images[imageIndex - 1]) {
+      prompt = scene.images[imageIndex - 1].image_prompt || scene.images[imageIndex - 1].prompt || "";
+    } else {
+      prompt = scene?.image_prompt || scene?.images?.[0]?.image_prompt || "";
+    }
 
     if (!prompt) {
-      toast.error(`Scene ${sceneNum} has no image prompt defined.`);
+      toast.error(`Scene ${sceneNum} ${imageIndex ? `Frame ${imageIndex}` : ""} has no prompt defined.`);
       return;
     }
 
-    setGeneratingSceneImages((prev) => ({ ...prev, [sceneNum]: true }));
+    const genKey = imageIndex ? `${sceneNum}_${imageIndex}` : sceneNum;
+    setGeneratingSceneImages((prev) => ({ ...prev, [genKey]: true, [sceneNum]: true }));
 
     try {
       const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/generate-images`, {
@@ -1169,16 +1305,44 @@ export default function TopicStudioPage() {
 
       const data = await res.json();
       if (res.ok && data.imageUrl) {
-        setSceneImages((prev) => ({
-          ...prev,
-          [sceneNum]: {
+        setSceneImages((prev) => {
+          const next = { ...prev };
+          const current = next[sceneNum] || {
             url: data.imageUrl,
             key: data.key,
             name: `Scene ${sceneNum} Image`,
             endpointUsed: data.endpointUsed,
-          },
-        }));
-        toast.success(`Scene ${sceneNum} image generated successfully!`);
+            images: [],
+          };
+          let newImages = Array.isArray(current.images) ? [...current.images] : [];
+          const newImg = {
+            url: data.imageUrl,
+            key: data.key,
+            name: `Scene ${sceneNum} Image ${imageIndex || (newImages.length + 1)}`,
+            endpointUsed: data.endpointUsed,
+          };
+          if (imageIndex !== null && imageIndex !== undefined) {
+            const idx = imageIndex - 1;
+            if (idx >= 0 && idx < newImages.length) {
+              newImages[idx] = newImg;
+            } else {
+              newImages.push(newImg);
+            }
+          } else {
+            if (newImages.length === 0) newImages.push(newImg);
+            else newImages[0] = newImg;
+          }
+          next[sceneNum] = {
+            ...current,
+            url: newImages[0]?.url || data.imageUrl,
+            key: newImages[0]?.key || data.key,
+            name: newImages[0]?.name,
+            endpointUsed: data.endpointUsed,
+            images: newImages,
+          };
+          return next;
+        });
+        toast.success(`Scene ${sceneNum} ${imageIndex ? `Frame ${imageIndex}` : "image"} generated!`);
       } else {
         toast.error(data.error || "Failed to generate image.");
       }
@@ -1186,7 +1350,7 @@ export default function TopicStudioPage() {
       console.error(`Error generating image for Scene ${sceneNum}:`, err);
       toast.error("Error generating image: " + err.message);
     } finally {
-      setGeneratingSceneImages((prev) => ({ ...prev, [sceneNum]: false }));
+      setGeneratingSceneImages((prev) => ({ ...prev, [genKey]: false, [sceneNum]: false }));
     }
   }
 

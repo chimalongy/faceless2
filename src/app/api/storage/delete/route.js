@@ -73,8 +73,7 @@ export async function POST(request) {
                 DELETE FROM topic_assets
                 WHERE topic_id = ${topicId} AND (file_key = ${r2Key} OR file_url LIKE ${`%${r2Key}%`});
               `;
-            }
-            if (assetType && sceneIndex !== undefined && sceneIndex !== null) {
+            } else if (assetType && sceneIndex !== undefined && sceneIndex !== null) {
               await sql`
                 DELETE FROM topic_assets
                 WHERE topic_id = ${topicId} AND asset_type = ${assetType} AND scene_index = ${sceneIndex};
