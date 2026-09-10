@@ -289,14 +289,62 @@ def resolve_scene_index(scene: dict, fallback: int) -> int:
     return value
 
 
+def read_image_configuration(scene):
+    """Return ordered URL/timing pairs; reject malformed new-format payloads."""
+    configuration = scene.get("imageConfiguration")
+    if configuration is None:
+        return None
+    if not isinstance(configuration, list) or not configuration:
+        raise RenderInputError("imageConfiguration must be a non-empty array")
+    ordered = []
+    for item in configuration:
+        if not isinstance(item, dict):
+            raise RenderInputError("Each imageConfiguration entry must be an object")
+        number = item.get("image_number")
+        if isinstance(number, bool) or not isinstance(number, int) or number < 1:
+            raise RenderInputError("image_number must be a positive integer")
+        url = item.get("image_url")
+        if not isinstance(url, str) or not url.strip():
+            raise RenderInputError("Each imageConfiguration entry requires image_url")
+        if urlparse(url.strip()).scheme not in {"http", "https"}:
+            raise RenderInputError("image_url must use HTTP or HTTPS")
+        timing = {"image_number": number}
+        for name in ("start_time", "end_time", "duration"):
+            try:
+                value = float(item[name])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RenderInputError(f"Each imageConfiguration entry requires numeric {name}") from exc
+            if not math.isfinite(value):
+                raise RenderInputError(f"{name} must be finite")
+            timing[name] = value
+        if timing["start_time"] < 0 or timing["duration"] <= 0 or timing["end_time"] <= timing["start_time"]:
+            raise RenderInputError("Invalid imageConfiguration timing interval")
+        if abs(timing["end_time"] - timing["start_time"] - timing["duration"]) > 0.05:
+            raise RenderInputError("Image duration must match end_time minus start_time")
+        ordered.append((number, url.strip(), timing))
+    ordered.sort(key=lambda item: item[0])
+    if [item[0] for item in ordered] != list(range(1, len(ordered) + 1)):
+        raise RenderInputError("image_number values must be unique and consecutive from 1")
+    previous_end = 0.0
+    for _, _, timing in ordered:
+        if abs(timing["start_time"] - previous_end) > 0.05:
+            raise RenderInputError("imageConfiguration must start at zero without gaps or overlaps")
+        previous_end = timing["end_time"]
+    return [item[1] for item in ordered], [item[2] for item in ordered]
+
+
 def prepare_scene(scene, fallback, job_dir, r2_client, bucket):
     scene_index = resolve_scene_index(scene, fallback)
     scene_dir = job_dir / f"scene-{scene_index}"
     scene_dir.mkdir(parents=True, exist_ok=True)
     audio_path = scene_dir / "audio.wav"
 
-    # Gather all image URLs/keys for multi-image scenes
-    raw_urls = scene.get("imageUrls") or []
+    configuration = read_image_configuration(scene)
+    image_timings = scene.get("imageTimings") or scene.get("image_timings") or []
+    if configuration is not None:
+        raw_urls, image_timings = configuration
+    else:
+        raw_urls = list(scene.get("imageUrls") or [])
     if not raw_urls and isinstance(scene.get("images"), list):
         for img in scene.get("images"):
             if isinstance(img, str) and img.strip():
@@ -320,7 +368,7 @@ def prepare_scene(scene, fallback, job_dir, r2_client, bucket):
         dest = scene_dir / "image.png"
         download_asset(
             raw_urls[0] if raw_urls else (scene.get("imageUrl") or scene.get("visual_url")),
-            scene.get("imageKey"),
+            None if configuration is not None else scene.get("imageKey"),
             dest,
             r2_client,
             bucket,
@@ -343,7 +391,7 @@ def prepare_scene(scene, fallback, job_dir, r2_client, bucket):
         "transition": normalize_transition(scene.get("transition", "fade")),
         "imagePath": image_paths[0],
         "imagePaths": image_paths,
-        "imageTimings": scene.get("imageTimings") or scene.get("image_timings") or [],
+        "imageTimings": image_timings,
         "audioPath": audio_path,
         "outputPath": scene_dir / "final.mp4",
         "duration": get_audio_duration(audio_path),
@@ -841,6 +889,7 @@ def api():
         scene_number: int | None = Field(default=None, ge=1)
         scene_index: int | None = Field(default=None, ge=1)
         index: int | None = Field(default=None, ge=1)
+        imageConfiguration: list[dict] | None = None
         imageUrls: list[str] = Field(default_factory=list)
         imageTimings: list[dict] = Field(default_factory=list)
         imageUrl: str | None = None
@@ -853,8 +902,10 @@ def api():
 
         @model_validator(mode="after")
         def assets_are_required(self):
-            if not (self.imageUrls or self.imageUrl or self.imageKey or self.visual_url or getattr(self, "images", None)):
-                raise ValueError("imageUrls, images, imageUrl, visual_url, or imageKey is required")
+            if self.imageConfiguration is not None:
+                read_image_configuration({"imageConfiguration": self.imageConfiguration})
+            if not (self.imageConfiguration or self.imageUrls or self.imageUrl or self.imageKey or self.visual_url or getattr(self, "images", None)):
+                raise ValueError("imageConfiguration or a legacy image source is required")
             if not (self.audioUrl or self.audioKey):
                 raise ValueError("audioUrl or audioKey is required")
             normalize_transition(self.transition)
