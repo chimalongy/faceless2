@@ -143,158 +143,160 @@ export async function planSceneTiming({
   images = [],
   channelSlug = null,
   topicSlug = null,
+  forceEqualSplit = false,
 } = {}) {
   const safeDuration = Number(audioDuration);
   if (!Number.isFinite(safeDuration) || safeDuration <= 0) {
     throw new Error("Measured audioDuration is required for scene timing.");
   }
 
-  // If only 1 image, no planner needed
-  if (!Array.isArray(images) || images.length <= 1) {
-    return [
-      {
-        image_number: 1,
-        start_time: 0.0,
-        end_time: Number(safeDuration.toFixed(2)),
-        duration: Number(safeDuration.toFixed(2)),
-      },
-    ];
-  }
-
-  // 1. Transcribe scene audio to get ASS timestamps
-  let assContent = "";
-  if (audioUrl) {
-    try {
-      console.log(`[ScenePlanner] Transcribing audio for Scene ${sceneNumber} via Whisper Modal...`);
-      const transResult = await transcribeAudio({ audioUrl });
-      assContent = transResult?.ass || "";
-      console.log(`[ScenePlanner] Successfully received ASS transcription for Scene ${sceneNumber} (${assContent.length} chars).`);
-    } catch (transErr) {
-      console.warn(`[ScenePlanner] Whisper transcription warning for Scene ${sceneNumber}:`, transErr?.message || transErr);
+  // If only 1 image, or if equal split is explicitly requested, return equal proportional timings immediately
+  if (forceEqualSplit || !Array.isArray(images) || images.length <= 1) {
+    if (forceEqualSplit && Array.isArray(images) && images.length > 1) {
+      console.log(`[ScenePlanner] Equal split explicitly requested for Scene ${sceneNumber}. Splitting duration (${safeDuration}s) equally across ${images.length} images.`);
     }
-  }
-
-  // 2. Fetch LLM settings & accounts from database
-  let configuredModel = "gemini-2.5-flash";
-  let gemmaBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/";
-  let openRouterBaseUrl = "https://openrouter.ai/api/v1";
-  let sceneGenSource = "gemini";
-  let executionAccounts = [];
-
-  try {
-    const sql = getDbSql();
-    if (sql) {
-      await initDbSchema();
-      const generalRows = await sql`
-        SELECT
-          scene_gen_source AS "sceneGenSource",
-          scene_gen_model AS "sceneGenModel",
-          default_llm_source AS "defaultLlmSource",
-          default_llm_model AS "defaultLlmModel",
-          gemma_base_url AS "gemmaBaseUrl",
-          open_router_base_url AS "openRouterBaseUrl"
-        FROM general_settings
-        LIMIT 1;
-      `;
-
-      if (generalRows?.[0]) {
-        const g = generalRows[0];
-        sceneGenSource = (g.defaultLlmSource || g.sceneGenSource || "gemini").trim().toLowerCase();
-        configuredModel = (g.defaultLlmModel || g.sceneGenModel || "gemini-2.5-flash-lite").trim();
-        if (g.gemmaBaseUrl) gemmaBaseUrl = g.gemmaBaseUrl;
-        if (g.openRouterBaseUrl) openRouterBaseUrl = g.openRouterBaseUrl;
-      }
-
-      const rawAccounts = await sql`
-        SELECT id, account_email AS "accountEmail", source, api_token AS "apiToken"
-        FROM llm_accounts
-        ORDER BY id ASC;
-      `;
-
-      if (rawAccounts && rawAccounts.length > 0) {
-        const matching = rawAccounts.filter(
-          (a) => (a.source || "gemini").trim().toLowerCase() === sceneGenSource
-        );
-        const others = rawAccounts.filter(
-          (a) => (a.source || "gemini").trim().toLowerCase() !== sceneGenSource
-        );
-        executionAccounts = [...matching, ...others];
-      }
-    }
-  } catch (dbErr) {
-    console.warn("[ScenePlanner] DB config lookup warning:", dbErr?.message || dbErr);
-  }
-
-  // If no LLM accounts configured, fallback to proportional
-  if (executionAccounts.length === 0) {
-    console.warn(`[ScenePlanner] No LLM accounts available. Using proportional timing for Scene ${sceneNumber}.`);
     return generateProportionalTimings(images, safeDuration);
   }
 
-  // 3. Build prompt
-  const prompt = getScenePlannerPrompt({
-    sceneNumber,
-    audioText,
-    assContent,
-    audioDuration: safeDuration,
-    images,
-  });
-
-  // 4. Call LLM with account failover
-  for (let i = 0; i < executionAccounts.length; i++) {
-    const acc = executionAccounts[i];
-    const source = (acc.source || "gemini").trim().toLowerCase();
-    const token = (acc.apiToken || "").trim();
-    if (!token) continue;
-
-    const baseURL = source === "openrouter" ? openRouterBaseUrl : gemmaBaseUrl;
-
-    const candidateModels = [configuredModel];
-    if (source === "gemini") {
-      for (const m of ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]) {
-        if (!candidateModels.includes(m)) candidateModels.push(m);
+  try {
+    // 1. Transcribe scene audio to get ASS timestamps
+    let assContent = "";
+    if (audioUrl) {
+      try {
+        console.log(`[ScenePlanner] Transcribing audio for Scene ${sceneNumber} via Whisper Modal...`);
+        const transResult = await transcribeAudio({ audioUrl });
+        assContent = transResult?.ass || "";
+        console.log(`[ScenePlanner] Successfully received ASS transcription for Scene ${sceneNumber} (${assContent.length} chars).`);
+      } catch (transErr) {
+        console.warn(`[ScenePlanner] Whisper transcription warning for Scene ${sceneNumber}:`, transErr?.message || transErr);
       }
     }
 
-    const openai = new OpenAI({
-      apiKey: token,
-      baseURL,
+    // 2. Fetch LLM settings & accounts from database
+    let configuredModel = "gemini-2.5-flash";
+    let gemmaBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/";
+    let openRouterBaseUrl = "https://openrouter.ai/api/v1";
+    let sceneGenSource = "gemini";
+    let executionAccounts = [];
+
+    try {
+      const sql = getDbSql();
+      if (sql) {
+        await initDbSchema();
+        const generalRows = await sql`
+          SELECT
+            scene_gen_source AS "sceneGenSource",
+            scene_gen_model AS "sceneGenModel",
+            default_llm_source AS "defaultLlmSource",
+            default_llm_model AS "defaultLlmModel",
+            gemma_base_url AS "gemmaBaseUrl",
+            open_router_base_url AS "openRouterBaseUrl"
+          FROM general_settings
+          LIMIT 1;
+        `;
+
+        if (generalRows?.[0]) {
+          const g = generalRows[0];
+          sceneGenSource = (g.defaultLlmSource || g.sceneGenSource || "gemini").trim().toLowerCase();
+          configuredModel = (g.defaultLlmModel || g.sceneGenModel || "gemini-2.5-flash-lite").trim();
+          if (g.gemmaBaseUrl) gemmaBaseUrl = g.gemmaBaseUrl;
+          if (g.openRouterBaseUrl) openRouterBaseUrl = g.openRouterBaseUrl;
+        }
+
+        const rawAccounts = await sql`
+          SELECT id, account_email AS "accountEmail", source, api_token AS "apiToken"
+          FROM llm_accounts
+          ORDER BY id ASC;
+        `;
+
+        if (rawAccounts && rawAccounts.length > 0) {
+          const matching = rawAccounts.filter(
+            (a) => (a.source || "gemini").trim().toLowerCase() === sceneGenSource
+          );
+          const others = rawAccounts.filter(
+            (a) => (a.source || "gemini").trim().toLowerCase() !== sceneGenSource
+          );
+          executionAccounts = [...matching, ...others];
+        }
+      }
+    } catch (dbErr) {
+      console.warn("[ScenePlanner] DB config lookup warning:", dbErr?.message || dbErr);
+    }
+
+    // If no LLM accounts configured, fallback to proportional
+    if (executionAccounts.length === 0) {
+      console.warn(`[ScenePlanner] No LLM accounts available. Splitting image durations equally for Scene ${sceneNumber} (${safeDuration}s).`);
+      return generateProportionalTimings(images, safeDuration);
+    }
+
+    // 3. Build prompt
+    const prompt = getScenePlannerPrompt({
+      sceneNumber,
+      audioText,
+      assContent,
+      audioDuration: safeDuration,
+      images,
     });
 
-    for (const currentModel of candidateModels) {
-      try {
-        console.log(`[ScenePlanner] Calling LLM (${currentModel}) via ${source} for Scene ${sceneNumber}...`);
-        const completion = await openai.chat.completions.create({
-          model: currentModel,
-          messages: [
-            {
-              role: "system",
-              content: "You are an expert video director. You MUST return ONLY a top-level raw JSON array starting with '[' and ending with ']'. Never return a JSON object with numeric keys like {\"0\": ...} or wrapper objects. Return ONLY: [ { \"image_number\": 1, \"start_time\": 0.0, \"end_time\": ..., \"duration\": ... } ]. No markdown fences.",
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          temperature: 0.2,
-        });
+    // 4. Call LLM with account failover
+    for (let i = 0; i < executionAccounts.length; i++) {
+      const acc = executionAccounts[i];
+      const source = (acc.source || "gemini").trim().toLowerCase();
+      const token = (acc.apiToken || "").trim();
+      if (!token) continue;
 
-        const rawContent = completion.choices?.[0]?.message?.content || "";
-        const parsed = extractJsonArray(rawContent);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const validated = normalizeTimings(parsed, images, safeDuration);
-          console.log(`[ScenePlanner] Successfully planned Scene ${sceneNumber} image timings:`, validated);
-          return validated;
+      const baseURL = source === "openrouter" ? openRouterBaseUrl : gemmaBaseUrl;
+
+      const candidateModels = [configuredModel];
+      if (source === "gemini") {
+        for (const m of ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]) {
+          if (!candidateModels.includes(m)) candidateModels.push(m);
         }
-        throw new Error(`Could not parse valid JSON array from LLM response: ${rawContent.slice(0, 100)}...`);
-      } catch (llmErr) {
-        console.warn(`[ScenePlanner] Attempt with ${currentModel} on account ${i + 1} failed for Scene ${sceneNumber}:`, llmErr?.message || llmErr);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      const openai = new OpenAI({
+        apiKey: token,
+        baseURL,
+      });
+
+      for (const currentModel of candidateModels) {
+        try {
+          console.log(`[ScenePlanner] Calling LLM (${currentModel}) via ${source} for Scene ${sceneNumber}...`);
+          const completion = await openai.chat.completions.create({
+            model: currentModel,
+            messages: [
+              {
+                role: "system",
+                content: "You are an expert video director. You MUST return ONLY a top-level raw JSON array starting with '[' and ending with ']'. Never return a JSON object with numeric keys like {\"0\": ...} or wrapper objects. Return ONLY: [ { \"image_number\": 1, \"start_time\": 0.0, \"end_time\": ..., \"duration\": ... } ]. No markdown fences.",
+              },
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            temperature: 0.2,
+          });
+
+          const rawContent = completion.choices?.[0]?.message?.content || "";
+          const parsed = extractJsonArray(rawContent);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const validated = normalizeTimings(parsed, images, safeDuration);
+            console.log(`[ScenePlanner] Successfully planned Scene ${sceneNumber} image timings:`, validated);
+            return validated;
+          }
+          throw new Error(`Could not parse valid JSON array from LLM response: ${rawContent.slice(0, 100)}...`);
+        } catch (llmErr) {
+          console.warn(`[ScenePlanner] Attempt with ${currentModel} on account ${i + 1} failed for Scene ${sceneNumber}:`, llmErr?.message || llmErr);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
     }
-  }
 
-  // Fallback if all attempts fail
-  console.warn(`[ScenePlanner] Falling back to proportional timings for Scene ${sceneNumber}.`);
-  return generateProportionalTimings(images, safeDuration);
+    // Fallback if all attempts fail
+    console.warn(`[ScenePlanner] All LLM attempts failed for Scene ${sceneNumber}. Falling back to equal duration split to fill total audio length (${safeDuration}s).`);
+    return generateProportionalTimings(images, safeDuration);
+  } catch (error) {
+    console.warn(`[ScenePlanner] Unhandled error during timing planning for Scene ${sceneNumber}: ${error?.message || error}. Falling back to equal duration split to fill total audio length (${safeDuration}s).`);
+    return generateProportionalTimings(images, safeDuration);
+  }
 }

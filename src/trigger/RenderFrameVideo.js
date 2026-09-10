@@ -81,6 +81,8 @@ async function renderSingleScene({
     intensity: 0.1,
   },
   transition = "fade",
+  forceEqualSplit = false,
+  equalTiming = false,
 }) {
   let resolvedImageUrls = [];
   if (Array.isArray(imageUrls) && imageUrls.length > 0) {
@@ -238,9 +240,10 @@ async function renderSingleScene({
             images: imagesInput,
             channelSlug,
             topicSlug,
+            forceEqualSplit: Boolean(forceEqualSplit || equalTiming),
           });
         } catch (planErr) {
-          logger.warn(`Scene timing planning failed for scene ${sceneIndex}, using proportional fallback:`, planErr.message);
+          logger.warn(`Scene timing planning failed for scene ${sceneIndex}, using equal proportional fallback:`, planErr.message);
         }
       }
 

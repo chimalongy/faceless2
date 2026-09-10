@@ -113,6 +113,10 @@ export const renderFrameVideoModalTask = task({
       renderConcurrency = 4,
       downloadConcurrency = 12,
 
+      // Optional equal duration split override
+      forceEqualSplit = false,
+      equalTiming = false,
+
       // Optional Modal URL override
       modalApiUrl,
     } = payload;
@@ -189,6 +193,7 @@ export const renderFrameVideoModalTask = task({
             direction: kenBurnsDirection,
           },
           transition: transition || "fade",
+          forceEqualSplit: Boolean(payload.forceEqualSplit || payload.equalTiming),
         },
       ];
     } else if (Array.isArray(scenes) && scenes.length > 0) {
@@ -290,6 +295,7 @@ export const renderFrameVideoModalTask = task({
               direction: kenBurnsDirection,
             },
             transition: scene.transition || "fade",
+            forceEqualSplit: Boolean(scene.forceEqualSplit || scene.equalTiming),
           };
         })
         .filter(Boolean);
@@ -344,6 +350,14 @@ export const renderFrameVideoModalTask = task({
         url,
         prompt: scene.imagePrompts?.[index] || `Scene image ${index + 1}`,
       }));
+
+      const shouldUseEqualSplit = Boolean(
+        forceEqualSplit ||
+        equalTiming ||
+        scene.forceEqualSplit ||
+        scene.equalTiming
+      );
+
       let timings = null;
       if (images.length > 1) {
         try {
@@ -355,9 +369,10 @@ export const renderFrameVideoModalTask = task({
             images,
             channelSlug,
             topicSlug,
+            forceEqualSplit: shouldUseEqualSplit,
           });
         } catch (error) {
-          logger.warn(`Timing planning failed for scene ${scene.scene_number}; using equal durations.`, {
+          logger.warn(`Timing planning failed for scene ${scene.scene_number}; splitting durations equally across images to fill audio length.`, {
             error: error?.message || String(error),
           });
         }
@@ -370,10 +385,12 @@ export const renderFrameVideoModalTask = task({
         duration: timings[index].duration,
         image_url: image.url,
       }));
-      delete scene.imageUrl;
-      delete scene.imageUrls;
+
+      // Retain backward-compatible fields
+      scene.imageUrl = images[0]?.url || "";
+      scene.imageUrls = images.map((img) => img.url);
+      scene.imageTimings = timings;
       delete scene.imagePrompts;
-      delete scene.imageTimings;
     }
 
     logger.log(
