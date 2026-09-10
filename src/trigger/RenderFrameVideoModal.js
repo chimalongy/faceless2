@@ -6,6 +6,35 @@ import { task, logger, wait } from "@trigger.dev/sdk";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { planSceneTiming } from "@/lib/scene-planner";
 
+
+const RENDER_LOG_VERSION = "multi-image-debug-2026-09-10";
+
+// Preserve the payload structure while hiding credentials and signed URL queries.
+function redactRenderLog(value, key = "") {
+  if (/credentials|database.?url|secret|token|password|authorization|api.?key|access.?key/i.test(key)) {
+    return "[REDACTED]";
+  }
+  if (Array.isArray(value)) return value.map((item) => redactRenderLog(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, redactRenderLog(item, name)]));
+  }
+  if (typeof value === "string" && /^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      url.username = "";
+      url.password = "";
+      if (url.search) url.search = "?REDACTED";
+      url.hash = "";
+      return url.toString();
+    } catch { return "[INVALID URL]"; }
+  }
+  return value;
+}
+
+function logRenderPayload(label, payload) {
+  logger.log(`[${RENDER_LOG_VERSION}] ${label}\n${JSON.stringify(redactRenderLog(payload), null, 2)}`);
+}
+
 // Probe a downloaded narration; URL contents never enter a shell command.
 async function measureNarrationDuration(audioUrl) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "scene-audio-probe-"));
@@ -88,6 +117,7 @@ export const renderFrameVideoModalTask = task({
   maxDuration: 11100,
 
   run: async (payload) => {
+    logRenderPayload("Modal task input", payload);
     const {
       channelSlug,
       topicSlug,
@@ -528,6 +558,21 @@ export const renderFrameVideoModalTask = task({
       downloadConcurrency: requestBody.downloadConcurrency,
     });
 
+    logRenderPayload("POST Modal /render payload", {
+      endpoint: renderUrl,
+      payload: requestBody,
+    });
+    for (const scene of requestBody.scenes) {
+      logRenderPayload("Modal outgoing scene images", {
+        sceneNumber: scene.scene_number,
+        imageCount: scene.imageUrls?.length || 0,
+        uniqueImageCount: new Set(scene.imageUrls || []).size,
+        imageUrls: scene.imageUrls,
+        imageTimings: scene.imageTimings || [],
+        audioUrl: scene.audioUrl,
+      });
+    }
+
     let submitResponse;
 
     try {
@@ -569,6 +614,8 @@ export const renderFrameVideoModalTask = task({
           : JSON.stringify(errorMessage)
       );
     }
+
+    logRenderPayload("Modal submission response", submitJson);
 
     const jobId =
       submitJson.jobId ||
@@ -752,6 +799,8 @@ export const renderFrameVideoModalTask = task({
     /*
      * Normalize the response from Modal.
      */
+    logRenderPayload("Modal completed result", jobResult);
+
     const renderedVideos = Array.isArray(
       jobResult.videos
     )

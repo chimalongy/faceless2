@@ -16,6 +16,35 @@ import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { planSceneTiming } from "@/lib/scene-planner";
 
+
+const RENDER_LOG_VERSION = "multi-image-debug-2026-09-10";
+
+// Preserve the payload structure while hiding credentials and signed URL queries.
+function redactRenderLog(value, key = "") {
+  if (/credentials|database.?url|secret|token|password|authorization|api.?key|access.?key/i.test(key)) {
+    return "[REDACTED]";
+  }
+  if (Array.isArray(value)) return value.map((item) => redactRenderLog(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, redactRenderLog(item, name)]));
+  }
+  if (typeof value === "string" && /^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      url.username = "";
+      url.password = "";
+      if (url.search) url.search = "?REDACTED";
+      url.hash = "";
+      return url.toString();
+    } catch { return "[INVALID URL]"; }
+  }
+  return value;
+}
+
+function logRenderPayload(label, payload) {
+  logger.log(`[${RENDER_LOG_VERSION}] ${label}\n${JSON.stringify(redactRenderLog(payload), null, 2)}`);
+}
+
 const execAsync = promisify(exec);
 
 async function downloadFileToDisk(url, destination) {
@@ -94,6 +123,13 @@ async function renderSingleScene({
   if (!audioUrl) {
     throw new Error(`No audio URL supplied for scene ${sceneIndex}. Audio narration is required.`);
   }
+
+  logRenderPayload("Resolved local scene assets", {
+    channelSlug, topicSlug, sceneIndex,
+    imageCount: resolvedImageUrls.length,
+    uniqueImageCount: new Set(resolvedImageUrls).size,
+    imageUrls: resolvedImageUrls, audioUrl, timingPlan, fps, width, height,
+  });
 
   const jobId = `scene_${sceneIndex}_${Date.now()}_${Math.random()
     .toString(36)
@@ -211,6 +247,14 @@ async function renderSingleScene({
       // Calculate frame count per segment ensuring strict totalFrames match
       const segFramesList = allocateImageFrames(timings, N, totalFrames, fps);
       logger.log(`Scene ${sceneIndex} image allocation`, { imageCount: N, totalFrames, segmentFrames: segFramesList });
+      logRenderPayload("Local FFmpeg segment plan", {
+        sceneIndex, audioDuration: duration, totalFrames, fps,
+        timings,
+        segments: resolvedImageUrls.map((url, i) => ({
+          image_number: i + 1, url, frames: segFramesList[i],
+          duration: segFramesList[i] / fps,
+        })),
+      });
 
       const segmentFiles = [];
 
@@ -497,6 +541,7 @@ export const renderSceneFrameTask = task({
   machine: "medium-2x",
   maxDuration: 7200, // 2 hour max
   run: async (payload) => {
+    logRenderPayload("Trigger renderer input (local FFmpeg; no Modal request)", payload);
     const {
       channelSlug,
       topicSlug,
@@ -553,6 +598,7 @@ export const renderAllSceneFramesTask = task({
   id: "render-all-scene-frames",
   maxDuration: 7200, // 2 hour max
   run: async (payload) => {
+    logRenderPayload("Trigger renderer input (local FFmpeg; no Modal request)", payload);
     const {
       channelSlug,
       topicSlug,
