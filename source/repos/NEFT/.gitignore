@@ -1,0 +1,54 @@
+# Build and publish outputs (all projects)
+[Bb]in/
+[Oo]bj/
+artifacts/
+[Pp]ublish/
+
+# Visual Studio and Rider local settings
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Test results and coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# NuGet package outputs
+*.nupkg
+*.snupkg
+
+# Logs and temporary files
+[Ll]ogs/
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+*.publishsettings
+
+# Frontend dependencies, if used
+node_modules/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep solution/project files, source, migrations, and lock files tracked.
+# Keep shared appsettings files tracked; do not store secrets in them.

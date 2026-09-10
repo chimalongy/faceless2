@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="NEFTCONSOLEPLAYGROUND/NEFTCONSOLEPLAYGROUND.csproj" Id="02ca1aa8-5470-4cea-b069-70eb0bccd020" />
+  <Project Path="NEFTCORE/NEFTCore.csproj" DisplayName="NEFTCore" Id="78cfdacc-d5b1-4dfd-b777-45ec4f3cee84" />
+  <Project Path="NEFTWebApi/NEFTWebApi.csproj" Id="d30bf1ee-1adc-41c0-9462-e434a2661dee" />
+  <Project Path="NEFTWebPortal/NEFTWebPortal.csproj" Id="56948948-10a3-4dcc-bded-f6d9225fbfae" />
+  <Project Path="WorkerServiceNEFT/WorkerServiceNEFT.csproj" Id="362c6384-094e-4dcd-9f41-8497370a19ee" />
+</Solution>
