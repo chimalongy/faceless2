@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-display: "Fraunces", Georgia, Cambria, "Times New Roman", Times, serif;
+
+  --color-paper: #f6f2ea;
+  --color-paper-deep: #eae3d7;
+  --color-paper-dark: #f1ede5;
+  --color-paper-card: #fcfbf7;
+  --color-ink: #191919;
+  --color-ink-muted: #746f67;
+  --color-signal: #3155e7;
+  --color-signal-hover: #2548d0;
+  --color-signal-light: #dae0f7;
+  --color-rose: #df8586;
+  --color-line: rgba(25, 25, 25, 0.1);
+  --color-line-dark: rgba(25, 25, 25, 0.18);
+}
+
+@keyframes cardRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-card-rise {
+  animation: cardRise 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.4s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.animate-modal-pop {
+  animation: modalPop 0.22s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
