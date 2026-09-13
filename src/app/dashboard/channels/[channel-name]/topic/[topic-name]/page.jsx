@@ -2081,7 +2081,7 @@ export default function TopicStudioPage() {
   }
 
   const tabs = [
-    { id: "thumbnail", label: "Thumbnail", icon: ImageIcon },
+    { id: "thumbnail", label: isShort ? "Thumbnail (Optional)" : "Thumbnail", icon: ImageIcon },
     { id: "script", label: "Script", icon: FileText },
     { id: "scenes", label: "Scenes (JSON)", icon: Braces },
     { id: "audio", label: "Audio", icon: Mic },

@@ -9,7 +9,8 @@ import {
   Check,
   Upload,
   Sparkles,
-  Loader2
+  Loader2,
+  Info
 } from "lucide-react";
 
 export default function ThumbnailTab({
@@ -30,9 +31,20 @@ export default function ThumbnailTab({
   handleThumbnailUpload,
   handleClearThumbnail,
   handleGenerateThumbnail,
+  isShort = false,
 }) {
   return (
     <div className="space-y-6 animate-slide-in">
+      {/* Informational Banner for Shorts */}
+      {isShort && (
+        <div className="flex items-center gap-2.5 p-3.5 bg-signal/5 border border-signal/20 text-xs text-ink">
+          <Info size={16} className="text-signal shrink-0" />
+          <span>
+            <strong>Note for Shorts:</strong> Custom thumbnails are optional for YouTube Shorts and not required for publishing or uploading. You can still generate or upload a vertical cover if desired.
+          </span>
+        </div>
+      )}
+
       {/* Thumbnail Prompt Section */}
       <div className="p-6 border border-line bg-paper-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line/60 pb-3">
@@ -152,7 +164,7 @@ export default function ThumbnailTab({
           <div className="flex items-center gap-2">
             <ImageIcon size={16} className="text-signal" />
             <span className="text-xs font-mono font-semibold text-ink uppercase tracking-wider">
-              16:9 Thumbnail Image
+              {isShort ? "9:16 Thumbnail / Cover (Optional)" : "16:9 Thumbnail Image"}
             </span>
           </div>
 

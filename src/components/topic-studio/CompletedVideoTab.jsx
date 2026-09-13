@@ -261,7 +261,7 @@ export default function CompletedVideoTab({
       return;
     }
 
-    if (!hasThumbnail) {
+    if (!isShort && !hasThumbnail) {
       setPublishError("A custom thumbnail is required for YouTube upload. Please generate or upload a thumbnail in the Thumbnail tab.");
       return;
     }
@@ -974,10 +974,16 @@ export default function CompletedVideoTab({
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-ink-muted block text-[10px] uppercase">Custom Thumbnail</span>
+                  <span className="text-ink-muted block text-[10px] uppercase">
+                    {isShort ? "Thumbnail (Optional)" : "Custom Thumbnail"}
+                  </span>
                   {hasThumbnail ? (
                     <span className="text-emerald-700 font-semibold flex items-center gap-1">
                       <Check size={12} /> Custom Cover Ready
+                    </span>
+                  ) : isShort ? (
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                      <Check size={12} /> Not Required for Shorts
                     </span>
                   ) : (
                     <span className="text-rose-600 font-semibold flex items-center gap-1">

@@ -27,6 +27,7 @@ export async function POST(request, { params }) {
         t.story_description AS "storyDescription",
         t.master_video_url AS "masterVideoUrl",
         t.thumbnail_url AS "thumbnailUrl",
+        COALESCE(t.video_type, 'longform') AS "videoType",
         t.youtube_video_id AS "youtubeVideoId",
         t.youtube_url AS "youtubeUrl",
         c.id AS "channelId",
@@ -72,9 +73,10 @@ export async function POST(request, { params }) {
       );
     }
 
-    // 4. Validate Thumbnail URL
+    // 4. Validate Thumbnail URL (Required for longform videos, optional for shorts)
+    const isShort = (item.videoType || "").toLowerCase() === "short";
     const thumbnailUrl = item.thumbnailUrl?.trim();
-    if (!thumbnailUrl || thumbnailUrl === "generated") {
+    if (!isShort && (!thumbnailUrl || thumbnailUrl === "generated")) {
       return NextResponse.json(
         {
           error: "A custom thumbnail is required for YouTube publishing. Please generate or upload a thumbnail image in the Thumbnail tab.",
@@ -143,12 +145,13 @@ export async function POST(request, { params }) {
     console.log(`[YouTube Publish] Calling PostersHive at: ${publishUrl} for topic "${item.topicTitle}"`);
 
     // 7. Make request to PostHive
+    const validThumbnail = thumbnailUrl && thumbnailUrl !== "generated" ? thumbnailUrl : null;
     const postPayload = {
       platform: "youtube",
       post_title: postTitle,
       description: postDescription,
       media_url: masterVideoUrl,
-      thumbnail_url: thumbnailUrl,
+      ...(validThumbnail ? { thumbnail_url: validThumbnail } : {}),
       ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
     };
 
