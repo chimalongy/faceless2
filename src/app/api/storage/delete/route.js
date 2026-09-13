@@ -68,12 +68,33 @@ export async function POST(request) {
           const topicId = tRows?.[0]?.id || null;
 
           if (topicId) {
+            // Fallback: If r2Key was not directly resolved from body/URL, lookup file_key in DB to ensure R2 deletion
+            if (!r2Key && assetType && sceneIndex !== undefined && sceneIndex !== null) {
+              try {
+                const existing = await sql`
+                  SELECT file_key FROM topic_assets
+                  WHERE topic_id = ${topicId} AND asset_type = ${assetType} AND scene_index = ${sceneIndex};
+                `;
+                if (existing && existing.length > 0) {
+                  for (const row of existing) {
+                    if (row.file_key) {
+                      console.log(`[StorageDelete] Found DB key for R2 deletion: ${row.file_key}`);
+                      await deleteFromR2(row.file_key).catch(() => {});
+                    }
+                  }
+                }
+              } catch (lookupErr) {
+                console.warn("[StorageDelete] Lookup error for asset R2 cleanup:", lookupErr);
+              }
+            }
+
             if (r2Key) {
               await sql`
                 DELETE FROM topic_assets
                 WHERE topic_id = ${topicId} AND (file_key = ${r2Key} OR file_url LIKE ${`%${r2Key}%`});
               `;
-            } else if (assetType && sceneIndex !== undefined && sceneIndex !== null) {
+            }
+            if (assetType && sceneIndex !== undefined && sceneIndex !== null) {
               await sql`
                 DELETE FROM topic_assets
                 WHERE topic_id = ${topicId} AND asset_type = ${assetType} AND scene_index = ${sceneIndex};

@@ -15,6 +15,9 @@ import {
   Clapperboard,
   Compass,
   Zap,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -30,6 +33,7 @@ export default function SceneFramesTab({
   generatingSceneVideosModal = {},
   handleUploadSceneVideo,
   handleDeleteSceneVideo,
+  handleDeleteMultipleSceneVideos,
   handleGenerateSceneVideo,
   handleGenerateAllVideos,
   handleGenerateSceneVideoModal,
@@ -37,12 +41,51 @@ export default function SceneFramesTab({
   isShort = false,
 }) {
   const [downloadingVideos, setDownloadingVideos] = useState({});
+  const [selectedScenes, setSelectedScenes] = useState(new Set());
 
   let parsedScenes = [];
   try {
     parsedScenes = JSON.parse(scenesJson || "[]");
   } catch (e) {
     parsedScenes = [];
+  }
+
+  // Filter selected scenes that actually have a rendered video file
+  const selectedScenesWithVideos = Array.from(selectedScenes).filter((sNum) => {
+    const vid = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+    return !!vid?.url;
+  });
+
+  function toggleSelectScene(sceneNum) {
+    setSelectedScenes((prev) => {
+      const next = new Set(prev);
+      if (next.has(sceneNum)) {
+        next.delete(sceneNum);
+      } else {
+        next.add(sceneNum);
+      }
+      return next;
+    });
+  }
+
+  function handleSelectAllScenes() {
+    setSelectedScenes(new Set(parsedScenes.map((s) => s.scene_number)));
+  }
+
+  function handleDeselectAll() {
+    setSelectedScenes(new Set());
+  }
+
+  function onDeleteBatchClick() {
+    if (selectedScenes.size === 0) return;
+    if (selectedScenesWithVideos.length === 0) {
+      toast("None of the selected scenes have rendered video clips to delete.", { icon: "ℹ️" });
+      return;
+    }
+    if (handleDeleteMultipleSceneVideos) {
+      handleDeleteMultipleSceneVideos(selectedScenesWithVideos);
+      setSelectedScenes(new Set());
+    }
   }
 
   async function handleDownloadVideo(sceneNum, url, videoName) {
@@ -163,7 +206,7 @@ export default function SceneFramesTab({
 
       {/* Responsive Grid for Scene Videos */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-line">
+        <div className="flex flex-wrap items-center justify-between pb-2 border-b border-line gap-2">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-mono font-semibold uppercase tracking-wider text-ink">
               Scene Video Reels ({parsedScenes.length} Scenes)
@@ -176,7 +219,66 @@ export default function SceneFramesTab({
               {isShort ? "9:16 Short Reels" : "16:9 Landscape"}
             </span>
           </div>
+
+          {/* Batch Selection Header Action */}
+          {parsedScenes.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={selectedScenes.size === parsedScenes.length ? handleDeselectAll : handleSelectAllScenes}
+                className="px-2.5 py-1 text-[11px] font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer inline-flex items-center gap-1.5 rounded-xs"
+                title={selectedScenes.size === parsedScenes.length ? "Deselect all scenes" : "Select all scenes"}
+              >
+                {selectedScenes.size === parsedScenes.length ? (
+                  <>
+                    <CheckSquare size={13} className="text-signal" />
+                    <span>Deselect All</span>
+                  </>
+                ) : (
+                  <>
+                    <Square size={13} />
+                    <span>Select All ({parsedScenes.length})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Selected Scenes Action Bar */}
+        {selectedScenes.size > 0 && (
+          <div className="p-3 bg-paper-dark border border-signal/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-signal animate-pulse" />
+              <span className="text-xs font-semibold text-ink font-mono">
+                {selectedScenes.size} scene{selectedScenes.size > 1 ? "s" : ""} selected ({selectedScenesWithVideos.length} with video{selectedScenesWithVideos.length !== 1 ? "s" : ""})
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={selectedScenesWithVideos.length === 0}
+                onClick={onDeleteBatchClick}
+                className="px-3.5 py-1.5 border border-rose-300 bg-rose-50 hover:bg-rose-100 text-[11px] font-semibold text-rose-700 transition-colors cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                title="Delete video clips for selected scenes from R2 and database"
+              >
+                <Trash2 size={12} />
+                <span>Delete Selected Videos ({selectedScenesWithVideos.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                className="px-3 py-1.5 border border-line bg-white hover:bg-ink/5 text-[11px] font-semibold text-ink transition-colors cursor-pointer inline-flex items-center gap-1"
+                title="Clear selection"
+              >
+                <X size={12} />
+                <span>Clear Selection</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {parsedScenes.length === 0 ? (
           <div className="p-8 border border-line bg-paper-card text-center space-y-2 text-ink-muted">
@@ -207,15 +309,25 @@ export default function SceneFramesTab({
               const isDownloading = !!downloadingVideos[sceneNum];
 
               const kb = scene.ken_burns || { direction: "zoom-in", intensity: 0.12 };
+              const isSelected = selectedScenes.has(sceneNum);
 
               return (
                 <div
                   key={sceneNum}
-                  className="border border-line bg-paper-card flex flex-col justify-between hover:border-signal/40 transition-all overflow-hidden"
+                  className={`border bg-paper-card flex flex-col justify-between hover:border-signal/40 transition-all overflow-hidden ${
+                    isSelected ? "border-signal/50 bg-signal/[0.02]" : "border-line"
+                  }`}
                 >
                   {/* Card Header */}
                   <div className="p-3 border-b border-line/60 bg-paper-dark/30 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectScene(sceneNum)}
+                        className="w-4 h-4 accent-signal cursor-pointer shrink-0"
+                        title={`Select Scene ${sceneNum}`}
+                      />
                       <span className="w-5 h-5 bg-ink text-white font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                         {sceneNum}
                       </span>

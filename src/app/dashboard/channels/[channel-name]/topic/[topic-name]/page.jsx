@@ -1479,6 +1479,54 @@ export default function TopicStudioPage() {
     });
   }
 
+  function handleDeleteMultipleSceneVideos(sceneNumbers = []) {
+    if (!sceneNumbers || sceneNumbers.length === 0) return;
+    const count = sceneNumbers.length;
+
+    requestDelete({
+      title: `Delete ${count} Scene Video${count > 1 ? "s" : ""}`,
+      description: `Are you sure you want to delete the video clips for ${count} selected scene${count > 1 ? "s" : ""}? This will permanently remove the video files from Cloudflare R2 and the database.`,
+      confirmLabel: `Delete ${count} Video${count > 1 ? "s" : ""}`,
+      onConfirm: async () => {
+        const deletePromises = sceneNumbers.map(async (sNum) => {
+          const videoData = sceneVideos[sNum] || sceneVideos[String(sNum)] || sceneVideos[Number(sNum)];
+          if (videoData?.key || videoData?.url) {
+            try {
+              await fetch("/api/storage/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  key: videoData?.key,
+                  url: videoData?.url,
+                  channelSlug,
+                  topicSlug,
+                  assetType: "video",
+                  sceneIndex: sNum,
+                }),
+              });
+            } catch (err) {
+              console.warn(`Could not delete video for scene ${sNum}:`, err);
+            }
+          }
+        });
+
+        await Promise.all(deletePromises);
+
+        setSceneVideos((prev) => {
+          const next = { ...prev };
+          sceneNumbers.forEach((sNum) => {
+            delete next[sNum];
+            delete next[String(sNum)];
+            delete next[Number(sNum)];
+          });
+          return next;
+        });
+
+        toast.success(`Deleted ${count} scene video${count > 1 ? "s" : ""}.`);
+      },
+    });
+  }
+
   async function handleGenerateSceneVideo(sceneNum) {
     let parsed = [];
     try {
@@ -2270,6 +2318,7 @@ export default function TopicStudioPage() {
               generatingSceneVideosModal={generatingSceneVideosModal}
               handleUploadSceneVideo={handleUploadSceneVideo}
               handleDeleteSceneVideo={handleDeleteSceneVideo}
+              handleDeleteMultipleSceneVideos={handleDeleteMultipleSceneVideos}
               handleGenerateSceneVideo={handleGenerateSceneVideo}
               handleGenerateAllVideos={handleGenerateAllVideos}
               handleGenerateSceneVideoModal={handleGenerateSceneVideoModal}
