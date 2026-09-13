@@ -29,6 +29,7 @@ import {
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
+import { sortSceneImages } from "@/lib/scene-images";
 
 export default function ImagesTab({
   scenesJson,
@@ -636,7 +637,7 @@ export default function ImagesTab({
                   ];
 
               // 2. Gather all existing uploaded/generated image assets for this scene
-              const uploadedImagesList = Array.isArray(imgData?.images) && imgData.images.length > 0
+              const rawImagesList = Array.isArray(imgData?.images) && imgData.images.length > 0
                 ? imgData.images
                 : imgData?.url
                 ? [
@@ -648,6 +649,7 @@ export default function ImagesTab({
                     },
                   ]
                 : [];
+              const uploadedImagesList = sortSceneImages(rawImagesList, sceneNum);
 
               // 3. Determine total frames: maximum of defined prompts, number_of_images field, and uploaded files
               const totalFrames = Math.max(

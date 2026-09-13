@@ -30,6 +30,7 @@ import SceneFramesTab from "@/components/topic-studio/SceneFramesTab";
 import CompletedVideoTab from "@/components/topic-studio/CompletedVideoTab";
 import DeleteConfirmModal from "@/components/topic-studio/DeleteConfirmModal";
 import { getSceneGenerationPrompt } from "@/lib/LLMPrompts/SceneGenerationPrompt";
+import { getImageIndex, sortSceneImages } from "@/lib/scene-images";
 
 export default function TopicStudioPage() {
   const params = useParams();
@@ -236,34 +237,33 @@ export default function TopicStudioPage() {
                     duration: "00:20",
                   };
                 } else if (asset.assetType === "image" && asset.sceneIndex) {
-                  if (!images[asset.sceneIndex]) {
-                    images[asset.sceneIndex] = {
+                  const sIdx = Number(asset.sceneIndex);
+                  const frameIndex = getImageIndex(asset.fileName, sIdx);
+                  const imgObj = {
+                    url: asset.fileUrl,
+                    key: asset.fileKey,
+                    name: asset.fileName || `Scene ${sIdx} Image ${frameIndex}`,
+                    imageIndex: frameIndex,
+                  };
+                  if (!images[sIdx]) {
+                    images[sIdx] = {
                       url: asset.fileUrl,
                       key: asset.fileKey,
-                      name: asset.fileName || `Scene ${asset.sceneIndex} Image`,
-                      images: [
-                        {
-                          url: asset.fileUrl,
-                          key: asset.fileKey,
-                          name: asset.fileName || `Scene ${asset.sceneIndex} Image 1`,
-                        }
-                      ],
+                      name: asset.fileName || `Scene ${sIdx} Image 1`,
+                      images: [imgObj],
                     };
                   } else {
-                    if (!images[asset.sceneIndex].images) {
-                      images[asset.sceneIndex].images = [
+                    if (!images[sIdx].images) {
+                      images[sIdx].images = [
                         {
-                          url: images[asset.sceneIndex].url,
-                          key: images[asset.sceneIndex].key,
-                          name: images[asset.sceneIndex].name,
+                          url: images[sIdx].url,
+                          key: images[sIdx].key,
+                          name: images[sIdx].name,
+                          imageIndex: getImageIndex(images[sIdx].name, sIdx),
                         }
                       ];
                     }
-                    images[asset.sceneIndex].images.push({
-                      url: asset.fileUrl,
-                      key: asset.fileKey,
-                      name: asset.fileName || `Scene ${asset.sceneIndex} Image ${images[asset.sceneIndex].images.length + 1}`,
-                    });
+                    images[sIdx].images.push(imgObj);
                   }
                 } else if (asset.assetType === "video" && asset.sceneIndex) {
                   videos[asset.sceneIndex] = {
@@ -276,14 +276,7 @@ export default function TopicStudioPage() {
               // Ensure images are strictly ordered by frame index (e.g. 1, 2, 3...)
               Object.keys(images).forEach((sNum) => {
                 if (Array.isArray(images[sNum]?.images) && images[sNum].images.length > 1) {
-                  images[sNum].images.sort((a, b) => {
-                    const getNum = (name) => {
-                      if (!name) return 1;
-                      const match = name.match(/scene[-_]\d+[-_](\d+)/i) || name.match(/[-_](\d+)\.[a-zA-Z0-9]+$/);
-                      return match ? parseInt(match[1], 10) : 1;
-                    };
-                    return getNum(a.name) - getNum(b.name);
-                  });
+                  images[sNum].images = sortSceneImages(images[sNum].images, sNum);
                   if (images[sNum].images[0]) {
                     images[sNum].url = images[sNum].images[0].url;
                     images[sNum].key = images[sNum].images[0].key;
@@ -1199,48 +1192,39 @@ export default function TopicStudioPage() {
         if (Array.isArray(data.images) && data.images.length > 0) {
           setSceneImages((prev) => {
             const next = { ...prev };
+            // First, cleanly reset scenes present in the extracted ZIP to avoid stale images
+            const extractedScenes = new Set(data.images.map((img) => Number(img.sceneIndex)).filter(Boolean));
+            extractedScenes.forEach((sNum) => {
+              delete next[sNum];
+              delete next[String(sNum)];
+            });
+
             data.images.forEach((img) => {
-              if (!next[img.sceneIndex]) {
-                next[img.sceneIndex] = {
+              const sIdx = Number(img.sceneIndex);
+              const frameIdx = img.imageIndex || getImageIndex(img.fileName, sIdx);
+              const imgObj = {
+                url: img.publicUrl,
+                key: img.key,
+                name: img.fileName || `Scene ${sIdx} Image ${frameIdx}`,
+                imageIndex: frameIdx,
+              };
+
+              if (!next[sIdx]) {
+                next[sIdx] = {
                   url: img.publicUrl,
                   key: img.key,
-                  name: img.fileName || `Scene ${img.sceneIndex} Image`,
-                  images: [
-                    {
-                      url: img.publicUrl,
-                      key: img.key,
-                      name: img.fileName || `Scene ${img.sceneIndex} Image 1`,
-                    },
-                  ],
+                  name: img.fileName || `Scene ${sIdx} Image 1`,
+                  images: [imgObj],
                 };
               } else {
-                if (!next[img.sceneIndex].images) {
-                  next[img.sceneIndex].images = [
-                    {
-                      url: next[img.sceneIndex].url,
-                      key: next[img.sceneIndex].key,
-                      name: next[img.sceneIndex].name,
-                    },
-                  ];
-                }
-                next[img.sceneIndex].images.push({
-                  url: img.publicUrl,
-                  key: img.key,
-                  name: img.fileName || `Scene ${img.sceneIndex} Image ${next[img.sceneIndex].images.length + 1}`,
-                });
+                next[sIdx].images.push(imgObj);
               }
             });
-            // Ensure extracted images are sorted by frame index
+
+            // Ensure extracted images are sorted strictly by frame index
             Object.keys(next).forEach((sIdx) => {
               if (Array.isArray(next[sIdx]?.images) && next[sIdx].images.length > 1) {
-                next[sIdx].images.sort((a, b) => {
-                  const getNum = (name) => {
-                    if (!name) return 1;
-                    const match = name.match(/scene[-_]\d+[-_](\d+)/i) || name.match(/[-_](\d+)\.[a-zA-Z0-9]+$/);
-                    return match ? parseInt(match[1], 10) : 1;
-                  };
-                  return getNum(a.name) - getNum(b.name);
-                });
+                next[sIdx].images = sortSceneImages(next[sIdx].images, sIdx);
                 if (next[sIdx].images[0]) {
                   next[sIdx].url = next[sIdx].images[0].url;
                   next[sIdx].key = next[sIdx].images[0].key;

@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { uploadToR2, deleteFromR2, getR2Client, getBucketName } from "@/lib/storage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { parseImageFileName } from "@/lib/scene-images";
 
 export const extractZipImagesTask = task({
   id: "extract-zip-images",
@@ -87,7 +88,40 @@ export const extractZipImagesTask = task({
 
       logger.log(`Found ${imageFiles.length} image candidate(s) in ZIP archive.`);
 
-      // 3. Process each image, extract scene number or thumbnail, and upload to R2
+      // 3. Parse candidates and sort deterministically by sceneIndex and imageIndex
+      const parsedCandidates = [];
+      const sceneCounts = new Map();
+
+      for (const item of imageFiles) {
+        const fullFileName = item.path.split("/").pop() || item.path;
+        const parsed = parseImageFileName(fullFileName);
+
+        if (!parsed.isThumbnail && !parsed.sceneIndex) {
+          logger.warn(`Could not extract scene number or thumbnail identifier from filename: ${fullFileName}. Skipping.`);
+          continue;
+        }
+
+        if (!parsed.isThumbnail && parsed.sceneIndex) {
+          const currentCount = sceneCounts.get(parsed.sceneIndex) || 0;
+          sceneCounts.set(parsed.sceneIndex, currentCount + 1);
+        }
+
+        parsedCandidates.push({
+          ...item,
+          fullFileName,
+          ...parsed,
+        });
+      }
+
+      // Sort: Thumbnails first, then scene images ordered strictly by sceneIndex ASC, imageIndex ASC
+      parsedCandidates.sort((a, b) => {
+        if (a.isThumbnail && !b.isThumbnail) return -1;
+        if (!a.isThumbnail && b.isThumbnail) return 1;
+        if (a.isThumbnail && b.isThumbnail) return 0;
+        if (a.sceneIndex !== b.sceneIndex) return a.sceneIndex - b.sceneIndex;
+        return a.imageIndex - b.imageIndex;
+      });
+
       const sql = getDbSql();
       let channelId = null;
       let topicId = null;
@@ -104,32 +138,13 @@ export const extractZipImagesTask = task({
       let thumbnailResult = null;
       const cleanedScenes = new Set();
 
-      for (const item of imageFiles) {
-        const fullFileName = item.path.split("/").pop() || item.path;
-        const lowerFull = fullFileName.toLowerCase();
-
-        // Determine extension and MIME type
-        let ext = "png";
-        let mimeType = "image/png";
-        if (lowerFull.includes(".jfif")) {
-          ext = "jfif";
-          mimeType = "image/jpeg";
-        } else if (lowerFull.includes(".jpg") || lowerFull.includes(".jpeg")) {
-          ext = "jpg";
-          mimeType = "image/jpeg";
-        } else if (lowerFull.includes(".webp")) {
-          ext = "webp";
-          mimeType = "image/webp";
-        } else if (lowerFull.includes(".gif")) {
-          ext = "gif";
-          mimeType = "image/gif";
-        }
-
+      for (const item of parsedCandidates) {
+        const { fullFileName, ext, mimeType, isThumbnail, sceneIndex, imageIndex, isMultiIndexed } = item;
         const imgBuffer = await item.file.async("nodebuffer");
 
-        // ── THUMBNAIL DETECTION: Any image containing "thumbnail" in its filename ──
-        if (lowerFull.includes("thumbnail")) {
-          logger.log(`Found thumbnail image in ZIP: ${fullFileName}`);
+        // ── THUMBNAIL PROCESSING ──
+        if (isThumbnail) {
+          logger.log(`Processing thumbnail image from ZIP: ${fullFileName}`);
           const timestamp = Date.now();
           const randomSuffix = Math.random().toString(36).substring(2, 7);
           const key = `channels/${channelSlug}/topics/${topicSlug}/thumbnail/thumb-${timestamp}-${randomSuffix}.${ext}`;
@@ -193,46 +208,7 @@ export const extractZipImagesTask = task({
           continue;
         }
 
-        // ── SCENE IMAGE DETECTION ──
-        // Filenames in ZIP can be:
-        // Multi-image format: "1_1.png", "1_2.png", "scene_1_1.png", "scene-2-3.jpg", "1-2.jfif"
-        // Legacy format: "1.jfif", "2.jfif", "scene_3.png"
-        // Browser/downloader timestamped: "1_2.png_202608210053", "1.png_202608210053", "1_202608210053.png"
-
-        // Step A: Strip extensions and trailing download timestamps (e.g. .png_timestamp)
-        let cleanName = fullFileName.replace(/\.[^/.]+(?:_\d+)?$/, "");
-        cleanName = cleanName.replace(/\.[^/.]+$/, "");
-        const baseName = cleanName.toLowerCase().replace(/^scene[-_]?/i, "");
-
-        // Step B: Match multi-part numbers like "1_2", "1-2", "1_image_2"
-        const multiMatch = baseName.match(/^(\d+)[-_](?:image[-_]?)?(\d+)/i);
-        let sceneIndex = null;
-        let imageIndex = 1;
-
-        if (multiMatch) {
-          sceneIndex = parseInt(multiMatch[1], 10);
-          const secondNum = multiMatch[2];
-          // If the second number has 6+ digits (e.g. timestamp 20260821), treat it as timestamp, not image index
-          if (secondNum.length >= 6) {
-            imageIndex = 1;
-          } else {
-            imageIndex = parseInt(secondNum, 10);
-          }
-        } else {
-          // Fallback to primary scene number extraction
-          const primaryPart = baseName.split("_")[0];
-          const numberMatch = primaryPart.match(/(\d+)/) || baseName.match(/(\d+)/) || fullFileName.match(/(\d+)/);
-          if (numberMatch) {
-            sceneIndex = parseInt(numberMatch[1], 10);
-            imageIndex = 1;
-          }
-        }
-
-        if (!sceneIndex) {
-          logger.warn(`Could not extract scene number or thumbnail identifier from filename: ${fullFileName}. Skipping.`);
-          continue;
-        }
-
+        // ── SCENE IMAGE PROCESSING ──
         // Clean up any previous image assets for this scene from R2 and DB (only once per scene in this ZIP extraction)
         if (sql && channelId && topicId && !cleanedScenes.has(sceneIndex)) {
           try {
@@ -257,10 +233,14 @@ export const extractZipImagesTask = task({
           }
         }
 
+        // Determine if scene is multi-image to name files consistently
+        const hasMultiple = (sceneCounts.get(sceneIndex) || 0) > 1 || isMultiIndexed || imageIndex > 1;
+        const imageSuffix = hasMultiple ? `-${imageIndex}` : "";
+        const assetFileName = hasMultiple ? `scene-${sceneIndex}-${imageIndex}.${ext}` : `scene-${sceneIndex}.${ext}`;
+
         // Upload extracted image directly to Cloudflare R2
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 7);
-        const imageSuffix = imageIndex > 1 ? `-${imageIndex}` : "";
         const key = `channels/${channelSlug}/topics/${topicSlug}/images/scene-${sceneIndex}${imageSuffix}-${timestamp}-${randomSuffix}.${ext}`;
 
         const uploadResult = await uploadToR2({
@@ -278,7 +258,6 @@ export const extractZipImagesTask = task({
         });
 
         // Record in Neon database
-        const assetFileName = imageIndex > 1 ? `scene-${sceneIndex}-${imageIndex}.${ext}` : `scene-${sceneIndex}.${ext}`;
         if (sql && channelId && topicId) {
           try {
             await sql`
@@ -309,7 +288,7 @@ export const extractZipImagesTask = task({
           }
         }
 
-        logger.log(`Mapped Scene ${sceneIndex}${imageIndex > 1 ? ` (Image ${imageIndex})` : ""} (${fullFileName}) -> ${uploadResult.publicUrl}`);
+        logger.log(`Mapped Scene ${sceneIndex}${hasMultiple ? ` (Image ${imageIndex})` : ""} (${fullFileName}) -> ${uploadResult.publicUrl}`);
 
         results.push({
           sceneIndex,

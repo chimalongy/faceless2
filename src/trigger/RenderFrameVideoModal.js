@@ -5,6 +5,7 @@ import { getAudioDuration } from "@/lib/ffmpeg-helper";
 import { task, logger, wait } from "@trigger.dev/sdk";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { planSceneTiming, normalizeTimings } from "@/lib/scene-planner";
+import { getImageIndex } from "@/lib/scene-images";
 
 
 // Probe a downloaded narration; URL contents never enter a shell command.
@@ -149,17 +150,19 @@ export const renderFrameVideoModalTask = task({
           if (sql) {
             await initDbSchema();
             const dbRows = await sql`
-              SELECT ta.file_url FROM topic_assets ta
+              SELECT ta.file_url, ta.file_name, ta.id FROM topic_assets ta
               JOIN topics t ON ta.topic_id = t.id
               JOIN channels c ON ta.channel_id = c.id
               WHERE c.slug = ${channelSlug}
                 AND t.slug = ${topicSlug}
                 AND ta.asset_type = 'image'
                 AND ta.scene_index = ${Number.parseInt(sceneIndex, 10)}
-              ORDER BY ta.file_name ASC, ta.id ASC;
+              ORDER BY ta.id ASC;
             `;
             if (dbRows && dbRows.length > 1) {
-              resolvedImageUrls = dbRows.map((r) => r.file_url).filter(Boolean);
+              const sNum = Number.parseInt(sceneIndex, 10);
+              const sorted = [...dbRows].sort((a, b) => (getImageIndex(a.file_name, sNum) - getImageIndex(b.file_name, sNum)) || (a.id - b.id));
+              resolvedImageUrls = sorted.map((r) => r.file_url).filter(Boolean);
             }
           }
         } catch (_) {}
@@ -306,24 +309,26 @@ export const renderFrameVideoModalTask = task({
         if (sql && channelSlug && topicSlug) {
           await initDbSchema();
           const dbRows = await sql`
-            SELECT ta.scene_index, ta.file_url FROM topic_assets ta
+            SELECT ta.scene_index, ta.file_url, ta.file_name, ta.id FROM topic_assets ta
             JOIN topics t ON ta.topic_id = t.id
             JOIN channels c ON ta.channel_id = c.id
             WHERE c.slug = ${channelSlug}
               AND t.slug = ${topicSlug}
               AND ta.asset_type = 'image'
-            ORDER BY ta.scene_index ASC, ta.file_name ASC, ta.id ASC;
+            ORDER BY ta.scene_index ASC, ta.id ASC;
           `;
           if (dbRows && dbRows.length > 0) {
             const dbMap = {};
             for (const row of dbRows) {
               const sIdx = Number(row.scene_index);
               if (!dbMap[sIdx]) dbMap[sIdx] = [];
-              if (row.file_url) dbMap[sIdx].push(row.file_url);
+              dbMap[sIdx].push(row);
             }
             for (const s of scenesToRender) {
-              if ((!s.imageUrls || s.imageUrls.length <= 1) && dbMap[s.scene_number]?.length > 1) {
-                s.imageUrls = dbMap[s.scene_number];
+              const sRows = dbMap[s.scene_number];
+              if ((!s.imageUrls || s.imageUrls.length <= 1) && sRows?.length > 1) {
+                const sorted = [...sRows].sort((a, b) => (getImageIndex(a.file_name, s.scene_number) - getImageIndex(b.file_name, s.scene_number)) || (a.id - b.id));
+                s.imageUrls = sorted.map((r) => r.file_url).filter(Boolean);
                 s.imageUrl = s.imageUrls[0];
               }
             }

@@ -404,22 +404,36 @@
     const imgs = genImgs();
     const beforeSet = new Set((beforeSrcs || []).filter(Boolean));
 
-    // Prefer images that were NOT in beforeSrcs
+    // Helper: sort images in visual reading order (top→bottom, left→right).
+    // Flow renders generated images in the same order as the scene prompts,
+    // so this ordering ensures items[0] maps to sceneNumbers[0], etc.
+    function sortByReadingOrder(imgList) {
+      return [...imgList].sort((a, b) => {
+        const ra = a.getBoundingClientRect();
+        const rb = b.getBoundingClientRect();
+        // Primary: top edge (ascending = top-to-bottom)
+        const topDiff = ra.top - rb.top;
+        if (Math.abs(topDiff) > 10) return topDiff; // 10px tolerance for same row
+        // Secondary: left edge (ascending = left-to-right)
+        return ra.left - rb.left;
+      });
+    }
+
+    // Prefer images that were NOT in beforeSrcs (i.e. freshly generated)
     let candidates = imgs.filter((img) => {
       const s = img.currentSrc || img.src || img.getAttribute("src") || "";
       return s && !beforeSet.has(s);
     });
 
-    // Fallback if no URL difference detected: pick newest by layout position or DOM order
+    // Sort new candidates in scene/reading order
+    candidates = sortByReadingOrder(candidates);
+
+    // Fallback if no URL difference detected: take the last `count` images
+    // in reading order (newest batch appears at the bottom of the chat feed)
     if (candidates.length === 0 && imgs.length > 0) {
-      // In chat feeds, newest is at bottom; in galleries, newest is at top.
-      // Sort by vertical position (bottom-most first)
-      const sortedByBottom = [...imgs].sort((a, b) => {
-        const ra = a.getBoundingClientRect();
-        const rb = b.getBoundingClientRect();
-        return rb.bottom - ra.bottom;
-      });
-      candidates = sortedByBottom.slice(0, Math.max(1, count));
+      const sorted = sortByReadingOrder(imgs);
+      // Newest images are at the bottom — take the last `count` entries
+      candidates = sorted.slice(Math.max(0, sorted.length - count));
     }
 
     const items = [];

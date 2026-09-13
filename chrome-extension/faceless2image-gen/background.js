@@ -451,10 +451,38 @@ async function downloadJob(tabId, job, beforeImg, beforeSrcs = []) {
   });
   const items = (mres.ok && mres.items) || [];
 
+  // Warn if the number of returned images doesn't match expected scene count.
+  // This usually means Flow generated fewer images than requested, or the DOM
+  // ordering could not be determined — the user should regenerate missing scenes.
+  if (items.length !== sceneNumbers.length) {
+    emit({
+      kind: "warn",
+      message: `Expected ${sceneNumbers.length} image(s) but found ${items.length} in Flow — scene-to-image mapping may be off. Missing scenes should be re-generated individually.`,
+    });
+  }
+
   for (let k = 0; k < sceneNumbers.length; k++) {
     const sceneNumber = sceneNumbers[k];
-    const filename = `${folder}/${sceneNumber}.png`;
-    const targetItem = items[k] || items[items.length - 1];
+
+    // Use the actual filename the Flow agent assigned to the image.
+    // item.name is scraped from the caption/label text Flow renders next to
+    // each generated image (e.g. "1.png", "scene_3_2.png", "thumbnail.png").
+    // Fall back to the scene-number-derived name only when the agent didn't
+    // provide one.
+    const targetItem = items[k];
+    if (!targetItem) {
+      emit({ kind: "warn", message: `No image available for scene ${sceneNumber} (index ${k}) — skipping. Re-generate this scene individually.` });
+      continue;
+    }
+
+    let agentName = sanitize(targetItem.name || "");
+    // Ensure it ends with .png
+    if (agentName && !/\.(png|jpg|jpeg|webp|gif)$/i.test(agentName)) {
+      agentName += ".png";
+    }
+    const filename = agentName
+      ? `${folder}/${agentName}`
+      : `${folder}/${sceneNumber}.png`;
 
     let ok = false;
 

@@ -67,12 +67,20 @@ export async function POST(request) {
           // If replacing an existing frame of a scene, clean up the previous asset for this frame
           if (assetType === "image" && sceneIndex !== null && imageIndex !== null && topicId) {
             try {
-              const searchPattern = imageIndex > 1 ? `%scene-${sceneIndex}-${imageIndex}.%` : `%scene-${sceneIndex}.%`;
-              const existingRows = await sql`
-                SELECT id, file_key FROM topic_assets
-                WHERE topic_id = ${topicId} AND asset_type = 'image' AND scene_index = ${sceneIndex}
-                AND (file_name LIKE ${searchPattern} OR file_key LIKE ${searchPattern});
-              `;
+              const existingRows = imageIndex > 1
+                ? await sql`
+                    SELECT id, file_key FROM topic_assets
+                    WHERE topic_id = ${topicId} AND asset_type = 'image' AND scene_index = ${sceneIndex}
+                    AND (file_name LIKE ${`%scene-${sceneIndex}-${imageIndex}.%`} OR file_key LIKE ${`%scene-${sceneIndex}-${imageIndex}-%`});
+                  `
+                : await sql`
+                    SELECT id, file_key FROM topic_assets
+                    WHERE topic_id = ${topicId} AND asset_type = 'image' AND scene_index = ${sceneIndex}
+                    AND (
+                      file_name LIKE ${`%scene-${sceneIndex}-1.%`} OR file_name LIKE ${`%scene-${sceneIndex}.%`}
+                      OR file_key LIKE ${`%scene-${sceneIndex}-1-%`} OR file_key LIKE ${`%scene-${sceneIndex}-%`}
+                    );
+                  `;
               if (existingRows && existingRows.length > 0) {
                 const { deleteFromR2 } = await import("@/lib/storage");
                 for (const row of existingRows) {

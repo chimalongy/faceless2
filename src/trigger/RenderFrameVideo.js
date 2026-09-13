@@ -15,6 +15,7 @@ import {
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { planSceneTiming } from "@/lib/scene-planner";
+import { getImageIndex } from "@/lib/scene-images";
 
 
 const RENDER_LOG_VERSION = "multi-image-debug-2026-09-10";
@@ -99,17 +100,19 @@ async function renderSingleScene({
       if (sql) {
         await initDbSchema();
         const dbRows = await sql`
-          SELECT ta.file_url FROM topic_assets ta
+          SELECT ta.file_url, ta.file_name, ta.id FROM topic_assets ta
           JOIN topics t ON ta.topic_id = t.id
           JOIN channels c ON ta.channel_id = c.id
           WHERE c.slug = ${channelSlug}
             AND t.slug = ${topicSlug}
             AND ta.asset_type = 'image'
             AND ta.scene_index = ${sceneIndex}
-          ORDER BY ta.file_name ASC, ta.id ASC;
+          ORDER BY ta.id ASC;
         `;
         if (dbRows && dbRows.length > 1) {
-          resolvedImageUrls = dbRows.map((r) => r.file_url).filter(Boolean);
+          const sNum = Number(sceneIndex);
+          const sorted = [...dbRows].sort((a, b) => (getImageIndex(a.file_name, sNum) - getImageIndex(b.file_name, sNum)) || (a.id - b.id));
+          resolvedImageUrls = sorted.map((r) => r.file_url).filter(Boolean);
           logger.log(`Found ${resolvedImageUrls.length} images in DB for scene ${sceneIndex}.`);
         }
       }
