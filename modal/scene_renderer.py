@@ -916,7 +916,7 @@ def api():
             return self
 
     class RenderRequest(BaseModel):
-        model_config = ConfigDict(extra="forbid")
+        model_config = ConfigDict(extra="ignore")
         credentials: Credentials
         KEN_BURNS_ZOOM_AMOUNT: float = Field(..., ge=0.02, le=0.30)
         KEN_BURNS_PAN_ZOOM: float = Field(..., gt=1.0, le=1.30)
@@ -926,6 +926,7 @@ def api():
         fps: int = Field(default=60, ge=1, le=120)
         width: int = Field(default=1376, ge=320, le=3840)
         height: int = Field(default=768, ge=240, le=2160)
+        isShort: bool | None = Field(default=False)
         renderConcurrency: int = Field(default=4, ge=1, le=16)
         downloadConcurrency: int = Field(default=12, ge=1, le=32)
 

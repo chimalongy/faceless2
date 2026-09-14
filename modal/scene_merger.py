@@ -1126,7 +1126,7 @@ def api():
 
     class MergeRequest(BaseModel):
         model_config = ConfigDict(
-            extra="forbid"
+            extra="ignore"
         )
 
         credentials: Credentials
@@ -1145,10 +1145,13 @@ def api():
             default_factory=list
         )
 
-        resolution: Literal[
-            "720p",
-            "1080p",
-        ] = "1080p"
+        resolution: str = Field(
+            default="1080p"
+        )
+
+        isShort: bool | None = Field(
+            default=False
+        )
 
         fps: int = Field(
             default=60,

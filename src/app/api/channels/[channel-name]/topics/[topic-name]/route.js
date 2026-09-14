@@ -144,6 +144,31 @@ export async function PUT(request, { params }) {
     const videoType = body.videoType || body.video_type || undefined;
     const aspectRatio = body.aspectRatio || body.aspect_ratio || undefined;
 
+    const hasMasterVideo = "masterVideoUrl" in body || "master_video_url" in body;
+    const masterVideoVal = hasMasterVideo
+      ? (body.masterVideoUrl || body.master_video_url || null)
+      : undefined;
+
+    const hasThumbnail = "thumbnailUrl" in body || "thumbnail_url" in body;
+    const thumbnailVal = hasThumbnail
+      ? (body.thumbnailUrl || body.thumbnail_url || null)
+      : undefined;
+
+    const hasYoutubeVideoId = "youtubeVideoId" in body || "youtube_video_id" in body;
+    const youtubeVideoIdVal = hasYoutubeVideoId
+      ? (body.youtubeVideoId || body.youtube_video_id || null)
+      : undefined;
+
+    const hasYoutubeUrl = "youtubeUrl" in body || "youtube_url" in body;
+    const youtubeUrlVal = hasYoutubeUrl
+      ? (body.youtubeUrl || body.youtube_url || null)
+      : undefined;
+
+    const hasYoutubePublishedAt = "youtubePublishedAt" in body || "youtube_published_at" in body;
+    const youtubePublishedAtVal = hasYoutubePublishedAt
+      ? (body.youtubePublishedAt || body.youtube_published_at || null)
+      : undefined;
+
     const updated = await sql`
       UPDATE topics
       SET
@@ -151,15 +176,15 @@ export async function PUT(request, { params }) {
         pillar_id = COALESCE(${pillarId}, pillar_id),
         script_content = COALESCE(${body.scriptContent}, script_content),
         scenes_json = COALESCE(${scenesJson}::jsonb, scenes_json),
-        thumbnail_url = COALESCE(${body.thumbnailUrl}, thumbnail_url),
+        thumbnail_url = CASE WHEN ${hasThumbnail} THEN ${thumbnailVal} ELSE thumbnail_url END,
         thumbnail_prompt = COALESCE(${body.thumbnailPrompt}, thumbnail_prompt),
         story_description = COALESCE(${storyDesc}, story_description),
-        master_video_url = COALESCE(${body.masterVideoUrl}, master_video_url),
+        master_video_url = CASE WHEN ${hasMasterVideo} THEN ${masterVideoVal} ELSE master_video_url END,
         video_type = COALESCE(${videoType}, video_type),
         aspect_ratio = COALESCE(${aspectRatio}, aspect_ratio),
-        youtube_video_id = COALESCE(${body.youtubeVideoId !== undefined ? body.youtubeVideoId : null}, youtube_video_id),
-        youtube_url = COALESCE(${body.youtubeUrl !== undefined ? body.youtubeUrl : null}, youtube_url),
-        youtube_published_at = COALESCE(${body.youtubePublishedAt !== undefined ? body.youtubePublishedAt : null}, youtube_published_at),
+        youtube_video_id = CASE WHEN ${hasYoutubeVideoId} THEN ${youtubeVideoIdVal} ELSE youtube_video_id END,
+        youtube_url = CASE WHEN ${hasYoutubeUrl} THEN ${youtubeUrlVal} ELSE youtube_url END,
+        youtube_published_at = CASE WHEN ${hasYoutubePublishedAt} THEN ${youtubePublishedAtVal} ELSE youtube_published_at END,
         updated_at = NOW()
       WHERE channel_id = ${channelId} AND slug = ${topicSlug}
       RETURNING *;
@@ -167,6 +192,20 @@ export async function PUT(request, { params }) {
 
     if (!updated || updated.length === 0) {
       return NextResponse.json({ error: "Topic not found" }, { status: 404 });
+    }
+
+    // If masterVideoUrl was cleared to null, also clear any completedvideo rows in topic_assets
+    if (hasMasterVideo && !masterVideoVal) {
+      try {
+        await sql`
+          DELETE FROM topic_assets
+          WHERE channel_id = ${channelId}
+            AND topic_id = ${updated[0].id}
+            AND asset_type = 'completedvideo';
+        `;
+      } catch (assetDelErr) {
+        console.warn("Could not delete completedvideo from topic_assets:", assetDelErr);
+      }
     }
 
     return NextResponse.json({ topic: updated[0] });

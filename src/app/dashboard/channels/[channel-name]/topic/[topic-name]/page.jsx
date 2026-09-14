@@ -202,10 +202,21 @@ export default function TopicStudioPage() {
                   : JSON.stringify(t.scenesJson, null, 2)
               );
             }
+            let masterKey = null;
+            let masterName = `${topicSlug}-master.mp4`;
+            if (Array.isArray(t.assets)) {
+              const masterAsset = t.assets.find((a) => a.assetType === "completedvideo");
+              if (masterAsset) {
+                masterKey = masterAsset.fileKey || null;
+                if (masterAsset.fileName) masterName = masterAsset.fileName;
+              }
+            }
+
             if (t.masterVideoUrl) {
               setCompletedMasterVideo({
                 url: t.masterVideoUrl,
-                name: `${topicSlug}-master.mp4`,
+                key: masterKey,
+                name: masterName,
               });
             }
 
@@ -223,12 +234,12 @@ export default function TopicStudioPage() {
               t.assets.forEach((asset) => {
                 if (asset.assetType === "thumbnail" && !t.thumbnailUrl) {
                   setThumbnailImage(asset.fileUrl);
-                } else if (asset.assetType === "completedvideo" && !t.masterVideoUrl) {
-                  setCompletedMasterVideo({
-                    url: asset.fileUrl,
-                    key: asset.fileKey,
-                    name: asset.fileName || `${topicSlug}-master.mp4`,
-                  });
+                } else if (asset.assetType === "completedvideo") {
+                  setCompletedMasterVideo((prev) => ({
+                    url: prev?.url || asset.fileUrl,
+                    key: asset.fileKey || prev?.key || null,
+                    name: asset.fileName || prev?.name || `${topicSlug}-master.mp4`,
+                  }));
                 } else if (asset.assetType === "audio" && asset.sceneIndex) {
                   audios[asset.sceneIndex] = {
                     url: asset.fileUrl,
@@ -1879,17 +1890,38 @@ export default function TopicStudioPage() {
       description: "Are you sure you want to delete the rendered master video file from this project?",
       confirmLabel: "Delete Master Cut",
       onConfirm: async () => {
-        if (completedMasterVideo?.key) {
-          try {
-            await fetch("/api/storage/delete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fileKey: completedMasterVideo.key, channelSlug }),
-            });
-          } catch {}
-        }
+        const videoToDelete = completedMasterVideo;
         setCompletedMasterVideo(null);
-        toast.success("Master video cut deleted.");
+
+        try {
+          // 1. Delete physical file from Cloudflare R2 & delete topic_assets record
+          await fetch("/api/storage/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileKey: videoToDelete?.key || null,
+              fileUrl: videoToDelete?.url || null,
+              url: videoToDelete?.url || null,
+              channelSlug,
+              topicSlug,
+              assetType: "completedvideo",
+            }),
+          });
+
+          // 2. Clear master_video_url in topics table in database
+          await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              masterVideoUrl: null,
+            }),
+          });
+
+          toast.success("Master video cut deleted from storage & project.");
+        } catch (err) {
+          console.error("Error deleting master video:", err);
+          toast.error("Failed to delete master video completely.");
+        }
       },
     });
   }

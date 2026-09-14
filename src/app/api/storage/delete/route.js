@@ -67,7 +67,72 @@ export async function POST(request) {
           const tRows = await sql`SELECT id FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
           const topicId = tRows?.[0]?.id || null;
 
-          if (topicId) {
+            // Master video cleanup (assetType === 'completedvideo' or 'master')
+            if (
+              assetType === "completedvideo" ||
+              assetType === "master" ||
+              assetType === "master_video" ||
+              assetType === "masterVideo"
+            ) {
+              try {
+                const masterAssets = await sql`
+                  SELECT file_key, file_url FROM topic_assets
+                  WHERE topic_id = ${topicId} AND asset_type = 'completedvideo';
+                `;
+                const topRows = await sql`
+                  SELECT master_video_url FROM topics WHERE id = ${topicId} LIMIT 1;
+                `;
+                const urlsToCheck = [];
+                if (targetUrl) urlsToCheck.push(targetUrl);
+                if (topRows?.[0]?.master_video_url) urlsToCheck.push(topRows[0].master_video_url);
+
+                for (const row of masterAssets || []) {
+                  if (row.file_key) {
+                    await deleteFromR2(row.file_key).catch(() => {});
+                  }
+                  if (row.file_url) urlsToCheck.push(row.file_url);
+                }
+
+                for (const u of urlsToCheck) {
+                  let k = null;
+                  const publicBase = getPublicBaseUrl();
+                  if (publicBase && u.startsWith(publicBase)) {
+                    k = u.replace(publicBase, "").replace(/^\//, "");
+                  } else {
+                    const parts = u.split(".r2.dev/");
+                    if (parts.length > 1) {
+                      k = parts[1];
+                    } else {
+                      try {
+                        const parsed = new URL(u);
+                        k = parsed.pathname.replace(/^\//, "");
+                      } catch {
+                        k = u;
+                      }
+                    }
+                  }
+                  if (k && k !== r2Key) {
+                    await deleteFromR2(k).catch(() => {});
+                  }
+                }
+
+                // Clear topics.master_video_url
+                await sql`
+                  UPDATE topics
+                  SET master_video_url = NULL, updated_at = NOW()
+                  WHERE id = ${topicId};
+                `;
+
+                // Remove completedvideo record from topic_assets
+                await sql`
+                  DELETE FROM topic_assets
+                  WHERE topic_id = ${topicId} AND asset_type = 'completedvideo';
+                `;
+              } catch (masterCleanErr) {
+                console.warn("[StorageDelete] Error cleaning master video from DB:", masterCleanErr);
+              }
+            }
+
             // Fallback: If r2Key was not directly resolved from body/URL, lookup file_key in DB to ensure R2 deletion
             if (!r2Key && assetType && sceneIndex !== undefined && sceneIndex !== null) {
               try {

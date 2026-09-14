@@ -553,7 +553,6 @@ export const renderFrameVideoModalTask = task({
       fps: Number.parseInt(fps, 10),
       width: Number.parseInt(renderWidth, 10),
       height: Number.parseInt(renderHeight, 10),
-      isShort: isShortTopic,
 
       // Parallel rendering happens inside one Modal container.
       renderConcurrency: Number.parseInt(
