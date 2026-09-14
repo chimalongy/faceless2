@@ -148,8 +148,9 @@ def build_ken_burns_filter(
     total = max(2, int(total_frames))
     progress = f"(on/{total - 1})"
     smooth = f"({progress}*{progress}*(3-2*{progress}))"
-    internal_width = width * 4
-    internal_height = height * 4
+    scale_factor = 2 if max(width, height) >= 1280 else 4
+    internal_width = width * scale_factor
+    internal_height = height * scale_factor
 
     if direction == "zoom-in":
         z = f"(1+({zoom_amount}*{smooth}))"
@@ -723,9 +724,12 @@ def render_all_job(payload: dict) -> dict:
         topic_slug,
     ) = validate_worker_payload(payload)
 
+    is_short = bool(payload.get("isShort"))
+    default_w = 1080 if is_short else 1376
+    default_h = 1920 if is_short else 768
     fps = max(1, min(120, int(payload.get("fps", 60))))
-    width = max(320, min(3840, int(payload.get("width", 1376))))
-    height = max(240, min(2160, int(payload.get("height", 768))))
+    width = max(320, min(3840, int(payload.get("width", default_w))))
+    height = max(240, min(2160, int(payload.get("height", default_h))))
     render_concurrency = max(1, min(16, int(payload.get("renderConcurrency", 4))))
     download_concurrency = max(1, min(32, int(payload.get("downloadConcurrency", 12))))
 

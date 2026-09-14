@@ -3,7 +3,8 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
-  GetObjectCommand
+  GetObjectCommand,
+  ListObjectsV2Command
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -144,10 +145,10 @@ export async function deleteFromR2(key) {
 }
 
 /**
- * Delete multiple objects in batch from Cloudflare R2
+ * Delete multiple objects in batch from Cloudflare R2 (chunks up to 1000 per request)
  */
 export async function deleteMultipleFromR2(keys = []) {
-  const validKeys = (keys || []).filter(Boolean);
+  const validKeys = Array.from(new Set((keys || []).filter(Boolean)));
   if (validKeys.length === 0) return true;
 
   const client = getR2Client();
@@ -155,18 +156,78 @@ export async function deleteMultipleFromR2(keys = []) {
 
   try {
     const bucket = getBucketName();
-    const command = new DeleteObjectsCommand({
-      Bucket: bucket,
-      Delete: {
-        Objects: validKeys.map((k) => ({ Key: k })),
-        Quiet: true,
-      },
-    });
-
-    await client.send(command);
+    const chunkSize = 1000;
+    for (let i = 0; i < validKeys.length; i += chunkSize) {
+      const chunk = validKeys.slice(i, i + chunkSize);
+      const command = new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: {
+          Objects: chunk.map((k) => ({ Key: k })),
+          Quiet: true,
+        },
+      });
+      await client.send(command);
+    }
     return true;
   } catch (err) {
     console.warn("Failed to batch delete objects from Cloudflare R2:", err);
     return false;
   }
 }
+
+/**
+ * Recursively delete all objects with a given prefix directory in Cloudflare R2
+ */
+export async function deletePrefixFromR2(prefix) {
+  if (!prefix) return false;
+  const client = getR2Client();
+  if (!client) return false;
+
+  const bucket = getBucketName();
+  // Ensure trailing slash or clean format
+  const normalizedPrefix = prefix.replace(/^\//, "");
+
+  try {
+    let continuationToken = undefined;
+    let totalDeleted = 0;
+
+    do {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: normalizedPrefix,
+        ContinuationToken: continuationToken,
+      });
+
+      const listResponse = await client.send(listCommand);
+      const contents = listResponse.Contents || [];
+      const objectsToDelete = contents
+        .map((item) => ({ Key: item.Key }))
+        .filter((item) => Boolean(item.Key));
+
+      if (objectsToDelete.length > 0) {
+        const chunkSize = 1000;
+        for (let i = 0; i < objectsToDelete.length; i += chunkSize) {
+          const chunk = objectsToDelete.slice(i, i + chunkSize);
+          const delCommand = new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: {
+              Objects: chunk,
+              Quiet: true,
+            },
+          });
+          await client.send(delCommand);
+          totalDeleted += chunk.length;
+        }
+      }
+
+      continuationToken = listResponse.IsTruncated ? listResponse.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    console.log(`[deletePrefixFromR2] Cleaned up ${totalDeleted} file(s) under prefix: ${normalizedPrefix}`);
+    return true;
+  } catch (err) {
+    console.warn(`[deletePrefixFromR2] Error deleting prefix "${normalizedPrefix}":`, err);
+    return false;
+  }
+}
+

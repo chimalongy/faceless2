@@ -331,14 +331,16 @@ export function buildKenBurnsFilter(
 
   /**
    * --------------------------------------------------
-   * 4X INTERNAL RESOLUTION
+   * INTERNAL SUPERSAMPLED RESOLUTION
    * --------------------------------------------------
    */
+  const maxDim = Math.max(width, height);
+  const scaleFactor = maxDim >= 1280 ? 2 : 4;
   const internalWidth =
-    width * 4;
+    width * scaleFactor;
 
   const internalHeight =
-    height * 4;
+    height * scaleFactor;
 
   let z;
   let x;

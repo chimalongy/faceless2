@@ -746,6 +746,9 @@ def merge_all_job(
         payload.get("resolution", "1080p")
     ).strip().lower()
 
+    if bool(payload.get("isShort")) and resolution in ("1080p", "1920x1080"):
+        resolution = "1080x1920"
+
     output_dimensions(resolution)
 
     fps = max(

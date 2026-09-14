@@ -66,8 +66,9 @@ export async function POST(req, context) {
         audioUrl,
         kenBurns: kenBurns || { direction: "zoom-in", intensity: 0.15 },
         transition,
-        ...(width ? { width } : {}),
-        ...(height ? { height } : {}),
+        isShort: Boolean(body.isShort),
+        ...(width ? { width } : body.isShort ? { width: 1080 } : {}),
+        ...(height ? { height } : body.isShort ? { height: 1920 } : {}),
       });
 
       const run = await runs.poll(handle.id, { pollIntervalMs: 1500 });
@@ -96,8 +97,9 @@ export async function POST(req, context) {
         scenes,
         sceneImages: sceneImages || {},
         sceneAudios: sceneAudios || {},
-        ...(width ? { width } : {}),
-        ...(height ? { height } : {}),
+        isShort: Boolean(body.isShort),
+        ...(width ? { width } : body.isShort ? { width: 1080 } : {}),
+        ...(height ? { height } : body.isShort ? { height: 1920 } : {}),
       });
 
       const run = await runs.poll(handle.id, { pollIntervalMs: 2000 });

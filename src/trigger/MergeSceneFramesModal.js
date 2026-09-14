@@ -178,12 +178,37 @@ export const mergeSceneFramesModalTask = task({
       );
     }
 
-    const normResolution =
-      String(resolution || "1080p")
-        .toLowerCase()
-        .trim() === "720p"
+    let isShortTopic =
+      Boolean(payload.isShort) ||
+      ["1080x1920", "shorts", "vertical", "9:16", "720x1280"].includes(String(resolution).toLowerCase());
+
+    if (!isShortTopic && topicSlug) {
+      try {
+        const sql = getDbSql();
+        if (sql) {
+          await initDbSchema();
+          const tRows = await sql`
+            SELECT COALESCE(video_type, 'longform') AS "videoType"
+            FROM topics WHERE slug = ${topicSlug} LIMIT 1;
+          `;
+          if (tRows?.[0]?.videoType === "short") {
+            isShortTopic = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    const resLower = String(resolution || "").toLowerCase().trim();
+    let normResolution = "1080p";
+    if (isShortTopic) {
+      normResolution = (resLower === "720p" || resLower === "720x1280")
+        ? "720x1280"
+        : "1080x1920";
+    } else {
+      normResolution = (resLower === "720p" || resLower === "1280x720")
         ? "720p"
         : "1080p";
+    }
 
     const requestBody = {
       credentials: {
@@ -396,7 +421,7 @@ export const mergeSceneFramesModalTask = task({
     const finalFileName =
       jobResult.fileName ||
       jobResult.file_name ||
-      `${topicSlug}-master-${normResolution}.mp4`;
+      (isShortTopic ? `${topicSlug}-master-shorts.mp4` : `${topicSlug}-master-${normResolution}.mp4`);
     const finalDuration = Number.parseFloat(jobResult.duration || 0);
     const finalSizeBytes = Number.parseInt(
       jobResult.sizeBytes || jobResult.size_bytes || 0,

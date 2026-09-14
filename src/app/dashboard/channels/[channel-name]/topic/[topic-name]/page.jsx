@@ -1567,6 +1567,9 @@ export default function TopicStudioPage() {
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.10 },
           transition: scene?.transition || "fade",
+          isShort,
+          width: isShort ? 1080 : 1376,
+          height: isShort ? 1920 : 768,
         }),
       });
 
@@ -1651,6 +1654,9 @@ export default function TopicStudioPage() {
           scenes: scenesToRender,
           sceneImages,
           sceneAudios,
+          isShort,
+          width: isShort ? 1080 : 1376,
+          height: isShort ? 1920 : 768,
         }),
       });
 
@@ -1725,6 +1731,7 @@ export default function TopicStudioPage() {
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
           transition: scene?.transition || "fade",
+          isShort,
           width: isShort ? 1080 : 1376,
           height: isShort ? 1920 : 768,
         }),
@@ -1808,6 +1815,7 @@ export default function TopicStudioPage() {
           scenes: scenesToRender,
           sceneImages,
           sceneAudios,
+          isShort,
           width: isShort ? 1080 : 1376,
           height: isShort ? 1920 : 768,
         }),
@@ -1941,7 +1949,8 @@ export default function TopicStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sceneVideos: videosPayload,
-          resolution: "1080p",
+          resolution: isShort ? "1080x1920" : "1080p",
+          isShort,
         }),
       });
 
@@ -1954,7 +1963,7 @@ export default function TopicStudioPage() {
           url: data.videoUrl,
           key: data.key,
           duration: data.duration,
-          name: `${topicSlug}-master-1080p.mp4`,
+          name: isShort ? `${topicSlug}-master-shorts.mp4` : `${topicSlug}-master-1080p.mp4`,
         });
         toast.success("Master video merged and saved successfully! 🚀");
       } else {
@@ -2021,6 +2030,7 @@ export default function TopicStudioPage() {
         body: JSON.stringify({
           sceneVideos: videosPayload,
           resolution: isShort ? "1080x1920" : "1080p",
+          isShort,
           useModal: true,
         }),
       });
@@ -2032,7 +2042,7 @@ export default function TopicStudioPage() {
           url: data.videoUrl,
           key: data.key,
           duration: data.duration,
-          name: `${topicSlug}-master-1080p.mp4`,
+          name: isShort ? `${topicSlug}-master-shorts.mp4` : `${topicSlug}-master-1080p.mp4`,
         });
         toast.success("[Modal Merger] Master video merged and saved successfully! ⚡🚀");
       } else {

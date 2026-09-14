@@ -179,6 +179,29 @@ export async function PUT(request, { params }) {
   }
 }
 
+// Helper to extract Cloudflare R2 object key from public URL or file path
+function extractR2KeyFromUrl(targetUrl, publicBase = "") {
+  if (!targetUrl || typeof targetUrl !== "string" || targetUrl === "generated") return null;
+  const trimmed = targetUrl.trim();
+  if (!trimmed) return null;
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    return trimmed.replace(/^\//, "");
+  }
+  if (publicBase && trimmed.startsWith(publicBase)) {
+    return trimmed.replace(publicBase, "").replace(/^\//, "");
+  }
+  const parts = trimmed.split(".r2.dev/");
+  if (parts.length > 1) {
+    return parts[1];
+  }
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.pathname.replace(/^\//, "");
+  } catch {
+    return null;
+  }
+}
+
 // DELETE /api/channels/[channel-name]/topics/[topic-name] - Delete topic and all its uploaded files in Cloudflare R2
 export async function DELETE(request, { params }) {
   try {
@@ -200,27 +223,91 @@ export async function DELETE(request, { params }) {
     }
     const channelId = channelRows[0].id;
 
-    // 1. Fetch all asset keys for this topic before deleting from DB
-    const assetRows = await sql`
-      SELECT ta.file_key 
-      FROM topic_assets ta
-      JOIN topics t ON t.id = ta.topic_id
-      WHERE t.channel_id = ${channelId} AND t.slug = ${topicSlug};
+    // 1. Fetch topic details (master_video_url, thumbnail_url, scenes_json) before deletion
+    const topicRows = await sql`
+      SELECT id, master_video_url, thumbnail_url, scenes_json
+      FROM topics
+      WHERE channel_id = ${channelId} AND slug = ${topicSlug}
+      LIMIT 1;
     `;
 
-    const keysToDelete = (assetRows || []).map((r) => r.file_key).filter(Boolean);
+    if (!topicRows || topicRows.length === 0) {
+      return NextResponse.json({ error: "Topic not found" }, { status: 404 });
+    }
 
-    // 2. Delete all physical files from Cloudflare R2 bucket
-    if (keysToDelete.length > 0) {
+    const topic = topicRows[0];
+
+    // 2. Fetch all asset keys for this topic from topic_assets
+    const assetRows = await sql`
+      SELECT ta.file_key, ta.file_url 
+      FROM topic_assets ta
+      WHERE ta.topic_id = ${topic.id};
+    `;
+
+    const { deleteMultipleFromR2, deletePrefixFromR2, getPublicBaseUrl } = await import("@/lib/storage");
+    const publicBase = getPublicBaseUrl ? getPublicBaseUrl() : "";
+    const keysToDelete = new Set();
+
+    // Add keys from topic_assets
+    for (const row of assetRows || []) {
+      if (row.file_key) keysToDelete.add(row.file_key);
+      const urlKey = extractR2KeyFromUrl(row.file_url, publicBase);
+      if (urlKey) keysToDelete.add(urlKey);
+    }
+
+    // Add keys from master_video_url and thumbnail_url
+    const masterKey = extractR2KeyFromUrl(topic.master_video_url, publicBase);
+    if (masterKey) keysToDelete.add(masterKey);
+
+    const thumbKey = extractR2KeyFromUrl(topic.thumbnail_url, publicBase);
+    if (thumbKey) keysToDelete.add(thumbKey);
+
+    // Add keys from scenes_json (audio tracks, scene frame videos, images)
+    let scenes = topic.scenes_json;
+    if (typeof scenes === "string") {
       try {
-        const { deleteMultipleFromR2 } = await import("@/lib/storage");
-        await deleteMultipleFromR2(keysToDelete);
-      } catch (r2Err) {
-        console.warn("Could not delete some files from R2:", r2Err);
+        scenes = JSON.parse(scenes);
+      } catch {
+        scenes = [];
+      }
+    }
+    if (Array.isArray(scenes)) {
+      for (const scn of scenes) {
+        const audioKey = extractR2KeyFromUrl(scn.audio_url || scn.audioUrl, publicBase);
+        if (audioKey) keysToDelete.add(audioKey);
+
+        const videoKey = extractR2KeyFromUrl(scn.video_url || scn.videoUrl, publicBase);
+        if (videoKey) keysToDelete.add(videoKey);
+
+        if (Array.isArray(scn.images)) {
+          for (const img of scn.images) {
+            const imgKey = extractR2KeyFromUrl(img?.url || img?.image_url || (typeof img === "string" ? img : null), publicBase);
+            if (imgKey) keysToDelete.add(imgKey);
+          }
+        }
       }
     }
 
-    // 3. Delete topic from DB (cascades to topic_assets records)
+    const uniqueKeys = Array.from(keysToDelete).filter(Boolean);
+
+    // 3. Delete all explicitly tracked physical files from Cloudflare R2
+    if (uniqueKeys.length > 0) {
+      try {
+        await deleteMultipleFromR2(uniqueKeys);
+      } catch (r2Err) {
+        console.warn("Could not delete some individual files from R2:", r2Err);
+      }
+    }
+
+    // 4. Also wipe the entire R2 directory for this topic to clean any untracked or temp render files
+    const topicPrefix = `channels/${channelSlug}/topics/${topicSlug}/`;
+    try {
+      await deletePrefixFromR2(topicPrefix);
+    } catch (prefixErr) {
+      console.warn(`Could not clean topic prefix ${topicPrefix} in R2:`, prefixErr);
+    }
+
+    // 5. Delete topic from DB (cascades to topic_assets records)
     await sql`
       DELETE FROM topics
       WHERE channel_id = ${channelId} AND slug = ${topicSlug};
@@ -229,7 +316,7 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({
       success: true,
       deletedTopic: topicSlug,
-      deletedFilesCount: keysToDelete.length,
+      deletedFilesCount: uniqueKeys.length,
     });
   } catch (error) {
     console.error("Error deleting topic:", error);

@@ -84,7 +84,25 @@ async function renderSingleScene({
   transition = "fade",
   forceEqualSplit = false,
   equalTiming = false,
+  isShort = false,
 }) {
+  let renderWidth = width;
+  let renderHeight = height;
+
+  if (isShort || (renderWidth === 1376 && renderHeight === 768 && channelSlug && topicSlug)) {
+    try {
+      const sql = getDbSql();
+      if (sql) {
+        await initDbSchema();
+        const tRows = await sql`SELECT COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
+        if (tRows?.[0]?.videoType === "short" || isShort) {
+          renderWidth = 1080;
+          renderHeight = 1920;
+        }
+      }
+    } catch (_) {}
+  }
+
   let resolvedImageUrls = [];
   if (Array.isArray(imageUrls) && imageUrls.length > 0) {
     resolvedImageUrls = imageUrls.map((u) => (typeof u === "string" ? u : u?.url)).filter(Boolean);
@@ -133,7 +151,7 @@ async function renderSingleScene({
     channelSlug, topicSlug, sceneIndex,
     imageCount: resolvedImageUrls.length,
     uniqueImageCount: new Set(resolvedImageUrls).size,
-    imageUrls: resolvedImageUrls, audioUrl, timingPlan, fps, width, height,
+    imageUrls: resolvedImageUrls, audioUrl, timingPlan, fps, width: renderWidth, height: renderHeight,
   });
 
   const jobId = `scene_${sceneIndex}_${Date.now()}_${Math.random()
@@ -186,8 +204,8 @@ async function renderSingleScene({
         kenBurns,
         fps,
         totalFrames,
-        width,
-        height
+        renderWidth,
+        renderHeight
       );
 
       const transitionFilter = buildTransitionFilter(
@@ -296,8 +314,8 @@ async function renderSingleScene({
           segKenBurns,
           fps,
           segFrames,
-          width,
-          height
+          renderWidth,
+          renderHeight
         );
 
         // Apply scene transition only to final segment
@@ -591,6 +609,7 @@ export const renderSceneFrameTask = task({
       height,
       kenBurns,
       transition,
+      isShort: payload.isShort,
     });
   },
 });
@@ -626,12 +645,35 @@ export const renderAllSceneFramesTask = task({
       throw new Error("No scenes provided to render-all-scene-frames task.");
     }
 
+    let renderWidth = width;
+    let renderHeight = height;
+
+    const isShortTopic =
+      Boolean(payload.isShort) ||
+      (renderWidth === 1376 && renderHeight === 768 && channelSlug && topicSlug);
+
+    if (isShortTopic) {
+      try {
+        const sql = getDbSql();
+        if (sql) {
+          await initDbSchema();
+          const tRows = await sql`SELECT COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
+          if (tRows?.[0]?.videoType === "short" || payload.isShort) {
+            renderWidth = 1080;
+            renderHeight = 1920;
+          }
+        }
+      } catch (_) {}
+    }
+
     logger.log(
-      `Preparing concurrent multi-machine batch render for ${scenes.length} scene(s)...`,
+      `Preparing concurrent multi-machine batch render for ${scenes.length} scene(s) (${renderWidth}x${renderHeight})...`,
       {
         channelSlug,
         topicSlug,
         totalScenes: scenes.length,
+        width: renderWidth,
+        height: renderHeight,
       }
     );
 
@@ -705,8 +747,9 @@ export const renderAllSceneFramesTask = task({
           audioText,
           audioUrl,
           fps,
-          width,
-          height,
+          width: renderWidth,
+          height: renderHeight,
+          isShort: renderWidth < renderHeight,
           kenBurns: scene?.ken_burns || {
             direction: "zoom-in",
             intensity: 0.1,

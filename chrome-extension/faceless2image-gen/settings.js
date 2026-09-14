@@ -33,12 +33,14 @@ when generating images ensure that image follow this theme
 "{channel_image_generation_theme}"
 
 make sure the generated images are inline (visual description) of what is being said in the audio-text.
+MAKE SURE YOU FOLLOW THE NAMING CONVENTION DESCRIBED ABOVE!!! DO NOT NAME THE IMAGES ANY OTHER WAY!!!!
 `,
 
   theme_instruction: `when generating images ensure that image follow this theme
 "{channel_image_generation_theme}"
 
 make sure the generated images are inline (visual description) of what is being said in the audio-text.
+MAKE SURE YOU FOLLOW THE NAMING CONVENTION DESCRIBED ABOVE!!! DO NOT NAME THE IMAGES ANY OTHER WAY!!!!
 `,
 
   missing_scenes_header: `Lets Focus on Generating for these scenes`,
@@ -48,6 +50,7 @@ make sure the generated images are inline (visual description) of what is being 
 thumbnail_prompt: "{thumbnail_prompt}"
 
 Ensure only one Image is Generated. Name the image thumbnail.png.
+MAKE SURE YOU FOLLOW THE NAMING CONVENTION DESCRIBED ABOVE!!! DO NOT NAME THE IMAGES ANY OTHER WAY!!!!
 
 when generating images ensure that image follow this theme
 "{channel_thumbnail_generation_theme}"`,

@@ -27,6 +27,7 @@ export async function POST(req, context) {
       topicSlug,
       sceneVideos,
       resolution,
+      isShort: Boolean(body.isShort),
     });
 
     console.log(`[MergeSceneFramesRoute] Task triggered with run ID: ${handle.id}, polling for completion...`);

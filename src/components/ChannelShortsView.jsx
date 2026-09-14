@@ -17,7 +17,11 @@ import {
   ExternalLink,
   Scissors,
   Sparkles,
+  AlertTriangle,
+  X,
+  Loader2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import CreateShortModal from "./CreateShortModal";
 
 export default function ChannelShortsView({
@@ -30,6 +34,42 @@ export default function ChannelShortsView({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // "all" | "uncompleted" | "completed" | "posted"
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [shortToDelete, setShortToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleDeleteShort() {
+    if (!shortToDelete) return;
+    setIsDeleting(true);
+    const toastId = toast.loading(`Deleting "${shortToDelete.title}" and cleaning up R2 media...`);
+
+    try {
+      const res = await fetch(
+        `/api/channels/${channelSlug}/topics/${shortToDelete.slug}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete short");
+      }
+
+      toast.success(
+        `Deleted "${shortToDelete.title}" and cleaned up R2 media files.`,
+        { id: toastId }
+      );
+      setShortToDelete(null);
+      if (typeof onRefresh === "function") {
+        await onRefresh();
+      }
+    } catch (err) {
+      console.error("Error deleting short:", err);
+      toast.error(err.message || "Failed to delete short", { id: toastId });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   // Filter shorts topics
   const shorts = useMemo(() => {
@@ -269,21 +309,33 @@ export default function ChannelShortsView({
                       )}
                     </div>
 
-                    {/* Status Badge */}
-                    <div className="absolute top-2 right-2">
+                    {/* Status Badge & Delete Action */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
                       {isPosted ? (
-                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-emerald-600 text-white">
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-emerald-600 text-white shadow-xs">
                           POSTED
                         </span>
                       ) : hasMaster ? (
-                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-signal text-white">
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-signal text-white shadow-xs">
                           READY
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-amber-600 text-white">
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-amber-600 text-white shadow-xs">
                           DRAFT
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setShortToDelete(short);
+                        }}
+                        className="p-1 bg-black/60 hover:bg-rose-600 text-white/80 hover:text-white backdrop-blur-xs border border-white/20 transition-all cursor-pointer shadow-xs"
+                        title="Delete Short & remove files from R2"
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     </div>
                   </div>
 
@@ -346,21 +398,131 @@ export default function ChannelShortsView({
                     <ArrowRight size={12} />
                   </Link>
 
-                  {short.youtubeUrl && (
-                    <a
-                      href={short.youtubeUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-rose-600 hover:text-rose-700 inline-flex items-center gap-1 text-xs"
-                      title="View on YouTube"
+                  <div className="flex items-center gap-1.5">
+                    {short.youtubeUrl && (
+                      <a
+                        href={short.youtubeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 rounded transition-colors inline-flex items-center"
+                        title="View on YouTube"
+                      >
+                        <Youtube size={14} />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setShortToDelete(short);
+                      }}
+                      className="p-1.5 text-ink-muted hover:text-rose-600 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 rounded transition-all cursor-pointer"
+                      title="Delete Short & remove files from R2"
                     >
-                      <Youtube size={14} />
-                    </a>
-                  )}
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Short Confirmation Modal */}
+      {shortToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md bg-paper-card border border-line shadow-2xl overflow-hidden text-ink">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-line flex items-center justify-between bg-paper">
+              <div className="flex items-center gap-2 text-rose-600">
+                <div className="p-1.5 bg-rose-500/10 border border-rose-500/20">
+                  <AlertTriangle size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-ink">
+                    Delete Short &amp; Media
+                  </h3>
+                  <p className="text-[11px] text-ink-muted">
+                    Permanently delete from Database &amp; Cloudflare R2
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeleting && setShortToDelete(null)}
+                disabled={isDeleting}
+                className="p-1.5 text-ink-muted hover:text-ink hover:bg-paper border border-transparent hover:border-line transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-ink leading-relaxed">
+                Are you sure you want to delete{" "}
+                <span className="font-bold text-ink font-display">
+                  &ldquo;{shortToDelete.title}&rdquo;
+                </span>
+                ?
+              </p>
+
+              <div className="p-3 bg-rose-500/5 border border-rose-500/20 text-[11px] text-rose-700 dark:text-rose-400 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <Trash2 size={13} />
+                  <span>Cloudflare R2 Storage Cleanup:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-[10.5px] opacity-90">
+                  <li>All generated scene images and frame assets</li>
+                  <li>All AI voiceover narration audio files</li>
+                  <li>All individual scene frame videos</li>
+                  <li>Final master 9:16 video cut &amp; thumbnails</li>
+                  <li>
+                    Directory{" "}
+                    <code className="font-mono text-[10px] bg-rose-500/10 px-1 py-0.5">
+                      channels/{channelSlug}/topics/{shortToDelete.slug}/
+                    </code>
+                  </li>
+                </ul>
+              </div>
+
+              <p className="text-[11px] text-ink-muted">
+                This action is permanent and cannot be undone.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 border-t border-line bg-paper/50 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShortToDelete(null)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-xs font-semibold border border-line bg-paper hover:bg-paper-card text-ink transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteShort}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} />
+                    <span>Delete Short &amp; Files</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

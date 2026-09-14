@@ -126,6 +126,27 @@ export const renderFrameVideoModalTask = task({
       throw new Error("channelSlug and topicSlug are required.");
     }
 
+    let renderWidth = width;
+    let renderHeight = height;
+    let isShortTopic = Boolean(payload.isShort);
+
+    if (channelSlug && topicSlug) {
+      try {
+        const sql = getDbSql();
+        if (sql) {
+          await initDbSchema();
+          const tRows = await sql`SELECT COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
+          if (tRows?.[0]?.videoType === "short" || isShortTopic) {
+            isShortTopic = true;
+            if (payload.width === undefined && payload.height === undefined) {
+              renderWidth = 1080;
+              renderHeight = 1920;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     const resolvedEndpoint = await resolveModalApiUrl(modalApiUrl);
     const endpoint = resolvedEndpoint.replace(/\/+$/, "");
 
@@ -530,8 +551,9 @@ export const renderFrameVideoModalTask = task({
       topicSlug,
 
       fps: Number.parseInt(fps, 10),
-      width: Number.parseInt(width, 10),
-      height: Number.parseInt(height, 10),
+      width: Number.parseInt(renderWidth, 10),
+      height: Number.parseInt(renderHeight, 10),
+      isShort: isShortTopic,
 
       // Parallel rendering happens inside one Modal container.
       renderConcurrency: Number.parseInt(

@@ -48,9 +48,12 @@ export const mergeSceneFramesTask = task({
     if (sql) {
       await initDbSchema();
       const cRows = await sql`SELECT id FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
-      const tRows = await sql`SELECT id FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
+      const tRows = await sql`SELECT id, COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
       channelId = cRows?.[0]?.id || null;
       topicId = tRows?.[0]?.id || null;
+      if (tRows?.[0]?.videoType) {
+        payload.videoType = tRows[0].videoType;
+      }
     }
 
     // 1. Gather scene video list: from payload OR fallback to topic_assets in database
@@ -142,11 +145,34 @@ export const mergeSceneFramesTask = task({
       const ffmpeg = getFfmpegPath();
       const mergedOutputPath = path.join(tmpDir, "merged_master.mp4");
 
-      // 5. Run FFmpeg concatenation with encoding standardization (1080p 16:9, H.264 / AAC)
-      const scaleFilter =
-        resolution === "720p"
-          ? "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black"
-          : "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black";
+      // 5. Run FFmpeg concatenation with encoding standardization
+      const isShortTopic =
+        Boolean(payload.isShort) ||
+        payload.videoType === "short" ||
+        ["1080x1920", "shorts", "vertical", "9:16", "720x1280"].includes(String(resolution).toLowerCase());
+
+      let targetWidth = 1920;
+      let targetHeight = 1080;
+
+      if (isShortTopic) {
+        if (resolution === "720x1280" || resolution === "720p") {
+          targetWidth = 720;
+          targetHeight = 1280;
+        } else {
+          targetWidth = 1080;
+          targetHeight = 1920;
+        }
+      } else {
+        if (resolution === "720p" || resolution === "1280x720") {
+          targetWidth = 1280;
+          targetHeight = 720;
+        } else {
+          targetWidth = 1920;
+          targetHeight = 1080;
+        }
+      }
+
+      const scaleFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=black`;
 
       const mergeCmd = [
         `"${ffmpeg}" -y`,
@@ -167,7 +193,7 @@ export const mergeSceneFramesTask = task({
         `"${mergedOutputPath}"`,
       ].join(" ");
 
-      logger.log("Executing FFmpeg master merge...", { cmd: mergeCmd });
+      logger.log(`Executing FFmpeg master merge (${targetWidth}x${targetHeight} ${isShortTopic ? "Vertical Shorts 9:16" : "16:9"})...`, { cmd: mergeCmd });
 
       await execAsync(mergeCmd, { maxBuffer: 1024 * 1024 * 50 });
 
@@ -258,7 +284,7 @@ export const mergeSceneFramesTask = task({
               'completedvideo',
               ${uploadResult.publicUrl},
               ${uploadResult.key},
-              ${`${topicSlug}-master-1080p.mp4`},
+              ${isShortTopic ? `${topicSlug}-master-shorts.mp4` : `${topicSlug}-master-1080p.mp4`},
               'video/mp4',
               ${mergedBuffer.length}
             );
