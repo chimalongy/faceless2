@@ -408,10 +408,8 @@ def normalize_subtitles_ass(content: str) -> str:
     """Prepare a single narration caption track for libass.
 
     Keep styles and highlighting, but flatten inherited Whisper line breaks
-    and make whole phrase intervals mutually exclusive. Consecutive source
-    events with the same visible text are one phrase's highlight states.
-    Source phrase order is authoritative (as emitted by generateTikTokAss).
-    Once the next phrase starts, ALL remaining states of the old phrase end.
+    and make Dialogue intervals mutually exclusive. A newer caption replaces
+    the older one; an older caption must not reappear after that replacement.
     Times are compared in ASS's native integer centiseconds.
     """
     def parse_time(value: str) -> int:
@@ -465,41 +463,18 @@ def normalize_subtitles_ass(content: str) -> str:
         if end > start:
             events.append([start, end, index, values, start_index, end_index])
 
-    # Group BEFORE sorting timestamps: sorting individual highlight events
-    # interleaves phrases when Whisper segments cross a scene boundary.
-    groups = []
+    # For tied starts, the last source event is the final highlight state.
+    by_start = {}
     for event in events:
-        visible_text = " ".join(re.sub(r"\{[^}]*\}", "", event[3][-1]).split())
-        if not groups or groups[-1][0] != visible_text:
-            groups.append((visible_text, []))
-        groups[-1][1].append(event)
-
-    # Do not move later phrases backward ahead of earlier source phrases.
-    # Equal starts give the later source phrase priority, without inventing
-    # extra narration time or stretching subtitles into silent footage.
-    boundaries = []
-    for _, group in groups:
-        first_start = min(event[0] for event in group)
-        boundaries.append(max(first_start, boundaries[-1] if boundaries else 0))
-
+        by_start[event[0]] = event
+    ordered = sorted(by_start.values(), key=lambda event: event[0])
     replacements = {}
-    for group_index, (_, group) in enumerate(groups):
-        lower = boundaries[group_index]
-        upper = (boundaries[group_index + 1] if group_index + 1 < len(groups)
-                 else max(event[1] for event in group))
-        by_start = {}
-        for event in group:
-            start, end = max(event[0], lower), min(event[1], upper)
-            if end > start:
-                # Last source state wins when ASS centisecond rounding ties.
-                by_start[start] = [start, end, *event[2:]]
-        ordered = sorted(by_start.values(), key=lambda event: event[0])
-        for position, event in enumerate(ordered):
-            start, end, index, values, start_index, end_index = event
-            if position + 1 < len(ordered):
-                end = min(end, ordered[position + 1][0])
-            values[start_index], values[end_index] = format_time(start), format_time(end)
-            replacements[index] = "Dialogue: " + ",".join(values)
+    for position, event in enumerate(ordered):
+        start, end, index, values, start_index, end_index = event
+        if position + 1 < len(ordered):
+            end = min(end, ordered[position + 1][0])
+        values[start_index], values[end_index] = format_time(start), format_time(end)
+        replacements[index] = "Dialogue: " + ",".join(values)
     return "\n".join(
         replacements.get(index, line)
         for index, line in enumerate(lines)
