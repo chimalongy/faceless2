@@ -37,7 +37,7 @@ api_image = modal.Image.debian_slim(
 
 merger_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("ffmpeg")
+    .apt_install("ffmpeg", "fonts-dejavu-core", "fontconfig")
     .uv_pip_install(
         "boto3>=1.35,<2",
         "httpx>=0.27,<1",
@@ -413,6 +413,7 @@ def run_ffmpeg_merge(
     crf: int,
     audio_bitrate: str,
     ffmpeg_threads: int,
+    subtitles_path: Path | None = None,
 ):
     width, height = output_dimensions(resolution)
 
@@ -427,6 +428,12 @@ def run_ffmpeg_merge(
         "setsar=1,"
         "format=yuv420p"
     )
+
+    if subtitles_path and subtitles_path.exists():
+        escaped_subtitles = str(subtitles_path.as_posix()).replace(":", r"\:")
+        video_filter = f"{scale_filter},ass='{escaped_subtitles}'"
+    else:
+        video_filter = scale_filter
 
     command = [
         "ffmpeg",
@@ -443,7 +450,7 @@ def run_ffmpeg_merge(
         "-map",
         "0:a:0",
         "-vf",
-        scale_filter,
+        video_filter,
         "-c:v",
         "libx264",
         "-threads:v",
@@ -941,6 +948,17 @@ def merge_all_job(
             concat_path,
         )
 
+        subtitles_ass = (
+            payload.get("subtitles_ass")
+            or payload.get("subtitlesAss")
+            or None
+        )
+
+        subtitles_path = None
+        if subtitles_ass and isinstance(subtitles_ass, str) and subtitles_ass.strip():
+            subtitles_path = job_dir / "subtitles.ass"
+            subtitles_path.write_text(subtitles_ass, encoding="utf-8")
+
         run_ffmpeg_merge(
             concat_path=concat_path,
             output_path=output_path,
@@ -951,6 +969,7 @@ def merge_all_job(
             crf=crf,
             audio_bitrate=audio_bitrate,
             ffmpeg_threads=ffmpeg_threads,
+            subtitles_path=subtitles_path,
         )
 
         duration = get_video_duration(
@@ -1152,6 +1171,9 @@ def api():
         isShort: bool | None = Field(
             default=False
         )
+
+        subtitles_ass: str | None = None
+        subtitlesAss: str | None = None
 
         fps: int = Field(
             default=60,

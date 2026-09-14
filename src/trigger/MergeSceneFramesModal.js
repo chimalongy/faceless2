@@ -1,5 +1,7 @@
 import { task, logger, wait } from "@trigger.dev/sdk";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { generateTikTokAss } from "@/lib/subtitle-generator";
+import { transcribeAudio } from "@/lib/transcription";
 
 const DEFAULT_MODAL_MERGER_API_URL =
   process.env.MODAL_SCENE_MERGER_URL ||
@@ -210,6 +212,112 @@ export const mergeSceneFramesModalTask = task({
         : "1080p";
     }
 
+    const burnSubtitles = payload.burnSubtitles !== undefined
+      ? Boolean(payload.burnSubtitles)
+      : isShortTopic;
+    const subtitleStyle = payload.subtitleStyle || "yellow_highlight";
+
+    let subtitlesAss = null;
+
+    if (burnSubtitles) {
+      logger.log("[Modal Merger] Generating TikTok-style animated subtitles for Modal merge...", {
+        subtitleStyle,
+        isShortTopic,
+      });
+
+      try {
+        const sql = getDbSql();
+        if (sql) {
+          await initDbSchema();
+
+          const tRows = await sql`
+            SELECT id, scenes_json FROM topics WHERE slug = ${topicSlug} LIMIT 1;
+          `;
+          let topicScenes = [];
+          if (tRows?.[0]?.scenes_json) {
+            try {
+              topicScenes = typeof tRows[0].scenes_json === "string"
+                ? JSON.parse(tRows[0].scenes_json)
+                : tRows[0].scenes_json;
+            } catch (_) {}
+          }
+
+          const topicId = tRows?.[0]?.id;
+
+          let audioMap = {};
+          if (topicId) {
+            const audioRows = await sql`
+              SELECT scene_index, file_url
+              FROM topic_assets
+              WHERE topic_id = ${topicId} AND asset_type = 'audio'
+              ORDER BY scene_index ASC;
+            `;
+            if (audioRows) {
+              for (const row of audioRows) {
+                audioMap[Number(row.scene_index || 1)] = row.file_url;
+              }
+            }
+          }
+
+          const subtitleScenes = await Promise.all(
+            formattedSceneVideos.map(async (scene) => {
+              const sNum = scene.scene_number;
+              const sceneData =
+                topicScenes.find((s) => Number(s.scene_number || s.sceneIndex) === sNum) || {};
+              const audioUrl = sceneData.audio_url || sceneData.audioUrl || audioMap[sNum] || null;
+              const audioText = sceneData.narration || sceneData.audio_text || sceneData.script || "";
+
+              let transcription = null;
+              if (audioUrl) {
+                try {
+                  transcription = await transcribeAudio({ audioUrl });
+                } catch (tErr) {
+                  logger.warn(`Could not transcribe audio for scene ${sNum}:`, { error: tErr.message });
+                }
+              }
+
+              const dur = transcription?.duration || sceneData.duration || 4.0;
+
+              return {
+                scene_number: sNum,
+                duration: dur,
+                audioText,
+                transcription,
+              };
+            })
+          );
+
+          let targetWidth = 1920;
+          let targetHeight = 1080;
+          if (isShortTopic) {
+            if (normResolution === "720x1280") {
+              targetWidth = 720;
+              targetHeight = 1280;
+            } else {
+              targetWidth = 1080;
+              targetHeight = 1920;
+            }
+          }
+
+          subtitlesAss = generateTikTokAss({
+            scenes: subtitleScenes,
+            styleKey: subtitleStyle,
+            width: targetWidth,
+            height: targetHeight,
+            fontSize: isShortTopic ? 68 : 52,
+            marginV: isShortTopic ? 540 : 120,
+            wordsPerBurst: 3,
+          });
+
+          logger.log(`[Modal Merger] Generated subtitles ASS (${subtitlesAss.length} chars).`);
+        }
+      } catch (subErr) {
+        logger.warn("[Modal Merger] Failed generating subtitles, proceeding without subtitles:", {
+          error: subErr?.message || String(subErr),
+        });
+      }
+    }
+
     const requestBody = {
       credentials: {
         DATABASE_URL: databaseUrl,
@@ -224,6 +332,7 @@ export const mergeSceneFramesModalTask = task({
       topicSlug,
       sceneVideos: formattedSceneVideos,
       resolution: normResolution,
+      subtitles_ass: subtitlesAss,
       fps: Number.parseInt(fps || 60, 10),
       downloadConcurrency: Number.parseInt(downloadConcurrency || 8, 10),
       ffmpegThreads: Number.parseInt(ffmpegThreads || 16, 10),
