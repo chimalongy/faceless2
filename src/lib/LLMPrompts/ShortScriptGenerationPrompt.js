@@ -136,7 +136,7 @@ export function getShortScriptGenerationSystemPrompt({
     wordsCount ||
     wordCount ||
     contentPillarWordsCount ||
-    "300-350 words"
+    "250-300 words"
   ).trim();
 
   if (!effectiveChannelName) missingFields.push("Channel Name");

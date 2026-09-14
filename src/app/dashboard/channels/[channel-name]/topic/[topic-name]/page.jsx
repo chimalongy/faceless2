@@ -1926,7 +1926,7 @@ export default function TopicStudioPage() {
     });
   }
 
-  async function handleRenderMasterVideo() {
+  async function handleRenderMasterVideo(options = {}) {
     let parsed = [];
     try {
       parsed = JSON.parse(scenesJson);
@@ -1983,6 +1983,8 @@ export default function TopicStudioPage() {
           sceneVideos: videosPayload,
           resolution: isShort ? "1080x1920" : "1080p",
           isShort,
+          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : isShort,
+          subtitleStyle: options.subtitleStyle || "yellow_highlight",
         }),
       });
 
@@ -2011,7 +2013,7 @@ export default function TopicStudioPage() {
     }
   }
 
-  async function handleMergeMasterVideoModal() {
+  async function handleMergeMasterVideoModal(options = {}) {
     let parsed = [];
     try {
       parsed = JSON.parse(scenesJson);
@@ -2064,6 +2066,8 @@ export default function TopicStudioPage() {
           resolution: isShort ? "1080x1920" : "1080p",
           isShort,
           useModal: true,
+          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : isShort,
+          subtitleStyle: options.subtitleStyle || "yellow_highlight",
         }),
       });
 

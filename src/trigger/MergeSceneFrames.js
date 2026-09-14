@@ -7,6 +7,8 @@ import { promisify } from "util";
 import { getFfmpegPath, getAudioDuration } from "@/lib/ffmpeg-helper";
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { generateTikTokAss } from "@/lib/subtitle-generator";
+import { transcribeAudio } from "@/lib/transcription";
 
 const execAsync = promisify(exec);
 
@@ -44,15 +46,41 @@ export const mergeSceneFramesTask = task({
     const sql = getDbSql();
     let channelId = null;
     let topicId = null;
+    let topicScenes = [];
+    let audioMap = {};
 
     if (sql) {
       await initDbSchema();
       const cRows = await sql`SELECT id FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
-      const tRows = await sql`SELECT id, COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
+      const tRows = await sql`SELECT id, COALESCE(video_type, 'longform') AS "videoType", scenes_json AS "scenesJson" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
       channelId = cRows?.[0]?.id || null;
       topicId = tRows?.[0]?.id || null;
       if (tRows?.[0]?.videoType) {
         payload.videoType = tRows[0].videoType;
+      }
+      if (tRows?.[0]?.scenesJson) {
+        try {
+          topicScenes = typeof tRows[0].scenesJson === "string"
+            ? JSON.parse(tRows[0].scenesJson)
+            : tRows[0].scenesJson;
+        } catch {
+          topicScenes = [];
+        }
+      }
+      if (topicId && channelId) {
+        try {
+          const audioRows = await sql`
+            SELECT scene_index, file_url
+            FROM topic_assets
+            WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'audio'
+            ORDER BY scene_index ASC;
+          `;
+          for (const row of audioRows || []) {
+            if (row.scene_index && row.file_url) {
+              audioMap[row.scene_index] = row.file_url;
+            }
+          }
+        } catch {}
       }
     }
 
@@ -174,12 +202,88 @@ export const mergeSceneFramesTask = task({
 
       const scaleFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=black`;
 
+      // 5b. Generate and burn in TikTok-style animated subtitles if requested or for Shorts
+      const burnSubtitles = payload.burnSubtitles !== undefined
+        ? Boolean(payload.burnSubtitles)
+        : isShortTopic;
+      const subtitleStyle = payload.subtitleStyle || "yellow_highlight";
+
+      let videoFilter = scaleFilter;
+      let assPath = null;
+
+      if (burnSubtitles) {
+        logger.log("Generating TikTok-style animated subtitles for master video...", {
+          subtitleStyle,
+          isShortTopic,
+        });
+
+        try {
+          // Measure duration for each downloaded clip
+          const clipsWithDuration = await Promise.all(
+            downloadedClips.map(async (clip) => {
+              let dur = 0;
+              try {
+                dur = await getAudioDuration(clip.localPath);
+              } catch (_) {}
+              return { ...clip, duration: dur };
+            })
+          );
+
+          // Build scene items with audio & transcription
+          const subtitleScenes = await Promise.all(
+            clipsWithDuration.map(async (clip) => {
+              const sNum = clip.scene_number;
+              const sceneData =
+                topicScenes.find((s) => Number(s.scene_number || s.sceneIndex) === sNum) || {};
+              const audioUrl = sceneData.audio_url || sceneData.audioUrl || audioMap[sNum] || null;
+              const audioText = sceneData.narration || sceneData.audio_text || sceneData.script || "";
+
+              let transcription = null;
+              if (audioUrl) {
+                try {
+                  transcription = await transcribeAudio({ audioUrl });
+                } catch (tErr) {
+                  logger.warn(`Could not transcribe audio for scene ${sNum}:`, tErr.message);
+                }
+              }
+
+              return {
+                scene_number: sNum,
+                duration: clip.duration || 0,
+                audioText,
+                transcription,
+              };
+            })
+          );
+
+          const assContent = generateTikTokAss({
+            scenes: subtitleScenes,
+            styleKey: subtitleStyle,
+            width: targetWidth,
+            height: targetHeight,
+            fontSize: isShortTopic ? 68 : 52,
+            marginV: isShortTopic ? 540 : 120,
+            wordsPerBurst: 3,
+          });
+
+          assPath = path.join(tmpDir, "subtitles.ass");
+          fs.writeFileSync(assPath, assContent, "utf-8");
+
+          const formattedAssPath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+          videoFilter = `${scaleFilter},ass='${formattedAssPath}'`;
+          logger.log(`TikTok subtitles ASS file created successfully (${assContent.length} bytes).`);
+        } catch (subErr) {
+          logger.warn("Could not generate subtitles, continuing merge without subtitles:", subErr.message);
+          videoFilter = scaleFilter;
+        }
+      }
+
       const mergeCmd = [
         `"${ffmpeg}" -y`,
         `-f concat`,
         `-safe 0`,
         `-i "${concatListPath}"`,
-        `-vf "${scaleFilter}"`,
+        `-vf "${videoFilter}"`,
         `-c:v libx264`,
         `-preset veryfast`,
         `-crf 19`,

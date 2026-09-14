@@ -96,6 +96,16 @@ export default function CompletedVideoTab({
   const [customTitle, setCustomTitle] = useState(topicTitle || "");
   const [customDescription, setCustomDescription] = useState(storyDescription || "");
 
+  // TikTok Subtitle generation states
+  const [burnSubtitles, setBurnSubtitles] = useState(isShort);
+  const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
+
+  useEffect(() => {
+    if (isShort) {
+      setBurnSubtitles(true);
+    }
+  }, [isShort]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -357,7 +367,7 @@ export default function CompletedVideoTab({
             <button
               type="button"
               disabled={isRenderingMaster || isMergingMasterModal || !allScenesRendered}
-              onClick={handleMergeMasterVideoModal}
+              onClick={() => handleMergeMasterVideoModal({ burnSubtitles, subtitleStyle })}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-purple-900/20 transition-all cursor-pointer"
               title={
                 totalScenes === 0
@@ -384,7 +394,7 @@ export default function CompletedVideoTab({
             <button
               type="button"
               disabled={isRenderingMaster || isMergingMasterModal || !allScenesRendered}
-              onClick={handleRenderMasterVideo}
+              onClick={() => handleRenderMasterVideo({ burnSubtitles, subtitleStyle })}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
               title={
                 totalScenes === 0
@@ -407,6 +417,44 @@ export default function CompletedVideoTab({
               )}
             </button>
           </div>
+        </div>
+
+        {/* TikTok / Shorts Subtitles Configuration Panel */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-line/60 bg-paper/40 p-3 rounded-none text-xs">
+          <div className="flex items-center gap-2">
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={burnSubtitles}
+                onChange={(e) => setBurnSubtitles(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-signal"></div>
+              <span className="ml-2.5 font-semibold text-ink flex items-center gap-1.5">
+                <Sparkles size={13} className="text-amber-500" />
+                Burn TikTok-Style Captions {isShort ? "(Recommended for Shorts)" : ""}
+              </span>
+            </label>
+            <span className="text-[11px] text-ink-muted hidden md:inline">
+              • High-retention word bursts with active word pop & safe-zone margin
+            </span>
+          </div>
+
+          {burnSubtitles && (
+            <div className="flex items-center gap-2">
+              <span className="text-ink-muted text-[11px] font-medium">Style:</span>
+              <select
+                value={subtitleStyle}
+                onChange={(e) => setSubtitleStyle(e.target.value)}
+                className="bg-paper-card border border-line text-ink text-xs px-2.5 py-1 focus:outline-hidden focus:border-signal cursor-pointer font-medium"
+              >
+                <option value="yellow_highlight">🟡 TikTok Yellow Pop (Hormozi)</option>
+                <option value="cyan_highlight">🔵 Electric Cyan Highlight</option>
+                <option value="green_highlight">🟢 Neon Green Highlight</option>
+                <option value="white_clean">⚪ Classic White</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Status Notification */}

@@ -22,12 +22,20 @@ export async function POST(req, context) {
     const taskId = useModal ? "merge-scene-frames-modal" : "merge-scene-frames";
     console.log(`[MergeSceneFramesRoute] Triggering Trigger.dev task "${taskId}" for ${channelSlug}/${topicSlug}...`);
 
+    const isShortTopic = Boolean(body.isShort);
+    const burnSubtitles = body.burnSubtitles !== undefined
+      ? Boolean(body.burnSubtitles)
+      : isShortTopic;
+    const subtitleStyle = body.subtitleStyle || "yellow_highlight";
+
     const handle = await tasks.trigger(taskId, {
       channelSlug,
       topicSlug,
       sceneVideos,
       resolution,
-      isShort: Boolean(body.isShort),
+      isShort: isShortTopic,
+      burnSubtitles,
+      subtitleStyle,
     });
 
     console.log(`[MergeSceneFramesRoute] Task triggered with run ID: ${handle.id}, polling for completion...`);
