@@ -67,6 +67,7 @@ export async function POST(request) {
           const tRows = await sql`SELECT id FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
           const topicId = tRows?.[0]?.id || null;
 
+          if (topicId) {
             // Master video cleanup (assetType === 'completedvideo' or 'master')
             if (
               assetType === "completedvideo" ||
