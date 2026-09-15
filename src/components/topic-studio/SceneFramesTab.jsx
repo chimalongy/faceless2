@@ -141,7 +141,7 @@ export default function SceneFramesTab({
             <Captions size={15} />
           </span>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-ink">Channel Captions:</span>
+            <span className="font-semibold text-ink">Channel Captions ({isShort ? "Shorts" : "Longform"}):</span>
             <span
               className={`inline-flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 font-bold uppercase ${
                 channelSubtitlesEnabled

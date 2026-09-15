@@ -58,6 +58,9 @@ export default function TopicStudioPage() {
   const [saved, setSaved] = useState(false);
   const [topicData, setTopicData] = useState(null);
   const isShort = topicData?.videoType === "short";
+  const resolvedSubtitlesEnabled = isShort
+    ? (topicData?.channelSubtitlesShorts !== undefined ? Boolean(topicData.channelSubtitlesShorts) : true)
+    : (topicData?.channelSubtitlesLongform !== undefined ? Boolean(topicData.channelSubtitlesLongform) : false);
 
   const effectivePillarSlug = rawPillarSlug || topicData?.pillarSlug || null;
   const effectivePillarName =
@@ -1742,7 +1745,7 @@ export default function TopicStudioPage() {
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
           transition: scene?.transition || "fade",
-          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : (topicData?.channelSubtitlesEnabled !== undefined ? topicData.channelSubtitlesEnabled : isShort),
+          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : resolvedSubtitlesEnabled,
           subtitleStyle: options.subtitleStyle || topicData?.channelSubtitleStyle || "yellow_highlight",
           isShort,
           width: isShort ? 1080 : 1376,
@@ -1828,7 +1831,7 @@ export default function TopicStudioPage() {
           scenes: scenesToRender,
           sceneImages,
           sceneAudios,
-          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : (topicData?.channelSubtitlesEnabled !== undefined ? topicData.channelSubtitlesEnabled : isShort),
+          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : resolvedSubtitlesEnabled,
           subtitleStyle: options.subtitleStyle || topicData?.channelSubtitleStyle || "yellow_highlight",
           isShort,
           width: isShort ? 1080 : 1376,
@@ -2371,7 +2374,7 @@ export default function TopicStudioPage() {
               handleGenerateAllVideosModal={handleGenerateAllVideosModal}
               isShort={isShort}
               channelSlug={channelSlug}
-              channelSubtitlesEnabled={topicData?.channelSubtitlesEnabled !== undefined ? topicData.channelSubtitlesEnabled : isShort}
+              channelSubtitlesEnabled={resolvedSubtitlesEnabled}
               channelSubtitleStyle={topicData?.channelSubtitleStyle || "yellow_highlight"}
             />
           )}

@@ -30,6 +30,8 @@ export async function GET(request, { params }) {
         c.postershive_api AS "postershiveApi",
         c.script_structure AS "channelScriptStructure",
         c.subtitles_enabled AS "channelSubtitlesEnabled",
+        c.subtitles_shorts AS "channelSubtitlesShorts",
+        c.subtitles_longform AS "channelSubtitlesLongform",
         c.subtitle_style AS "channelSubtitleStyle",
         t.pillar_id AS "pillarId",
         cp.slug AS "pillarSlug",

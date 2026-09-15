@@ -62,6 +62,8 @@ export async function initDbSchema() {
         postershive_api TEXT,
         script_structure JSONB,
         subtitles_enabled BOOLEAN DEFAULT TRUE,
+        subtitles_shorts BOOLEAN DEFAULT TRUE,
+        subtitles_longform BOOLEAN DEFAULT FALSE,
         subtitle_style TEXT DEFAULT 'yellow_highlight',
         status TEXT DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -76,6 +78,8 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_enabled BOOLEAN DEFAULT TRUE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_shorts BOOLEAN DEFAULT TRUE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_longform BOOLEAN DEFAULT FALSE;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitle_style TEXT DEFAULT 'yellow_highlight';`;
     } catch {}
 

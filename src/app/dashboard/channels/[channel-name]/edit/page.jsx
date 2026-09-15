@@ -38,7 +38,8 @@ import {
   Share2,
   Code2,
   RotateCcw,
-  Captions
+  Captions,
+  Smartphone
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -94,7 +95,8 @@ export default function EditChannelPage() {
   const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
   const [postershiveApi, setPostershiveApi] = useState("");
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  const [subtitlesShorts, setSubtitlesShorts] = useState(true);
+  const [subtitlesLongform, setSubtitlesLongform] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
   const [scriptStructureText, setScriptStructureText] = useState(
     JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2)
@@ -140,10 +142,15 @@ export default function EditChannelPage() {
             setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
             setPostershiveApi(c.postershiveApi || "");
-            setSubtitlesEnabled(
-              c.subtitlesEnabled !== undefined && c.subtitlesEnabled !== null
-                ? Boolean(c.subtitlesEnabled)
+            setSubtitlesShorts(
+              c.subtitlesShorts !== undefined && c.subtitlesShorts !== null
+                ? Boolean(c.subtitlesShorts)
                 : true
+            );
+            setSubtitlesLongform(
+              c.subtitlesLongform !== undefined && c.subtitlesLongform !== null
+                ? Boolean(c.subtitlesLongform)
+                : false
             );
             setSubtitleStyle(c.subtitleStyle || "yellow_highlight");
             if (c.scriptStructure) {
@@ -192,10 +199,15 @@ export default function EditChannelPage() {
             setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
             setPostershiveApi(found.postershiveApi || "");
-            setSubtitlesEnabled(
-              found.subtitlesEnabled !== undefined && found.subtitlesEnabled !== null
-                ? Boolean(found.subtitlesEnabled)
+            setSubtitlesShorts(
+              found.subtitlesShorts !== undefined && found.subtitlesShorts !== null
+                ? Boolean(found.subtitlesShorts)
                 : true
+            );
+            setSubtitlesLongform(
+              found.subtitlesLongform !== undefined && found.subtitlesLongform !== null
+                ? Boolean(found.subtitlesLongform)
+                : false
             );
             setSubtitleStyle(found.subtitleStyle || "yellow_highlight");
             if (found.scriptStructure) {
@@ -291,9 +303,15 @@ export default function EditChannelPage() {
     setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
     setField(setStatus, "status");
 
-    const subsEnabledVal = findValue("subtitles_enabled", "subtitlesEnabled", "burn_subtitles", "burnSubtitles");
-    if (subsEnabledVal !== undefined && subsEnabledVal !== null) {
-      setSubtitlesEnabled(subsEnabledVal === true || subsEnabledVal === "true" || subsEnabledVal === 1);
+    const subsShortsVal = findValue("subtitles_shorts", "subtitlesShorts", "shorts_subtitles", "shortsSubtitles");
+    if (subsShortsVal !== undefined && subsShortsVal !== null) {
+      setSubtitlesShorts(subsShortsVal === true || subsShortsVal === "true" || subsShortsVal === 1);
+      count++;
+    }
+
+    const subsLongVal = findValue("subtitles_longform", "subtitlesLongform", "longform_subtitles", "longformSubtitles");
+    if (subsLongVal !== undefined && subsLongVal !== null) {
+      setSubtitlesLongform(subsLongVal === true || subsLongVal === "true" || subsLongVal === 1);
       count++;
     }
 
@@ -380,7 +398,8 @@ export default function EditChannelPage() {
         thumbnail_theme: thumbnailTheme.trim(),
         audio_theme: audioTheme.trim(),
         default_voice: defaultVoice,
-        subtitles_enabled: subtitlesEnabled,
+        subtitles_shorts: subtitlesShorts,
+        subtitles_longform: subtitlesLongform,
         subtitle_style: subtitleStyle,
       },
       integrations: {
@@ -461,7 +480,9 @@ export default function EditChannelPage() {
       audioTheme: audioTheme.trim(),
       defaultVoice,
       postershiveApi: postershiveApi.trim(),
-      subtitlesEnabled,
+      subtitlesShorts,
+      subtitlesLongform,
+      subtitlesEnabled: subtitlesShorts || subtitlesLongform,
       subtitleStyle,
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
@@ -855,29 +876,67 @@ export default function EditChannelPage() {
           </div>
 
           <div className="space-y-4">
-            {/* Enable/Disable Toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-line bg-white/40">
-              <div className="space-y-0.5">
-                <label className="text-xs font-semibold text-ink flex items-center gap-2">
-                  <span>Burn Subtitles on Scene Renders</span>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 font-bold uppercase ${subtitlesEnabled ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600"}`}>
-                    {subtitlesEnabled ? "Enabled" : "Disabled"}
+            {/* Format Subtitle Toggles: Shorts vs Longform */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Shorts Subtitles Toggle */}
+              <div className="p-4 border border-line bg-white/40 flex flex-col justify-between space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Smartphone size={14} className="text-signal" />
+                      <span className="text-xs font-bold text-ink">Shorts Subtitles (9:16)</span>
+                    </div>
+                    <p className="text-[11px] text-ink-muted leading-relaxed">
+                      Burn viral animated captions into TikTok, Reels, and YouTube Shorts scene video clips.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none shrink-0 pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={subtitlesShorts}
+                      onChange={(e) => setSubtitlesShorts(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-signal"></div>
+                  </label>
+                </div>
+                <div className="pt-2 border-t border-line/60 flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-ink-muted">Default: Enabled</span>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 font-bold uppercase ${subtitlesShorts ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600"}`}>
+                    {subtitlesShorts ? "Enabled" : "Disabled"}
                   </span>
-                </label>
-                <p className="text-[11px] text-ink-muted">
-                  Automatically transcribe audio via Whisper and burn high-retention animated captions into scene video renders.
-                </p>
+                </div>
               </div>
 
-              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
-                <input
-                  type="checkbox"
-                  checked={subtitlesEnabled}
-                  onChange={(e) => setSubtitlesEnabled(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-10 h-5 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-signal"></div>
-              </label>
+              {/* Longform Subtitles Toggle */}
+              <div className="p-4 border border-line bg-white/40 flex flex-col justify-between space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Tv size={14} className="text-signal" />
+                      <span className="text-xs font-bold text-ink">Longform Subtitles (16:9)</span>
+                    </div>
+                    <p className="text-[11px] text-ink-muted leading-relaxed">
+                      Burn widescreen subtitles into standard horizontal cinematic landscape scene videos.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none shrink-0 pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={subtitlesLongform}
+                      onChange={(e) => setSubtitlesLongform(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-signal"></div>
+                  </label>
+                </div>
+                <div className="pt-2 border-t border-line/60 flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-ink-muted">Default: Disabled</span>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 font-bold uppercase ${subtitlesLongform ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600"}`}>
+                    {subtitlesLongform ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Subtitle Style Selection Grid */}
