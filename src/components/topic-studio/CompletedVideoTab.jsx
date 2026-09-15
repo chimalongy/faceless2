@@ -96,14 +96,6 @@ export default function CompletedVideoTab({
   const [customTitle, setCustomTitle] = useState(topicTitle || "");
   const [customDescription, setCustomDescription] = useState(storyDescription || "");
 
-  // TikTok Subtitle generation states
-
-  useEffect(() => {
-    if (isShort) {
-      setBurnSubtitles(true);
-    }
-  }, [isShort]);
-
   useEffect(() => {
     setMounted(true);
   }, []);
