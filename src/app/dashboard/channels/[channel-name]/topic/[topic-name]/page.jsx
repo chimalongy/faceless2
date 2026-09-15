@@ -1742,8 +1742,8 @@ export default function TopicStudioPage() {
           audioUrl: audioData.url,
           kenBurns: scene?.ken_burns || { direction: "zoom-in", intensity: 0.15 },
           transition: scene?.transition || "fade",
-          burnSubtitles: options.burnSubtitles ?? isShort,
-          subtitleStyle: options.subtitleStyle || "yellow_highlight",
+          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : (topicData?.channelSubtitlesEnabled !== undefined ? topicData.channelSubtitlesEnabled : isShort),
+          subtitleStyle: options.subtitleStyle || topicData?.channelSubtitleStyle || "yellow_highlight",
           isShort,
           width: isShort ? 1080 : 1376,
           height: isShort ? 1920 : 768,
@@ -1828,8 +1828,8 @@ export default function TopicStudioPage() {
           scenes: scenesToRender,
           sceneImages,
           sceneAudios,
-          burnSubtitles: options.burnSubtitles ?? isShort,
-          subtitleStyle: options.subtitleStyle || "yellow_highlight",
+          burnSubtitles: options.burnSubtitles !== undefined ? options.burnSubtitles : (topicData?.channelSubtitlesEnabled !== undefined ? topicData.channelSubtitlesEnabled : isShort),
+          subtitleStyle: options.subtitleStyle || topicData?.channelSubtitleStyle || "yellow_highlight",
           isShort,
           width: isShort ? 1080 : 1376,
           height: isShort ? 1920 : 768,
@@ -2370,6 +2370,9 @@ export default function TopicStudioPage() {
               handleGenerateSceneVideoModal={handleGenerateSceneVideoModal}
               handleGenerateAllVideosModal={handleGenerateAllVideosModal}
               isShort={isShort}
+              channelSlug={channelSlug}
+              channelSubtitlesEnabled={topicData?.channelSubtitlesEnabled !== undefined ? topicData.channelSubtitlesEnabled : isShort}
+              channelSubtitleStyle={topicData?.channelSubtitleStyle || "yellow_highlight"}
             />
           )}
 

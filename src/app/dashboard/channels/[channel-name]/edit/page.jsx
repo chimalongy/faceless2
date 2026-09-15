@@ -37,13 +37,15 @@ import {
   Download,
   Share2,
   Code2,
-  RotateCcw
+  RotateCcw,
+  Captions
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { KOKORO_VOICES } from "@/lib/audio-generator";
+import { SUBTITLE_STYLES } from "@/lib/subtitle-generator";
 import {
   DEFAULT_SCRIPT_STRUCTURE,
   SCRIPT_STRUCTURE_PRESETS
@@ -92,6 +94,8 @@ export default function EditChannelPage() {
   const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
   const [postershiveApi, setPostershiveApi] = useState("");
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
   const [scriptStructureText, setScriptStructureText] = useState(
     JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2)
   );
@@ -136,6 +140,12 @@ export default function EditChannelPage() {
             setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
             setPostershiveApi(c.postershiveApi || "");
+            setSubtitlesEnabled(
+              c.subtitlesEnabled !== undefined && c.subtitlesEnabled !== null
+                ? Boolean(c.subtitlesEnabled)
+                : true
+            );
+            setSubtitleStyle(c.subtitleStyle || "yellow_highlight");
             if (c.scriptStructure) {
               setScriptStructureText(
                 typeof c.scriptStructure === "string"
@@ -182,6 +192,12 @@ export default function EditChannelPage() {
             setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
             setPostershiveApi(found.postershiveApi || "");
+            setSubtitlesEnabled(
+              found.subtitlesEnabled !== undefined && found.subtitlesEnabled !== null
+                ? Boolean(found.subtitlesEnabled)
+                : true
+            );
+            setSubtitleStyle(found.subtitleStyle || "yellow_highlight");
             if (found.scriptStructure) {
               setScriptStructureText(
                 typeof found.scriptStructure === "string"
@@ -275,6 +291,18 @@ export default function EditChannelPage() {
     setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
     setField(setStatus, "status");
 
+    const subsEnabledVal = findValue("subtitles_enabled", "subtitlesEnabled", "burn_subtitles", "burnSubtitles");
+    if (subsEnabledVal !== undefined && subsEnabledVal !== null) {
+      setSubtitlesEnabled(subsEnabledVal === true || subsEnabledVal === "true" || subsEnabledVal === 1);
+      count++;
+    }
+
+    const subStyleVal = findValue("subtitle_style", "subtitleStyle", "subtitles_style", "subtitlesStyle");
+    if (subStyleVal !== undefined && subStyleVal !== null) {
+      setSubtitleStyle(String(subStyleVal));
+      count++;
+    }
+
     const structureVal = findValue("script_structure", "scriptStructure", "script_structure_json", "scriptStructureJson");
     if (structureVal !== undefined && structureVal !== null) {
       setScriptStructureText(
@@ -352,6 +380,8 @@ export default function EditChannelPage() {
         thumbnail_theme: thumbnailTheme.trim(),
         audio_theme: audioTheme.trim(),
         default_voice: defaultVoice,
+        subtitles_enabled: subtitlesEnabled,
+        subtitle_style: subtitleStyle,
       },
       integrations: {
         postershive_api: postershiveApi.trim(),
@@ -431,6 +461,8 @@ export default function EditChannelPage() {
       audioTheme: audioTheme.trim(),
       defaultVoice,
       postershiveApi: postershiveApi.trim(),
+      subtitlesEnabled,
+      subtitleStyle,
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
       scriptStructure: parsedStructure,
@@ -801,6 +833,184 @@ export default function EditChannelPage() {
                   <span className="text-[9px] font-mono text-ink-muted uppercase block font-semibold">Active Default</span>
                   <p className="text-xs font-semibold text-ink truncate font-mono">
                     {KOKORO_VOICES.find((v) => v.id === defaultVoice)?.name || defaultVoice}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION: CHANNEL SUBTITLES & CAPTIONS */}
+        <section className="p-6 border border-line bg-paper-card space-y-6">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Captions size={16} />
+              </span>
+              <span>Channel Subtitles & Captions</span>
+            </div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5">
+              Viral Shorts & Video Styling
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            {/* Enable/Disable Toggle */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-line bg-white/40">
+              <div className="space-y-0.5">
+                <label className="text-xs font-semibold text-ink flex items-center gap-2">
+                  <span>Burn Subtitles on Scene Renders</span>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 font-bold uppercase ${subtitlesEnabled ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600"}`}>
+                    {subtitlesEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                </label>
+                <p className="text-[11px] text-ink-muted">
+                  Automatically transcribe audio via Whisper and burn high-retention animated captions into scene video renders.
+                </p>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                <input
+                  type="checkbox"
+                  checked={subtitlesEnabled}
+                  onChange={(e) => setSubtitlesEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-signal"></div>
+              </label>
+            </div>
+
+            {/* Subtitle Style Selection Grid */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1">
+                  Default Subtitle Style Preset
+                </label>
+                <p className="text-xs text-ink-muted leading-relaxed">
+                  Choose the signature caption aesthetic for this channel. All scene renders and TikTok-style Shorts will inherit this typography preset.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                {[
+                  {
+                    id: "yellow_highlight",
+                    name: "TikTok Yellow Pop",
+                    tagline: "Hormozi Viral Style",
+                    activeColor: "#FFE600",
+                    badge: "🟡 Yellow",
+                    desc: "Punchy yellow active pop with bold black outline",
+                  },
+                  {
+                    id: "cyan_highlight",
+                    name: "Electric Cyan",
+                    tagline: "High Contrast Modern",
+                    activeColor: "#00FFFF",
+                    badge: "🔵 Cyan",
+                    desc: "Vibrant electric cyan word pop with dark drop shadow",
+                  },
+                  {
+                    id: "green_highlight",
+                    name: "Neon Green",
+                    tagline: "High Energy Finance",
+                    activeColor: "#00FF32",
+                    badge: "🟢 Green",
+                    desc: "Bright neon green highlight for energetic pacing",
+                  },
+                  {
+                    id: "white_clean",
+                    name: "Classic White",
+                    tagline: "Clean Minimalist",
+                    activeColor: "#FFFFFF",
+                    badge: "⚪ Minimal",
+                    desc: "Clean crisp white typography with subtle shadow",
+                  },
+                ].map((style) => {
+                  const isSelected = subtitleStyle === style.id;
+                  return (
+                    <div
+                      key={style.id}
+                      onClick={() => setSubtitleStyle(style.id)}
+                      className={`relative p-4 border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                        isSelected
+                          ? "border-signal bg-signal/[0.03] shadow-xs"
+                          : "border-line bg-white/60 hover:border-line-strong hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-ink">{style.name}</span>
+                          </div>
+                          <p className="text-[10px] text-ink-muted font-mono">{style.tagline}</p>
+                        </div>
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? "border-signal bg-signal text-white"
+                              : "border-line bg-paper"
+                          }`}
+                        >
+                          {isSelected && <Check size={10} strokeWidth={3} />}
+                        </div>
+                      </div>
+
+                      {/* Mini typography preview */}
+                      <div className="bg-zinc-950 p-2.5 rounded-none text-center select-none shadow-inner border border-zinc-800">
+                        <span className="text-[10px] font-black uppercase tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                          HOW TO{" "}
+                        </span>
+                        <span
+                          className="text-[10px] font-black uppercase tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                          style={{ color: style.activeColor }}
+                        >
+                          BUILD
+                        </span>
+                        <span className="text-[10px] font-black uppercase tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                          {" "}WEALTH
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-ink-muted leading-tight">
+                        {style.desc}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Live Realistic Preview Banner */}
+              <div className="p-4 border border-line bg-zinc-950 text-white space-y-2 mt-3">
+                <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono border-b border-zinc-800 pb-2">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Sparkles size={11} className="text-amber-400" />
+                    Live Render Preview ({SUBTITLE_STYLES[subtitleStyle]?.name || subtitleStyle})
+                  </span>
+                  <span className="text-zinc-500">9:16 Shorts Safe Zone</span>
+                </div>
+                <div className="py-4 text-center">
+                  <p className="text-sm sm:text-base font-black tracking-wide uppercase">
+                    <span className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                      DISCOVER THE{" "}
+                    </span>
+                    <span
+                      className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-colors duration-200"
+                      style={{
+                        color:
+                          subtitleStyle === "cyan_highlight"
+                            ? "#00FFFF"
+                            : subtitleStyle === "green_highlight"
+                            ? "#00FF32"
+                            : subtitleStyle === "white_clean"
+                            ? "#FFFFFF"
+                            : "#FFE600",
+                      }}
+                    >
+                      MECHANICS
+                    </span>
+                    <span className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                      {" "}OF WEALTH
+                    </span>
                   </p>
                 </div>
               </div>

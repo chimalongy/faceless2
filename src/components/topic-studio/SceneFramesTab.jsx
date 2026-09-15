@@ -18,7 +18,10 @@ import {
   CheckSquare,
   Square,
   X,
+  Captions,
+  ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
@@ -39,9 +42,10 @@ export default function SceneFramesTab({
   handleGenerateSceneVideoModal,
   handleGenerateAllVideosModal,
   isShort = false,
+  channelSlug = "",
+  channelSubtitlesEnabled = true,
+  channelSubtitleStyle = "yellow_highlight",
 }) {
-  const [burnSubtitles, setBurnSubtitles] = useState(isShort);
-  const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
   const [downloadingVideos, setDownloadingVideos] = useState({});
   const [selectedScenes, setSelectedScenes] = useState(new Set());
 
@@ -130,43 +134,53 @@ export default function SceneFramesTab({
 
   return (
     <div className="space-y-6 animate-slide-in">
-        {/* TikTok / Shorts Subtitles Configuration Panel */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-line/60 bg-paper/40 p-3 rounded-none text-xs">
-          <div className="flex items-center gap-2">
-            <label className="relative inline-flex items-center cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={burnSubtitles}
-                onChange={(e) => setBurnSubtitles(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-8 h-4 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-signal"></div>
-              <span className="ml-2.5 font-semibold text-ink flex items-center gap-1.5">
-                <Sparkles size={13} className="text-amber-500" />
-                Captions for Modal scene renders {isShort ? "(Recommended for Shorts)" : ""}
-              </span>
-            </label>
-            <span className="text-[11px] text-ink-muted hidden md:inline">
-              • Re-render scenes after changing captions; merging keeps them as rendered.
+      {/* Channel Subtitles & Captions Preset Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2.5 px-3.5 border border-line bg-paper-card text-xs">
+        <div className="flex items-center gap-2.5">
+          <span className="p-1 bg-signal/10 text-signal">
+            <Captions size={15} />
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-ink">Channel Captions:</span>
+            <span
+              className={`inline-flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 font-bold uppercase ${
+                channelSubtitlesEnabled
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-zinc-100 text-zinc-600"
+              }`}
+            >
+              {channelSubtitlesEnabled ? "Enabled" : "Disabled"}
             </span>
+            {channelSubtitlesEnabled && (
+              <span className="text-ink-muted text-xs flex items-center gap-1 font-medium">
+                Style:{" "}
+                <span className="text-ink font-semibold">
+                  {channelSubtitleStyle === "yellow_highlight"
+                    ? "🟡 TikTok Yellow Pop"
+                    : channelSubtitleStyle === "cyan_highlight"
+                    ? "🔵 Electric Cyan"
+                    : channelSubtitleStyle === "green_highlight"
+                    ? "🟢 Neon Green"
+                    : channelSubtitleStyle === "white_clean"
+                    ? "⚪ Classic White"
+                    : channelSubtitleStyle}
+                </span>
+              </span>
+            )}
           </div>
-
-          {burnSubtitles && (
-            <div className="flex items-center gap-2">
-              <span className="text-ink-muted text-[11px] font-medium">Style:</span>
-              <select
-                value={subtitleStyle}
-                onChange={(e) => setSubtitleStyle(e.target.value)}
-                className="bg-paper-card border border-line text-ink text-xs px-2.5 py-1 focus:outline-hidden focus:border-signal cursor-pointer font-medium"
-              >
-                <option value="yellow_highlight">🟡 TikTok Yellow Pop (Hormozi)</option>
-                <option value="cyan_highlight">🔵 Electric Cyan Highlight</option>
-                <option value="green_highlight">🟢 Neon Green Highlight</option>
-                <option value="white_clean">⚪ Classic White</option>
-              </select>
-            </div>
-          )}
         </div>
+
+        {channelSlug && (
+          <Link
+            href={`/dashboard/channels/${channelSlug}/edit`}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-signal hover:underline shrink-0"
+            title="Change caption preferences and styling in Channel Settings"
+          >
+            <span>Edit in Channel Settings</span>
+            <ExternalLink size={12} />
+          </Link>
+        )}
+      </div>
 
       {/* Header Card */}
       <div className="p-4 sm:p-6 border border-line bg-paper-card space-y-4">
@@ -190,7 +204,7 @@ export default function SceneFramesTab({
                 parsedScenes.length === 0 ||
                 eligibleScenesCount === 0
               }
-              onClick={() => handleGenerateAllVideosModal({ burnSubtitles, subtitleStyle })}
+              onClick={() => handleGenerateAllVideosModal({ burnSubtitles: channelSubtitlesEnabled, subtitleStyle: channelSubtitleStyle })}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs shadow-purple-600/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
               title={
                 eligibleScenesCount > 0
@@ -495,7 +509,7 @@ export default function SceneFramesTab({
                       <button
                         type="button"
                         disabled={isGeneratingThis || isGeneratingThisModal || !hasImage || !hasAudio}
-                        onClick={() => handleGenerateSceneVideoModal && handleGenerateSceneVideoModal(sceneNum, { burnSubtitles, subtitleStyle })}
+                        onClick={() => handleGenerateSceneVideoModal && handleGenerateSceneVideoModal(sceneNum, { burnSubtitles: channelSubtitlesEnabled, subtitleStyle: channelSubtitleStyle })}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-purple-300 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-700 text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Test render this scene on Modal"
                       >

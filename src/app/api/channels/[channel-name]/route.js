@@ -40,6 +40,8 @@ export async function GET(request, { params }) {
         default_voice AS "defaultVoice",
         postershive_api AS "postershiveApi",
         script_structure AS "scriptStructure",
+        subtitles_enabled AS "subtitlesEnabled",
+        subtitle_style AS "subtitleStyle",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -126,6 +128,8 @@ export async function PUT(request, { params }) {
         default_voice = ${body.defaultVoice || 'af_heart'},
         postershive_api = ${body.postershiveApi !== undefined ? body.postershiveApi : (body.postershive_api !== undefined ? body.postershive_api : null)},
         script_structure = ${rawStructure !== undefined ? scriptStructure : sql`script_structure`},
+        subtitles_enabled = ${body.subtitlesEnabled !== undefined ? Boolean(body.subtitlesEnabled) : (body.burnSubtitles !== undefined ? Boolean(body.burnSubtitles) : (body.subtitles_enabled !== undefined ? Boolean(body.subtitles_enabled) : true))},
+        subtitle_style = ${body.subtitleStyle || body.subtitle_style || 'yellow_highlight'},
         status = ${body.status || 'Active'},
         updated_at = NOW()
       WHERE slug = ${channelSlug}

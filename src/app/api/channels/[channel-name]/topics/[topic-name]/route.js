@@ -29,6 +29,8 @@ export async function GET(request, { params }) {
         c.thumbnail_theme AS "channelThumbnailTheme",
         c.postershive_api AS "postershiveApi",
         c.script_structure AS "channelScriptStructure",
+        c.subtitles_enabled AS "channelSubtitlesEnabled",
+        c.subtitle_style AS "channelSubtitleStyle",
         t.pillar_id AS "pillarId",
         cp.slug AS "pillarSlug",
         cp.name AS "pillarName",

@@ -61,6 +61,8 @@ export async function initDbSchema() {
         default_voice TEXT DEFAULT 'af_heart',
         postershive_api TEXT,
         script_structure JSONB,
+        subtitles_enabled BOOLEAN DEFAULT TRUE,
+        subtitle_style TEXT DEFAULT 'yellow_highlight',
         status TEXT DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -73,6 +75,8 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_enabled BOOLEAN DEFAULT TRUE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitle_style TEXT DEFAULT 'yellow_highlight';`;
     } catch {}
 
     // 2. Content Pillars Table
