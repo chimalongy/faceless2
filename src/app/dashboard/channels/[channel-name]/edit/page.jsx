@@ -95,6 +95,7 @@ export default function EditChannelPage() {
   const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
   const [postershiveApi, setPostershiveApi] = useState("");
+  const [channelTags, setChannelTags] = useState("");
   const [subtitlesShorts, setSubtitlesShorts] = useState(true);
   const [subtitlesLongform, setSubtitlesLongform] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
@@ -142,6 +143,7 @@ export default function EditChannelPage() {
             setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
             setPostershiveApi(c.postershiveApi || "");
+            setChannelTags(c.channelTags || c.channel_tags || "");
             setSubtitlesShorts(
               c.subtitlesShorts !== undefined && c.subtitlesShorts !== null
                 ? Boolean(c.subtitlesShorts)
@@ -199,6 +201,7 @@ export default function EditChannelPage() {
             setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
             setPostershiveApi(found.postershiveApi || "");
+            setChannelTags(found.channelTags || found.channel_tags || "");
             setSubtitlesShorts(
               found.subtitlesShorts !== undefined && found.subtitlesShorts !== null
                 ? Boolean(found.subtitlesShorts)
@@ -301,6 +304,7 @@ export default function EditChannelPage() {
     setField(setAudioTheme, "audioTheme", "audio_theme", "soundTheme", "voiceoverTheme");
     setField(setDefaultVoice, "defaultVoice", "default_voice", "voice_id", "narrator_voice");
     setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
+    setField(setChannelTags, "channelTags", "channel_tags", "tags", "channel_tag", "channelTagsList");
     setField(setStatus, "status");
 
     const subsShortsVal = findValue("subtitles_shorts", "subtitlesShorts", "shorts_subtitles", "shortsSubtitles");
@@ -377,6 +381,7 @@ export default function EditChannelPage() {
         handle: handle.trim() || `@${channelSlug}`,
         channel_url: channelUrl.trim() || `https://youtube.com/@${channelSlug}`,
         tagline: tagline.trim(),
+        channel_tags: channelTags.trim(),
         description: description.trim(),
         status: status,
       },
@@ -480,6 +485,8 @@ export default function EditChannelPage() {
       audioTheme: audioTheme.trim(),
       defaultVoice,
       postershiveApi: postershiveApi.trim(),
+      channelTags: channelTags.trim(),
+      channel_tags: channelTags.trim(),
       subtitlesShorts,
       subtitlesLongform,
       subtitlesEnabled: subtitlesShorts || subtitlesLongform,
@@ -1372,6 +1379,23 @@ export default function EditChannelPage() {
           </div>
 
           <div>
+            <label className="block text-xs font-semibold text-ink/80 mb-1.5" htmlFor="field-channel-tags">
+              Channel Tags
+            </label>
+            <input
+              id="field-channel-tags"
+              type="text"
+              value={channelTags}
+              onChange={(e) => setChannelTags(e.target.value)}
+              placeholder="e.g. finance, wealth, investing, money mechanics, economics"
+              className="w-full h-10 px-3.5 border border-line-dark bg-white text-xs text-ink outline-none focus:border-signal"
+            />
+            <p className="text-[11px] text-ink-muted mt-1">
+              Comma-separated core keywords and tags representing the channel's topics and SEO focus.
+            </p>
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-ink/80 mb-1.5" htmlFor="field-description">
               Channel Description
             </label>
@@ -1819,7 +1843,7 @@ export default function EditChannelPage() {
                     setPastedJsonText(e.target.value);
                     if (pasteError) setPasteError("");
                   }}
-                  placeholder={`{\n  "channel": {\n    "name": "Money Koncepts",\n    "slug": "moneykoncepts",\n    "handle": "@moneykoncepts",\n    "channel_url": "https://youtube.com/@moneykoncepts",\n    "tagline": "Mastering the mechanics of money and enterprise.",\n    "description": "Deep-dive financial breakdowns and wealth building frameworks.",\n    "status": "Active"\n  },\n  "niche_and_audience": {\n    "niche": "Finance & Wealth",\n    "sub_niche": "Enterprise & Capital",\n    "content_category": "Business & Finance",\n    "target_audience": "Entrepreneurs, investors, and ambitious professionals."\n  },\n  "brand_strategy": {\n    "mission": "Demystify complex capital markets into clear visual stories.",\n    "value_proposition": "First-principles financial intelligence.",\n    "personality": "Authoritative, analytical, objective",\n    "brand_positioning": "The definitive channel for capital analysis.",\n    "brand_promise": "Factual rigor without sensationalism."\n  },\n  "creative_themes": {\n    "image_theme": "Dark modern editorial, subtle gold and obsidian lighting.",\n    "thumbnail_theme": "High contrast minimal charts, bold serif focal words.",\n    "audio_theme": "Deep authoritative baritone narration with subtle low-drone audio backdrop."\n  }\n}`}
+                  placeholder={`{\n  "channel": {\n    "name": "Money Koncepts",\n    "slug": "moneykoncepts",\n    "handle": "@moneykoncepts",\n    "channel_url": "https://youtube.com/@moneykoncepts",\n    "tagline": "Mastering the mechanics of money and enterprise.",\n    "channel_tags": "finance, wealth, investing, enterprise",\n    "description": "Deep-dive financial breakdowns and wealth building frameworks.",\n    "status": "Active"\n  },\n  "niche_and_audience": {\n    "niche": "Finance & Wealth",\n    "sub_niche": "Enterprise & Capital",\n    "content_category": "Business & Finance",\n    "target_audience": "Entrepreneurs, investors, and ambitious professionals."\n  },\n  "brand_strategy": {\n    "mission": "Demystify complex capital markets into clear visual stories.",\n    "value_proposition": "First-principles financial intelligence.",\n    "personality": "Authoritative, analytical, objective",\n    "brand_positioning": "The definitive channel for capital analysis.",\n    "brand_promise": "Factual rigor without sensationalism."\n  },\n  "creative_themes": {\n    "image_theme": "Dark modern editorial, subtle gold and obsidian lighting.",\n    "thumbnail_theme": "High contrast minimal charts, bold serif focal words.",\n    "audio_theme": "Deep authoritative baritone narration with subtle low-drone audio backdrop."\n  }\n}`}
                   className="w-full flex-1 min-h-[220px] p-3.5 border border-line-dark bg-white text-ink font-mono text-xs leading-relaxed outline-none focus:border-signal"
                 />
               </div>

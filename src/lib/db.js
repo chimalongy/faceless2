@@ -61,6 +61,7 @@ export async function initDbSchema() {
         default_voice TEXT DEFAULT 'af_heart',
         postershive_api TEXT,
         script_structure JSONB,
+        channel_tags TEXT,
         subtitles_enabled BOOLEAN DEFAULT TRUE,
         subtitles_shorts BOOLEAN DEFAULT TRUE,
         subtitles_longform BOOLEAN DEFAULT FALSE,
@@ -77,6 +78,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS channel_tags TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_enabled BOOLEAN DEFAULT TRUE;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_shorts BOOLEAN DEFAULT TRUE;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_longform BOOLEAN DEFAULT FALSE;`;
@@ -128,6 +130,9 @@ export async function initDbSchema() {
         youtube_video_id TEXT,
         youtube_url TEXT,
         youtube_published_at TIMESTAMPTZ,
+        tiktok_publish_id TEXT,
+        tiktok_published_at TIMESTAMPTZ,
+        published_platforms JSONB,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(channel_id, slug)
@@ -143,6 +148,9 @@ export async function initDbSchema() {
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_video_id TEXT;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_url TEXT;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_published_at TIMESTAMPTZ;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS tiktok_publish_id TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS tiktok_published_at TIMESTAMPTZ;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS published_platforms JSONB;`;
     } catch {}
 
     // 4. Topic Assets Table (Cloudflare R2 media links)

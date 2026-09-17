@@ -31,7 +31,7 @@ export const generateStoryDescriptionTask = task({
 
     // 1. Fetch Channel & Topic records
     const channelRows = await sql`
-      SELECT id, name, slug, niche, sub_niche, description, personality, target_audience, mission, tagline
+      SELECT id, name, slug, niche, sub_niche, description, personality, target_audience, mission, tagline, channel_tags
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -118,6 +118,7 @@ export const generateStoryDescriptionTask = task({
       scriptContent,
       channelName: channel.name,
       channelNiche: channel.niche,
+      channelTags: channel.channel_tags || "",
       channelDescription: channel.description,
       channelPersonality: channel.personality,
       channelTargetAudience: channel.target_audience,

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS channels (
     default_voice TEXT DEFAULT 'af_heart',
     postershive_api TEXT,
     script_structure JSONB,
+    channel_tags TEXT,
     status TEXT DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -74,6 +75,9 @@ CREATE TABLE IF NOT EXISTS topics (
     youtube_video_id TEXT,
     youtube_url TEXT,
     youtube_published_at TIMESTAMPTZ,
+    tiktok_publish_id TEXT,
+    tiktok_published_at TIMESTAMPTZ,
+    published_platforms JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT uq_channel_topic UNIQUE (channel_id, slug)

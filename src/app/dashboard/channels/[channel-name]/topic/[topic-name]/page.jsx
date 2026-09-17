@@ -132,6 +132,9 @@ export default function TopicStudioPage() {
   const [youtubeVideoId, setYoutubeVideoId] = useState(null);
   const [youtubeUrl, setYoutubeUrl] = useState(null);
   const [youtubePublishedAt, setYoutubePublishedAt] = useState(null);
+  const [tiktokPublishId, setTiktokPublishId] = useState(null);
+  const [tiktokPublishedAt, setTiktokPublishedAt] = useState(null);
+  const [publishedPlatforms, setPublishedPlatforms] = useState({});
 
   // Generic Delete Confirmation Modal State
   const [deleteModalState, setDeleteModalState] = useState({
@@ -228,6 +231,9 @@ export default function TopicStudioPage() {
             if (t.youtubeVideoId) setYoutubeVideoId(t.youtubeVideoId);
             if (t.youtubeUrl) setYoutubeUrl(t.youtubeUrl);
             if (t.youtubePublishedAt) setYoutubePublishedAt(t.youtubePublishedAt);
+            if (t.tiktokPublishId) setTiktokPublishId(t.tiktokPublishId);
+            if (t.tiktokPublishedAt) setTiktokPublishedAt(t.tiktokPublishedAt);
+            if (t.publishedPlatforms) setPublishedPlatforms(t.publishedPlatforms);
 
             // Populate assets from database
             if (Array.isArray(t.assets)) {
@@ -2407,11 +2413,23 @@ export default function TopicStudioPage() {
               youtubeVideoId={youtubeVideoId}
               youtubeUrl={youtubeUrl}
               youtubePublishedAt={youtubePublishedAt}
+              tiktokPublishId={tiktokPublishId}
+              tiktokPublishedAt={tiktokPublishedAt}
+              publishedPlatforms={publishedPlatforms}
+              channelTags={topicData?.channelTags || ""}
               isShort={isShort}
               onYoutubePublished={({ youtubeVideoId, youtubeUrl, youtubePublishedAt }) => {
                 setYoutubeVideoId(youtubeVideoId);
                 setYoutubeUrl(youtubeUrl);
                 setYoutubePublishedAt(youtubePublishedAt);
+              }}
+              onPlatformsPublished={(data) => {
+                if (data.youtubeVideoId) setYoutubeVideoId(data.youtubeVideoId);
+                if (data.youtubeUrl) setYoutubeUrl(data.youtubeUrl);
+                if (data.youtubePublishedAt) setYoutubePublishedAt(data.youtubePublishedAt);
+                if (data.tiktokPublishId) setTiktokPublishId(data.tiktokPublishId);
+                if (data.tiktokPublishedAt) setTiktokPublishedAt(data.tiktokPublishedAt);
+                if (data.publishedPlatforms) setPublishedPlatforms(data.publishedPlatforms);
               }}
             />
           )}

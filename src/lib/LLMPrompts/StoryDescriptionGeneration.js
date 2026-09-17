@@ -206,6 +206,7 @@ export function getStoryDescriptionPrompt({
   scriptContent = "",
   channelName = "",
   channelNiche = "",
+  channelTags = "",
   channelDescription = "",
   channelPersonality = "",
   channelTargetAudience = "",
@@ -217,6 +218,7 @@ export function getStoryDescriptionPrompt({
 
 - Channel Name: ${channelName || "Faceless Documentary"}
 - Niche: ${channelNiche || "Documentary / Storytelling"}
+${channelTags ? `- Channel Core Tags / Keywords: ${channelTags}` : ""}
 - Brand Personality: ${channelPersonality || "Authoritative, compelling, engaging, objective"}
 - Target Audience: ${channelTargetAudience || "In-depth documentary and story seekers"}
 ${channelDescription ? `- Channel Mission/Description: ${channelDescription}` : ""}

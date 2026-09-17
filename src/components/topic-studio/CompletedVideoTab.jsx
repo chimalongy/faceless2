@@ -31,7 +31,11 @@ import {
   FileText,
   Save,
   RotateCcw,
-  Zap
+  Zap,
+  Tag,
+  Lock,
+  Smartphone,
+  Globe
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -44,6 +48,7 @@ export default function CompletedVideoTab({
   channelSlug,
   channelName,
   postershiveApi,
+  channelTags = "",
   scriptContent,
   storyDescription,
   setStoryDescription,
@@ -64,7 +69,11 @@ export default function CompletedVideoTab({
   youtubeVideoId: initialYoutubeVideoId,
   youtubeUrl: initialYoutubeUrl,
   youtubePublishedAt: initialYoutubePublishedAt,
+  tiktokPublishId: initialTiktokPublishId,
+  tiktokPublishedAt: initialTiktokPublishedAt,
+  publishedPlatforms: initialPublishedPlatforms,
   onYoutubePublished,
+  onPlatformsPublished,
   isShort = false,
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -83,18 +92,31 @@ export default function CompletedVideoTab({
   const [isSavingDesc, setIsSavingDesc] = useState(false);
   const [isGeneratingStoryDescription, setIsGeneratingStoryDescription] = useState(false);
 
-  // YouTube publishing states
+  // Multi-platform publishing states
   const [youtubeVideoId, setYoutubeVideoId] = useState(initialYoutubeVideoId || null);
   const [youtubeUrl, setYoutubeUrl] = useState(initialYoutubeUrl || null);
   const [youtubePublishedAt, setYoutubePublishedAt] = useState(initialYoutubePublishedAt || null);
+  const [tiktokPublishId, setTiktokPublishId] = useState(initialTiktokPublishId || null);
+  const [tiktokPublishedAt, setTiktokPublishedAt] = useState(initialTiktokPublishedAt || null);
+  const [publishedPlatforms, setPublishedPlatforms] = useState(initialPublishedPlatforms || {});
+
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isLoadingPlatforms, setIsLoadingPlatforms] = useState(false);
   const [publishError, setPublishError] = useState("");
   const [publishSuccess, setPublishSuccess] = useState("");
+  const [publishResults, setPublishResults] = useState(null);
 
-  // YouTube modal form states
+  // Modal configuration states
   const [customTitle, setCustomTitle] = useState(topicTitle || "");
   const [customDescription, setCustomDescription] = useState(storyDescription || "");
+  const [selectedPlatforms, setSelectedPlatforms] = useState(["youtube"]);
+  const [availablePlatforms, setAvailablePlatforms] = useState(["youtube", "tiktok"]);
+  const [postTags, setPostTags] = useState(channelTags || "");
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledDateTime, setScheduledDateTime] = useState("");
+  const [youtubePrivacy, setYoutubePrivacy] = useState("public");
+  const [youtubeUploadPrivate, setYoutubeUploadPrivate] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -104,7 +126,10 @@ export default function CompletedVideoTab({
     if (initialYoutubeVideoId) setYoutubeVideoId(initialYoutubeVideoId);
     if (initialYoutubeUrl) setYoutubeUrl(initialYoutubeUrl);
     if (initialYoutubePublishedAt) setYoutubePublishedAt(initialYoutubePublishedAt);
-  }, [initialYoutubeVideoId, initialYoutubeUrl, initialYoutubePublishedAt]);
+    if (initialTiktokPublishId) setTiktokPublishId(initialTiktokPublishId);
+    if (initialTiktokPublishedAt) setTiktokPublishedAt(initialTiktokPublishedAt);
+    if (initialPublishedPlatforms) setPublishedPlatforms(initialPublishedPlatforms);
+  }, [initialYoutubeVideoId, initialYoutubeUrl, initialYoutubePublishedAt, initialTiktokPublishId, initialTiktokPublishedAt, initialPublishedPlatforms]);
 
   useEffect(() => {
     if (topicTitle && !customTitle) {
@@ -118,6 +143,12 @@ export default function CompletedVideoTab({
       setCustomDescription(storyDescription || "");
     }
   }, [storyDescription]);
+
+  useEffect(() => {
+    if (channelTags && !postTags) {
+      setPostTags(channelTags);
+    }
+  }, [channelTags]);
 
   function handleCopyVideoUrl() {
     if (!completedMasterVideo?.url || completedMasterVideo.url === "generated") return;
@@ -237,19 +268,78 @@ export default function CompletedVideoTab({
     }
   }
 
-  function openPublishModal() {
+  function getDefaultScheduledDate() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 120);
+    d.setSeconds(0, 0);
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+  }
+
+  function getMinScheduledDate() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 5);
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+  }
+
+  async function openPublishModal() {
     setPublishError("");
     setPublishSuccess("");
+    setPublishResults(null);
     if (!customTitle) setCustomTitle(topicTitle || "");
     const effectiveDesc = descText || storyDescription || "";
     setCustomDescription(effectiveDesc);
+    if (!postTags && channelTags) {
+      setPostTags(channelTags);
+    }
+    if (!scheduledDateTime) {
+      setScheduledDateTime(getDefaultScheduledDate());
+    }
     setPublishModalOpen(true);
+
+    setIsLoadingPlatforms(true);
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/publish-youtube`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.platforms) && data.platforms.length > 0) {
+          setAvailablePlatforms(data.platforms);
+          setSelectedPlatforms((prev) => {
+            const filtered = prev.filter((p) => data.platforms.includes(p));
+            return filtered.length > 0 ? filtered : [data.platforms[0]];
+          });
+        }
+        if (data.channelTags && !postTags) {
+          setPostTags(data.channelTags);
+        }
+      }
+    } catch (err) {
+      console.warn("Error checking platform availability:", err);
+    } finally {
+      setIsLoadingPlatforms(false);
+    }
+  }
+
+  function togglePlatform(platform) {
+    setSelectedPlatforms((prev) => {
+      if (prev.includes(platform)) {
+        if (prev.length === 1) {
+          toast.error("Please select at least one platform.");
+          return prev;
+        }
+        return prev.filter((p) => p !== platform);
+      } else {
+        return [...prev, platform];
+      }
+    });
   }
 
   async function handleExecutePublish(e) {
     if (e) e.preventDefault();
     setPublishError("");
     setPublishSuccess("");
+    setPublishResults(null);
 
     if (!hasPostershiveKey) {
       setPublishError("PostersHive API Key is missing. Please configure it in your Channel Profile settings.");
@@ -261,9 +351,28 @@ export default function CompletedVideoTab({
       return;
     }
 
-    if (!isShort && !hasThumbnail) {
+    if (selectedPlatforms.length === 0) {
+      setPublishError("Please select at least one platform to publish to.");
+      return;
+    }
+
+    const postingToYouTube = selectedPlatforms.includes("youtube");
+    if (postingToYouTube && !isShort && !hasThumbnail) {
       setPublishError("A custom thumbnail is required for YouTube upload. Please generate or upload a thumbnail in the Thumbnail tab.");
       return;
+    }
+
+    if (isScheduled && !scheduledDateTime) {
+      setPublishError("Please choose a scheduled date and time.");
+      return;
+    }
+
+    if (isScheduled) {
+      const scheduledTime = new Date(scheduledDateTime).getTime();
+      if (scheduledTime <= Date.now() + 60 * 1000) {
+        setPublishError("Scheduled time must be at least a few minutes in the future.");
+        return;
+      }
     }
 
     setIsPublishing(true);
@@ -274,9 +383,17 @@ export default function CompletedVideoTab({
       if (isShort && !finalTitle.toLowerCase().includes("#shorts")) {
         finalTitle = `${finalTitle} #Shorts`;
       }
+
+      const scheduledIso = isScheduled && scheduledDateTime ? new Date(scheduledDateTime).toISOString() : null;
+
       const payload = {
+        platforms: selectedPlatforms,
         title: finalTitle,
         description: customDescription.trim() || descText || storyDescription || scriptContent || topicTitle,
+        tags: postTags.trim(),
+        scheduledAt: scheduledIso,
+        privacyStatus: isScheduled && youtubeUploadPrivate ? "private" : youtubePrivacy,
+        youtubeUploadPrivate: isScheduled ? youtubeUploadPrivate : (youtubePrivacy === "private"),
       };
 
       const res = await fetch(endpoint, {
@@ -288,37 +405,77 @@ export default function CompletedVideoTab({
       const data = await res.json();
 
       if (!res.ok || data.error || data.success === false) {
-        const msg = data.error || data.message || "Failed to publish video to YouTube via PostersHive.";
+        const msg = data.error || data.message || "Failed to publish video via PostersHive.";
         setPublishError(msg);
         toast.error(msg);
         return;
       }
 
-      // Success
-      const returnedVideoId = data.postId;
-      const returnedYoutubeUrl = data.youtubeUrl || `https://www.youtube.com/watch?v=${returnedVideoId}`;
+      setPublishResults(data);
       const publishedDate = new Date().toISOString();
 
-      setYoutubeVideoId(returnedVideoId);
-      setYoutubeUrl(returnedYoutubeUrl);
-      setYoutubePublishedAt(publishedDate);
-      setPublishSuccess("Successfully uploaded & published master video to YouTube!");
-      toast.success("Successfully published to YouTube!");
+      let ytId = null;
+      let ytLink = null;
+      if (data.youtube) {
+        ytId = data.youtube.videoId || null;
+        ytLink = data.youtube.url || (ytId ? `https://www.youtube.com/watch?v=${ytId}` : null);
+      } else if (data.postId) {
+        ytId = data.postId;
+        ytLink = data.youtubeUrl || `https://www.youtube.com/watch?v=${ytId}`;
+      }
 
-      if (onYoutubePublished) {
+      if (ytId) {
+        setYoutubeVideoId(ytId);
+        if (ytLink) setYoutubeUrl(ytLink);
+        setYoutubePublishedAt(publishedDate);
+      }
+
+      let ttId = null;
+      if (data.tiktok && data.tiktok.publishId) {
+        ttId = data.tiktok.publishId;
+        setTiktokPublishId(ttId);
+        setTiktokPublishedAt(publishedDate);
+      }
+
+      const updatedPublishedPlatforms = {
+        ...(publishedPlatforms || {}),
+        ...(data.platforms || {}),
+      };
+      setPublishedPlatforms(updatedPublishedPlatforms);
+
+      const platformsLabel = selectedPlatforms.map((p) => p.toUpperCase()).join(" & ");
+      const successMsg = isScheduled
+        ? `Scheduled successfully on ${platformsLabel} for ${new Date(scheduledIso).toLocaleString()}!`
+        : `Successfully published to ${platformsLabel}!`;
+
+      setPublishSuccess(successMsg);
+      toast.success(successMsg);
+
+      if (onPlatformsPublished) {
+        onPlatformsPublished({
+          youtubeVideoId: ytId || youtubeVideoId,
+          youtubeUrl: ytLink || youtubeUrl,
+          youtubePublishedAt: ytId ? publishedDate : youtubePublishedAt,
+          tiktokPublishId: ttId || tiktokPublishId,
+          tiktokPublishedAt: ttId ? publishedDate : tiktokPublishedAt,
+          publishedPlatforms: updatedPublishedPlatforms,
+        });
+      }
+
+      if (onYoutubePublished && ytId) {
         onYoutubePublished({
-          youtubeVideoId: returnedVideoId,
-          youtubeUrl: returnedYoutubeUrl,
+          youtubeVideoId: ytId,
+          youtubeUrl: ytLink,
           youtubePublishedAt: publishedDate,
         });
       }
 
       setTimeout(() => {
         setPublishModalOpen(false);
-      }, 2000);
+      }, 2500);
     } catch (err) {
-      console.error("YouTube publish error:", err);
-      const msg = err.message || "An unexpected network error occurred while publishing to YouTube.";
+      console.error("Publish error:", err);
+      const msg = err.message || "An unexpected network error occurred while publishing.";
       setPublishError(msg);
       toast.error(msg);
     } finally {
@@ -763,25 +920,33 @@ export default function CompletedVideoTab({
             </div>
           )}
 
-          {/* YouTube Direct Publishing Widget */}
+          {/* Socials Multi-Platform Publishing Widget */}
           <div className="p-5 border border-line bg-paper-card space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2 text-ink font-semibold text-xs">
-                <Youtube size={16} className="text-rose-600" />
-                <span>YouTube Direct Publishing</span>
+                <Globe size={16} className="text-signal" />
+                <span>Socials Distribution Desk</span>
               </div>
-              <span
-                className={`px-2 py-0.5 text-[10px] font-mono uppercase font-semibold border ${
-                  youtubeVideoId
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                    : "bg-rose-50 text-rose-600 border-rose-200"
-                }`}
-              >
-                {youtubeVideoId ? "Published" : "Draft"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-mono uppercase font-semibold border ${
+                    youtubeVideoId || tiktokPublishId
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                      : "bg-slate-100 text-slate-600 border-slate-300"
+                  }`}
+                >
+                  {youtubeVideoId && tiktokPublishId
+                    ? "Distributed"
+                    : youtubeVideoId
+                    ? "YT Live"
+                    : tiktokPublishId
+                    ? "TT Live"
+                    : "Draft"}
+                </span>
+              </div>
             </div>
 
-            {/* PostHive API Key Status Indicator */}
+            {/* PostersHive API Key Status Indicator */}
             <div className="p-3 bg-white border border-line text-xs space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-ink-muted flex items-center gap-1 font-mono text-[11px]">
@@ -802,7 +967,7 @@ export default function CompletedVideoTab({
               {!hasPostershiveKey && (
                 <div className="pt-1">
                   <p className="text-[11px] text-amber-800 leading-tight">
-                    API key not found for channel.{" "}
+                    API key not configured.{" "}
                     <Link
                       href={`/dashboard/channels/${channelSlug}/edit`}
                       className="text-signal hover:underline font-semibold"
@@ -814,12 +979,12 @@ export default function CompletedVideoTab({
               )}
             </div>
 
-            {/* Live Published Status View */}
+            {/* Live Published Status View: YouTube */}
             {youtubeVideoId && (
-              <div className="p-3.5 bg-emerald-50/70 border border-emerald-300 space-y-2.5 text-xs animate-fade-in">
+              <div className="p-3 bg-emerald-50/70 border border-emerald-300 space-y-2 text-xs animate-fade-in">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-emerald-900 flex items-center gap-1.5">
-                    <CheckCircle2 size={14} className="text-emerald-600" />
+                    <Youtube size={14} className="text-red-600" />
                     <span>Live on YouTube</span>
                   </span>
                   <span className="font-mono text-[10px] text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded">
@@ -828,33 +993,54 @@ export default function CompletedVideoTab({
                 </div>
 
                 {youtubePublishedAt && (
-                  <p className="text-[11px] font-mono text-emerald-700 flex items-center gap-1">
-                    <Calendar size={11} />
+                  <p className="text-[10px] font-mono text-emerald-700 flex items-center gap-1">
+                    <Calendar size={10} />
                     <span>Published: {new Date(youtubePublishedAt).toLocaleDateString()}</span>
                   </p>
                 )}
 
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-0.5">
                   <a
                     href={youtubeUrl || `https://www.youtube.com/watch?v=${youtubeVideoId}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex-1 py-2 px-3 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    className="flex-1 py-1.5 px-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                   >
-                    <Youtube size={14} />
-                    <span>Watch on YouTube</span>
-                    <ExternalLink size={12} className="ml-0.5 opacity-80" />
+                    <Youtube size={13} />
+                    <span>Watch Video</span>
+                    <ExternalLink size={11} className="ml-0.5 opacity-80" />
                   </a>
 
                   <button
                     type="button"
                     onClick={handleCopyYoutubeLink}
-                    className="p-2 border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 transition-colors cursor-pointer"
+                    className="p-1.5 border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 transition-colors cursor-pointer"
                     title="Copy YouTube URL"
                   >
-                    {copiedYoutubeUrl ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    {copiedYoutubeUrl ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Live Published Status View: TikTok */}
+            {tiktokPublishId && (
+              <div className="p-3 bg-slate-900 border border-slate-700 text-white space-y-1.5 text-xs animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                    <span>Live on TikTok</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-300 bg-slate-800 px-2 py-0.5 rounded">
+                    ID: {tiktokPublishId}
+                  </span>
+                </div>
+                {tiktokPublishedAt && (
+                  <p className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                    <Calendar size={10} />
+                    <span>Published: {new Date(tiktokPublishedAt).toLocaleDateString()}</span>
+                  </p>
+                )}
               </div>
             )}
 
@@ -865,26 +1051,26 @@ export default function CompletedVideoTab({
               onClick={openPublishModal}
               className={`w-full py-2.5 px-4 rounded-none font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                 hasMaster
-                  ? youtubeVideoId
+                  ? youtubeVideoId || tiktokPublishId
                     ? "bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow-xs"
-                    : "bg-red-600 hover:bg-red-700 text-white shadow-xs"
+                    : "bg-signal hover:bg-signal-hover text-white shadow-xs"
                   : "bg-ink/10 text-ink-muted cursor-not-allowed opacity-50"
               }`}
             >
               {isPublishing ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  <span>Uploading to YouTube via PostHive...</span>
+                  <span>Publishing via PostersHive...</span>
                 </>
-              ) : youtubeVideoId ? (
+              ) : youtubeVideoId || tiktokPublishId ? (
                 <>
-                  <Youtube size={14} className="text-red-500" />
-                  <span>Re-upload / Update on YouTube</span>
+                  <RotateCcw size={14} />
+                  <span>Re-publish / Schedule on Socials</span>
                 </>
               ) : (
                 <>
-                  <Youtube size={14} />
-                  <span>Upload to YouTube</span>
+                  <Send size={14} />
+                  <span>Publish / Schedule on Socials</span>
                 </>
               )}
             </button>
@@ -923,7 +1109,7 @@ export default function CompletedVideoTab({
         </div>
       </div>
 
-      {/* YouTube Publish Confirmation Modal */}
+      {/* Multi-Platform Publish & Schedule Confirmation Modal */}
       {mounted && publishModalOpen && createPortal(
         <div
           className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
@@ -934,18 +1120,19 @@ export default function CompletedVideoTab({
             }
           }}
         >
-          <div className="relative w-full max-w-xl bg-paper border border-line p-6 sm:p-7 shadow-2xl space-y-5 animate-scale-in text-ink my-auto max-h-[90vh] flex flex-col">
+          <div className="relative w-full max-w-xl bg-paper border border-line p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in text-ink my-auto max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-red-50 text-red-600 rounded">
-                  <Youtube size={20} />
+                <div className="p-2 bg-signal/10 text-signal rounded">
+                  <Share2 size={20} />
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-display font-semibold text-ink">
-                    Publish Master Video to YouTube
+                    Publish & Schedule Video
                   </h3>
                   <p className="text-xs text-ink-muted">
-                    Automated direct upload via PostersHive API pipeline
+                    Automated multi-platform distribution via PostersHive API
                   </p>
                 </div>
               </div>
@@ -981,7 +1168,7 @@ export default function CompletedVideoTab({
                   </span>
                   {hasThumbnail ? (
                     <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                      <Check size={12} /> Custom Cover Ready
+                      <Check size={12} /> Cover Ready
                     </span>
                   ) : isShort ? (
                     <span className="text-emerald-700 font-semibold flex items-center gap-1">
@@ -989,26 +1176,92 @@ export default function CompletedVideoTab({
                     </span>
                   ) : (
                     <span className="text-rose-600 font-semibold flex items-center gap-1">
-                      <X size={12} /> Missing Thumbnail
+                      <X size={12} /> Required for YouTube
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* YouTube Title */}
+              {/* Step 1: Target Platforms Selection */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-ink/90">
+                    Target Platforms *
+                  </label>
+                  <span className="text-[10px] text-ink-muted">
+                    {isLoadingPlatforms ? "Detecting connected platforms..." : "Select one or both"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* YouTube Option */}
+                  <div
+                    onClick={() => togglePlatform("youtube")}
+                    className={`p-3 border cursor-pointer transition-all flex items-start gap-2.5 select-none ${
+                      selectedPlatforms.includes("youtube")
+                        ? "border-red-500 bg-red-50/50"
+                        : "border-line bg-paper-card hover:border-line-dark"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPlatforms.includes("youtube")}
+                      onChange={() => {}} // Handled by container
+                      className="mt-0.5 accent-red-600 cursor-pointer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-ink">
+                        <Youtube size={14} className="text-red-600 shrink-0" />
+                        <span>YouTube</span>
+                      </div>
+                      <p className="text-[11px] text-ink-muted mt-0.5">
+                        {isShort ? "YouTube Shorts" : "Longform Video"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* TikTok Option */}
+                  <div
+                    onClick={() => togglePlatform("tiktok")}
+                    className={`p-3 border cursor-pointer transition-all flex items-start gap-2.5 select-none ${
+                      selectedPlatforms.includes("tiktok")
+                        ? "border-slate-800 bg-slate-100"
+                        : "border-line bg-paper-card hover:border-line-dark"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPlatforms.includes("tiktok")}
+                      onChange={() => {}} // Handled by container
+                      className="mt-0.5 accent-slate-900 cursor-pointer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-ink">
+                        <Smartphone size={14} className="text-slate-800 shrink-0" />
+                        <span>TikTok</span>
+                      </div>
+                      <p className="text-[11px] text-ink-muted mt-0.5">
+                        Shorts & Vertical Video
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Title */}
               <div>
-                <label className="block text-xs font-semibold text-ink/80 mb-1" htmlFor="yt-post-title">
-                  YouTube Video Title *
+                <label className="block text-xs font-semibold text-ink/80 mb-1" htmlFor="post-title">
+                  Video Title / Headline *
                 </label>
                 <input
-                  id="yt-post-title"
+                  id="post-title"
                   type="text"
                   required
                   maxLength={100}
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
-                  placeholder="Enter compelling YouTube title (max 100 chars)"
-                  className="w-full h-10 px-3.5 border border-line-dark bg-white text-xs text-ink outline-none focus:border-signal"
+                  placeholder="Enter compelling video title (max 100 chars)"
+                  className="w-full h-9 px-3 border border-line-dark bg-white text-xs text-ink outline-none focus:border-signal"
                 />
                 <div className="flex justify-end mt-1">
                   <span className="text-[10px] font-mono text-ink-muted">
@@ -1017,27 +1270,135 @@ export default function CompletedVideoTab({
                 </div>
               </div>
 
-              {/* YouTube Description (Synced with Story Description) */}
+              {/* Description */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-ink/80" htmlFor="yt-post-description">
-                    YouTube Video Description
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-ink/80" htmlFor="post-description">
+                    Description & Caption
                   </label>
                   <span className="text-[10px] font-mono text-ink-muted">
                     {customDescription.length} chars
                   </span>
                 </div>
                 <textarea
-                  id="yt-post-description"
-                  rows={6}
+                  id="post-description"
+                  rows={4}
                   value={customDescription}
                   onChange={(e) => {
                     setCustomDescription(e.target.value);
                     setDescText(e.target.value);
                   }}
-                  placeholder="Video description to be published with YouTube video..."
-                  className="w-full p-3 border border-line-dark bg-white text-xs text-ink leading-relaxed outline-none focus:border-signal font-sans"
+                  placeholder="Video description for YouTube and caption for TikTok..."
+                  className="w-full p-2.5 border border-line-dark bg-white text-xs text-ink leading-relaxed outline-none focus:border-signal font-sans"
                 />
+              </div>
+
+              {/* Channel & Post Tags (Crucial Feature) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="post-tags">
+                    <Tag size={12} className="text-signal" />
+                    <span>Channel & Post Tags</span>
+                  </label>
+                  <span className="text-[10px] text-ink-muted">
+                    Placed in YouTube tags & TikTok hashtags
+                  </span>
+                </div>
+                <input
+                  id="post-tags"
+                  type="text"
+                  value={postTags}
+                  onChange={(e) => setPostTags(e.target.value)}
+                  placeholder="e.g. faceless, storytime, facts, viral, automation"
+                  className="w-full h-9 px-3 border border-line-dark bg-white text-xs text-ink font-mono outline-none focus:border-signal"
+                />
+                <p className="text-[10px] text-ink-muted">
+                  Comma-separated keywords. Auto-populated from your channel tags.
+                </p>
+              </div>
+
+              {/* Scheduling & YouTube Privacy Section */}
+              <div className="p-3.5 bg-paper-card border border-line space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={15} className="text-signal" />
+                    <span className="text-xs font-semibold text-ink">Schedule Publication</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isScheduled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsScheduled(checked);
+                        if (checked && !scheduledDateTime) {
+                          setScheduledDateTime(getDefaultScheduledDate());
+                        }
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-signal"></div>
+                  </label>
+                </div>
+
+                {isScheduled && (
+                  <div className="pt-2 border-t border-line/60 space-y-3 animate-fade-in">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-ink-muted mb-1">
+                        Select Target Date & Time (Local Time) *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        min={getMinScheduledDate()}
+                        value={scheduledDateTime}
+                        onChange={(e) => setScheduledDateTime(e.target.value)}
+                        className="w-full h-9 px-3 border border-line-dark bg-white text-xs font-mono text-ink outline-none focus:border-signal"
+                      />
+                    </div>
+
+                    {/* YouTube Specific Privacy Options */}
+                    {selectedPlatforms.includes("youtube") && (
+                      <div className="p-2.5 bg-white border border-line space-y-2 text-xs">
+                        <div className="flex items-center gap-1.5 font-semibold text-ink text-[11px]">
+                          <Lock size={12} className="text-amber-600" />
+                          <span>YouTube Scheduled Privacy Setting</span>
+                        </div>
+
+                        <label className="flex items-start gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={youtubeUploadPrivate}
+                            onChange={(e) => setYoutubeUploadPrivate(e.target.checked)}
+                            className="mt-0.5 accent-signal cursor-pointer"
+                          />
+                          <div className="text-[11px] text-ink leading-tight">
+                            <span className="font-semibold block">Upload to YouTube and leave as Private</span>
+                            <span className="text-ink-muted text-[10px]">
+                              Recommended. The video file is uploaded immediately and remains completely Private on YouTube.
+                            </span>
+                          </div>
+                        </label>
+
+                        {!youtubeUploadPrivate && (
+                          <div className="pt-1">
+                            <label className="block text-[10px] uppercase font-mono text-ink-muted mb-1">
+                              Status on YouTube
+                            </label>
+                            <select
+                              value={youtubePrivacy}
+                              onChange={(e) => setYoutubePrivacy(e.target.value)}
+                              className="w-full h-8 px-2 border border-line bg-paper-card text-xs text-ink outline-none"
+                            >
+                              <option value="private">Private (Only you can view)</option>
+                              <option value="unlisted">Unlisted (Anyone with link can view)</option>
+                              <option value="public">Public (Published immediately)</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* PostersHive Key warning if missing */}
@@ -1047,7 +1408,7 @@ export default function CompletedVideoTab({
                   <div>
                     <span className="font-semibold block">PostersHive API Key is missing</span>
                     <p className="text-[11px] mt-0.5 text-amber-800">
-                      You must add your PostersHive API Key to this channel before publishing.{" "}
+                      You must configure your PostersHive API Key in channel settings before publishing.{" "}
                       <Link
                         href={`/dashboard/channels/${channelSlug}/edit`}
                         target="_blank"
@@ -1064,7 +1425,7 @@ export default function CompletedVideoTab({
               {publishError && (
                 <div className="p-3 bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2">
                   <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-600" />
-                  <span>{publishError}</span>
+                  <span className="leading-snug">{publishError}</span>
                 </div>
               )}
 
@@ -1076,7 +1437,7 @@ export default function CompletedVideoTab({
               )}
 
               {/* Modal Action Buttons */}
-              <div className="flex items-center justify-between pt-4 border-t border-line mt-auto">
+              <div className="flex items-center justify-between pt-3 border-t border-line mt-auto">
                 <button
                   type="button"
                   disabled={isPublishing}
@@ -1088,18 +1449,27 @@ export default function CompletedVideoTab({
 
                 <button
                   type="submit"
-                  disabled={isPublishing || !hasMaster || !hasPostershiveKey || !customTitle.trim()}
-                  className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-red-600/20 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                  disabled={isPublishing || !hasMaster || !hasPostershiveKey || !customTitle.trim() || selectedPlatforms.length === 0}
+                  className="px-5 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer inline-flex items-center gap-1.5"
                 >
                   {isPublishing ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      <span>Uploading to YouTube...</span>
+                      <span>Processing Distribution...</span>
+                    </>
+                  ) : isScheduled ? (
+                    <>
+                      <Calendar size={13} />
+                      <span>
+                        Schedule on {selectedPlatforms.map((p) => (p === "youtube" ? "YouTube" : "TikTok")).join(" & ")}
+                      </span>
                     </>
                   ) : (
                     <>
                       <Send size={13} />
-                      <span>Dispatch to YouTube</span>
+                      <span>
+                        Publish to {selectedPlatforms.map((p) => (p === "youtube" ? "YouTube" : "TikTok")).join(" & ")}
+                      </span>
                     </>
                   )}
                 </button>

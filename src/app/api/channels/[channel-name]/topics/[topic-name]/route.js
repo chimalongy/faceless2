@@ -29,6 +29,7 @@ export async function GET(request, { params }) {
         c.thumbnail_theme AS "channelThumbnailTheme",
         c.postershive_api AS "postershiveApi",
         c.script_structure AS "channelScriptStructure",
+        c.channel_tags AS "channelTags",
         c.subtitles_enabled AS "channelSubtitlesEnabled",
         c.subtitles_shorts AS "channelSubtitlesShorts",
         c.subtitles_longform AS "channelSubtitlesLongform",
@@ -57,6 +58,9 @@ export async function GET(request, { params }) {
         t.youtube_video_id AS "youtubeVideoId",
         t.youtube_url AS "youtubeUrl",
         t.youtube_published_at AS "youtubePublishedAt",
+        t.tiktok_publish_id AS "tiktokPublishId",
+        t.tiktok_published_at AS "tiktokPublishedAt",
+        t.published_platforms AS "publishedPlatforms",
         t.created_at AS "createdAt",
         t.updated_at AS "updatedAt"
       FROM topics t
@@ -173,6 +177,21 @@ export async function PUT(request, { params }) {
       ? (body.youtubePublishedAt || body.youtube_published_at || null)
       : undefined;
 
+    const hasTiktokPublishId = "tiktokPublishId" in body || "tiktok_publish_id" in body;
+    const tiktokPublishIdVal = hasTiktokPublishId
+      ? (body.tiktokPublishId || body.tiktok_publish_id || null)
+      : undefined;
+
+    const hasTiktokPublishedAt = "tiktokPublishedAt" in body || "tiktok_published_at" in body;
+    const tiktokPublishedAtVal = hasTiktokPublishedAt
+      ? (body.tiktokPublishedAt || body.tiktok_published_at || null)
+      : undefined;
+
+    const hasPublishedPlatforms = "publishedPlatforms" in body || "published_platforms" in body;
+    const publishedPlatformsVal = hasPublishedPlatforms
+      ? JSON.stringify(body.publishedPlatforms || body.published_platforms || {})
+      : undefined;
+
     const updated = await sql`
       UPDATE topics
       SET
@@ -189,6 +208,9 @@ export async function PUT(request, { params }) {
         youtube_video_id = CASE WHEN ${hasYoutubeVideoId} THEN ${youtubeVideoIdVal} ELSE youtube_video_id END,
         youtube_url = CASE WHEN ${hasYoutubeUrl} THEN ${youtubeUrlVal} ELSE youtube_url END,
         youtube_published_at = CASE WHEN ${hasYoutubePublishedAt} THEN ${youtubePublishedAtVal} ELSE youtube_published_at END,
+        tiktok_publish_id = CASE WHEN ${hasTiktokPublishId} THEN ${tiktokPublishIdVal} ELSE tiktok_publish_id END,
+        tiktok_published_at = CASE WHEN ${hasTiktokPublishedAt} THEN ${tiktokPublishedAtVal} ELSE tiktok_published_at END,
+        published_platforms = CASE WHEN ${hasPublishedPlatforms} THEN ${publishedPlatformsVal}::jsonb ELSE published_platforms END,
         updated_at = NOW()
       WHERE channel_id = ${channelId} AND slug = ${topicSlug}
       RETURNING *;

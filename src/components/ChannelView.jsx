@@ -343,6 +343,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
         handle: channelProfile?.handle || `@${channelSlug}`,
         channel_url: channelProfile?.channelUrl || `https://youtube.com/@${channelSlug}`,
         tagline: channelProfile?.tagline || "",
+        channel_tags: channelProfile?.channelTags || channelProfile?.channel_tags || "",
         description: channelProfile?.description || "",
         default_voice: channelProfile?.defaultVoice || "af_heart",
         status: channelProfile?.status || "Active",
@@ -616,6 +617,22 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
             <p className="text-xs sm:text-sm text-ink-muted mt-1 max-w-2xl">
               {channelProfile?.tagline || channelProfile?.description || "Automated long-form documentary production desk."}
             </p>
+            {Boolean(channelProfile?.channelTags || channelProfile?.channel_tags) && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1.5">
+                {(channelProfile.channelTags || channelProfile.channel_tags)
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+                  .map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 text-[10px] font-mono bg-paper text-ink-muted border border-line"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0 w-full sm:w-auto">

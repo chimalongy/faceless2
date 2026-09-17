@@ -38,6 +38,7 @@ export async function GET() {
         default_voice AS "defaultVoice",
         postershive_api AS "postershiveApi",
         script_structure AS "scriptStructure",
+        channel_tags AS "channelTags",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -101,6 +102,7 @@ export async function POST(request) {
     const thumbnailTheme = body.thumbnailTheme?.trim() || "";
     const audioTheme = body.audioTheme?.trim() || "";
     const postershiveApi = body.postershiveApi?.trim() || body.postershive_api?.trim() || null;
+    const channelTags = body.channelTags !== undefined ? body.channelTags.trim() : (body.channel_tags !== undefined ? body.channel_tags.trim() : "");
     const status = body.status || "Active";
 
     let scriptStructure = null;
@@ -140,6 +142,7 @@ export async function POST(request) {
         default_voice,
         postershive_api,
         script_structure,
+        channel_tags,
         status
       ) VALUES (
         ${name},
@@ -163,6 +166,7 @@ export async function POST(request) {
         ${body.defaultVoice || 'af_heart'},
         ${postershiveApi},
         ${scriptStructure},
+        ${channelTags},
         ${status}
       )
       ON CONFLICT (slug) DO UPDATE SET
@@ -186,6 +190,7 @@ export async function POST(request) {
         default_voice = EXCLUDED.default_voice,
         postershive_api = EXCLUDED.postershive_api,
         script_structure = COALESCE(EXCLUDED.script_structure, channels.script_structure),
+        channel_tags = EXCLUDED.channel_tags,
         status = EXCLUDED.status,
         updated_at = NOW()
       RETURNING *;
