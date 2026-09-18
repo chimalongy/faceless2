@@ -16,11 +16,17 @@ import {
   Sparkles,
   Video,
   Copy,
-  Check
+  Check,
+  Smartphone,
+  CheckCircle2,
+  Youtube,
+  Scissors,
+  Image as ImageIcon,
+  FileText
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 
 function toTopicSlug(title) {
@@ -32,6 +38,7 @@ function toTopicSlug(title) {
 }
 
 export default function ContentPillarDetail() {
+  const router = useRouter();
   const params = useParams();
   const rawChannelSlug = params?.["channel-name"] || "";
   const rawPillarSlug = params?.["content-pillar-name"] || "";
@@ -42,13 +49,15 @@ export default function ContentPillarDetail() {
   const [loading, setLoading] = useState(true);
   const [pillar, setPillar] = useState(null);
   const [topics, setTopics] = useState([]);
-  const [activeTab, setActiveTab] = useState("topics");
+  const [activeTab, setActiveTab] = useState("longform"); // 'longform' | 'shorts' | 'completed'
   const [mounted, setMounted] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
+  const [extractingShortSlug, setExtractingShortSlug] = useState(null);
 
   // Modals / forms
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [topicTitles, setTopicTitles] = useState("");
+  const [newTopicVideoType, setNewTopicVideoType] = useState("longform");
   const [creatingTopics, setCreatingTopics] = useState(false);
 
   useEffect(() => {
@@ -82,7 +91,20 @@ export default function ContentPillarDetail() {
     loadData();
   }, [channelSlug, pillarSlug]);
 
-  function handleOpenCreateTopic() {
+  const longformTopics = useMemo(() => {
+    return topics.filter((t) => t.videoType !== "short");
+  }, [topics]);
+
+  const shortsTopics = useMemo(() => {
+    return topics.filter((t) => t.videoType === "short");
+  }, [topics]);
+
+  const completedVideos = useMemo(() => {
+    return topics.filter((t) => t.stage === "Completed" || t.masterVideoUrl);
+  }, [topics]);
+
+  function handleOpenCreateTopic(type) {
+    setNewTopicVideoType(type || (activeTab === "shorts" ? "short" : "longform"));
     setTopicTitles("");
     setTopicModalOpen(true);
   }
@@ -101,6 +123,8 @@ export default function ContentPillarDetail() {
     const payload = {
       titles: lines,
       pillarSlug: pillarSlug,
+      videoType: newTopicVideoType,
+      aspectRatio: newTopicVideoType === "short" ? "9:16" : "16:9",
     };
 
     try {
@@ -110,6 +134,11 @@ export default function ContentPillarDetail() {
         body: JSON.stringify(payload),
       });
       await loadData();
+      if (newTopicVideoType === "short") {
+        setActiveTab("shorts");
+      } else {
+        setActiveTab("longform");
+      }
     } catch {
       // Ignore
     } finally {
@@ -121,6 +150,7 @@ export default function ContentPillarDetail() {
   async function handleDeleteTopic(topicSlugToDelete, e) {
     e.stopPropagation();
     e.preventDefault();
+    if (!confirm(`Are you sure you want to delete this topic?`)) return;
     try {
       await fetch(`/api/channels/${channelSlug}/topics/${topicSlugToDelete}`, {
         method: "DELETE",
@@ -128,6 +158,31 @@ export default function ContentPillarDetail() {
       await loadData();
     } catch {
       // Ignore
+    }
+  }
+
+  async function handleExtractShort(topicSlug, e) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (!topicSlug || extractingShortSlug) return;
+    setExtractingShortSlug(topicSlug);
+    try {
+      const res = await fetch(
+        `/api/channels/${channelSlug}/topics/${topicSlug}/extract-short`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to extract Short");
+      }
+      await loadData();
+      setActiveTab("shorts");
+    } catch (err) {
+      alert("Error extracting short: " + err.message);
+    } finally {
+      setExtractingShortSlug(null);
     }
   }
 
@@ -150,8 +205,6 @@ export default function ContentPillarDetail() {
       setTimeout(() => setCopiedJson(false), 2000);
     } catch {}
   }
-
-  const completedVideos = topics.filter((t) => t.stage === "Completed" || t.masterVideoUrl);
 
   const pillarName = pillar?.name || pillarSlug.split("-").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
 
@@ -177,13 +230,18 @@ export default function ContentPillarDetail() {
             <h1 className="text-2xl sm:text-3xl font-display font-semibold text-ink tracking-tight">
               {pillarName}
             </h1>
+            {pillar?.description && (
+              <p className="text-xs text-ink-muted max-w-2xl mt-1 leading-relaxed">
+                {pillar.description}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={handleCopyPillarJson}
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer"
               title="Copy content pillar JSON schema"
             >
               {copiedJson ? (
@@ -200,8 +258,8 @@ export default function ContentPillarDetail() {
             </button>
             <button
               type="button"
-              onClick={handleOpenCreateTopic}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+              onClick={() => handleOpenCreateTopic(activeTab === "shorts" ? "short" : "longform")}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
             >
               <Plus size={15} /> New Content Topic
             </button>
@@ -217,91 +275,379 @@ export default function ContentPillarDetail() {
       ) : (
         <>
           {/* Navigation Tabs */}
-          <div className="flex items-center gap-1 border-b border-line">
+          <div className="flex items-center gap-1 sm:gap-2 border-b border-line bg-paper-card px-2 pt-2 overflow-x-auto scrollbar-none">
             <button
               type="button"
-              onClick={() => setActiveTab("topics")}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-                activeTab === "topics"
-                  ? "border-signal text-signal"
-                  : "border-transparent text-ink-muted hover:text-ink"
+              onClick={() => setActiveTab("longform")}
+              className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                activeTab === "longform"
+                  ? "border-signal text-signal font-bold bg-signal/5"
+                  : "border-transparent text-ink-muted hover:text-ink hover:border-line"
               }`}
             >
-              Story Topics ({topics.length})
+              <Film size={14} />
+              <span>Long Form</span>
+              <span className="text-[11px] font-mono px-1.5 py-0.5 bg-paper border border-line rounded-xs">
+                {longformTopics.length}
+              </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("shorts")}
+              className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                activeTab === "shorts"
+                  ? "border-signal text-signal font-bold bg-signal/5"
+                  : "border-transparent text-ink-muted hover:text-ink hover:border-line"
+              }`}
+            >
+              <Smartphone size={14} className="text-rose-500" />
+              <span>Shorts</span>
+              <span className="text-[11px] font-mono px-1.5 py-0.5 bg-paper border border-line rounded-xs">
+                {shortsTopics.length}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setActiveTab("completed")}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+              className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 activeTab === "completed"
-                  ? "border-signal text-signal"
-                  : "border-transparent text-ink-muted hover:text-ink"
+                  ? "border-signal text-signal font-bold bg-signal/5"
+                  : "border-transparent text-ink-muted hover:text-ink hover:border-line"
               }`}
             >
-              Master Render Archive ({completedVideos.length})
+              <Video size={14} />
+              <span>Master Archive</span>
+              <span className="text-[11px] font-mono px-1.5 py-0.5 bg-paper border border-line rounded-xs">
+                {completedVideos.length}
+              </span>
             </button>
           </div>
 
-          {/* TAB 1: TOPICS LIST */}
-          {activeTab === "topics" && (
+          {/* TAB 1: LONG FORM TOPICS */}
+          {activeTab === "longform" && (
             <div className="space-y-4">
-              {topics.length === 0 ? (
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+                    <Film size={15} className="text-signal" />
+                    <span>Long Form Topics ({longformTopics.length})</span>
+                  </h3>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    16:9 widescreen video topics designed for full-length documentary and storytelling episodes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateTopic("longform")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus size={13} /> Add Long Form Topic
+                </button>
+              </div>
+
+              {longformTopics.length === 0 ? (
                 <div className="p-12 border border-line bg-paper-card text-center space-y-3">
                   <Film size={28} className="text-signal/60 mx-auto" />
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-ink">No story topics under this pillar yet</h3>
+                    <h3 className="text-sm font-semibold text-ink">No long form topics under this pillar yet</h3>
                     <p className="text-xs text-ink-muted max-w-sm mx-auto">
-                      Add your first content topic to start scripting scenes and rendering master videos.
+                      Create your first 16:9 widescreen topic to start scripting scenes and rendering master video episodes.
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={handleOpenCreateTopic}
+                    onClick={() => handleOpenCreateTopic("longform")}
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal text-white text-xs font-semibold cursor-pointer"
                   >
-                    <Plus size={14} /> New Content Topic
+                    <Plus size={14} /> Add Long Form Topic
                   </button>
                 </div>
               ) : (
                 <div className="divide-y divide-line border border-line bg-paper-card">
-                  {topics.map((topic) => (
-                    <div
-                      key={topic.slug}
-                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-ink/[0.015] transition-colors"
-                    >
-                      <div className="space-y-1 flex-1">
-                        <Link
-                          href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
-                          className="text-sm sm:text-base font-semibold text-ink hover:text-signal transition-colors block"
-                        >
-                          {topic.title}
-                        </Link>
-                      </div>
+                  {longformTopics.map((topic) => {
+                    const hasMaster = Boolean(topic.masterVideoUrl);
+                    const hasThumb = Boolean(topic.thumbnailUrl);
+                    const hasDesc = Boolean(topic.storyDescription);
+                    const hasScript = Boolean(topic.scriptContent);
+                    const isPosted = Boolean(topic.youtubeUrl || topic.youtubeVideoId);
+                    const isCompleted = hasMaster || topic.stage === "Completed";
 
-                      <div className="flex items-center gap-3 shrink-0">
-                        <Link
-                          href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer"
-                        >
-                          Open Studio <ChevronRight size={13} />
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteTopic(topic.slug, e)}
-                          className="p-1.5 text-ink-muted/50 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                          title="Delete topic"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                    return (
+                      <div
+                        key={topic.slug}
+                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-ink/[0.015] transition-colors"
+                      >
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-300 uppercase">
+                              16:9 Longform
+                            </span>
+
+                            {isPosted ? (
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-rose-500/10 text-rose-700 border border-rose-500/20 uppercase flex items-center gap-1">
+                                <Youtube size={11} /> Posted
+                              </span>
+                            ) : isCompleted ? (
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 uppercase">
+                                Completed
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-amber-500/10 text-amber-700 border border-amber-500/20 uppercase">
+                                In Progress
+                              </span>
+                            )}
+                          </div>
+
+                          <Link
+                            href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
+                            className="text-sm sm:text-base font-semibold text-ink hover:text-signal transition-colors block break-words"
+                          >
+                            {topic.title}
+                          </Link>
+
+                          {/* Completion checklist indicators */}
+                          <div className="flex items-center gap-3 text-xs font-mono pt-1">
+                            <span
+                              className={`flex items-center gap-1 ${
+                                hasMaster ? "text-emerald-700" : "text-ink-muted/70"
+                              }`}
+                              title={hasMaster ? "Master Video Ready" : "Master Video Not Ready"}
+                            >
+                              <Video size={13} />
+                              <span className="text-[11px]">{hasMaster ? "Video Ready" : "No Video"}</span>
+                            </span>
+
+                            <span
+                              className={`flex items-center gap-1 ${
+                                hasThumb ? "text-emerald-700" : "text-ink-muted/70"
+                              }`}
+                              title={hasThumb ? "Thumbnail Ready" : "Thumbnail Missing"}
+                            >
+                              <ImageIcon size={13} />
+                              <span className="text-[11px]">{hasThumb ? "Thumbnail Ready" : "No Thumbnail"}</span>
+                            </span>
+
+                            <span
+                              className={`flex items-center gap-1 ${
+                                hasDesc ? "text-emerald-700" : "text-ink-muted/70"
+                              }`}
+                              title={hasDesc ? "Story Description Ready" : "Story Description Missing"}
+                            >
+                              <FileText size={13} />
+                              <span className="text-[11px]">{hasDesc ? "Description Ready" : "No Description"}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-line/40">
+                          {topic.youtubeUrl && (
+                            <a
+                              href={topic.youtubeUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-line bg-paper-card text-rose-700 hover:border-rose-300 text-xs font-semibold transition-all cursor-pointer"
+                              title="Watch on YouTube"
+                            >
+                              <Youtube size={13} /> Watch
+                            </a>
+                          )}
+
+                          {hasScript && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleExtractShort(topic.slug, e)}
+                              disabled={extractingShortSlug === topic.slug}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-line bg-paper-card text-ink hover:text-signal hover:border-signal/40 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                              title="Extract a 45s viral Short from this script"
+                            >
+                              {extractingShortSlug === topic.slug ? (
+                                <>
+                                  <Loader2 size={13} className="animate-spin text-signal" />
+                                  <span>Extracting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Scissors size={13} className="text-signal" />
+                                  <span>Extract Short</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          <Link
+                            href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer"
+                          >
+                            Open Studio <ChevronRight size={13} />
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTopic(topic.slug, e)}
+                            className="p-1.5 text-ink-muted/50 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                            title="Delete topic"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 2: COMPLETED VIDEOS */}
+          {/* TAB 2: SHORTS TOPICS */}
+          {activeTab === "shorts" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+                    <Smartphone size={15} className="text-rose-500" />
+                    <span>Vertical Shorts ({shortsTopics.length})</span>
+                  </h3>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    9:16 vertical shortform topics tailored for high-retention YouTube Shorts and TikTok feeds.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateTopic("short")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus size={13} /> Add Short Topic
+                </button>
+              </div>
+
+              {shortsTopics.length === 0 ? (
+                <div className="p-12 border border-line bg-paper-card text-center space-y-3">
+                  <Smartphone size={28} className="text-rose-500/60 mx-auto" />
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-ink">No vertical shorts under this pillar yet</h3>
+                    <p className="text-xs text-ink-muted max-w-sm mx-auto">
+                      Create a dedicated 9:16 short topic, or extract one from any scripted longform topic above.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateTopic("short")}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal text-white text-xs font-semibold cursor-pointer"
+                  >
+                    <Plus size={14} /> Add First Short Topic
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-line border border-line bg-paper-card">
+                  {shortsTopics.map((topic) => {
+                    const hasMaster = Boolean(topic.masterVideoUrl);
+                    const hasDesc = Boolean(topic.storyDescription);
+                    const isPosted = Boolean(topic.youtubeUrl || topic.youtubeVideoId || topic.tiktokPublishId);
+                    const isCompleted = hasMaster || topic.stage === "Completed";
+
+                    return (
+                      <div
+                        key={topic.slug}
+                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-ink/[0.015] transition-colors"
+                      >
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 uppercase flex items-center gap-1">
+                              <Smartphone size={10} /> 9:16 Short
+                            </span>
+
+                            {topic.parentTopicId && (
+                              <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2 py-0.5 border border-purple-200">
+                                Extracted from Longform
+                              </span>
+                            )}
+
+                            {isPosted ? (
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-rose-500/10 text-rose-700 border border-rose-500/20 uppercase flex items-center gap-1">
+                                <Youtube size={11} /> Posted
+                              </span>
+                            ) : isCompleted ? (
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 uppercase">
+                                Completed
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-amber-500/10 text-amber-700 border border-amber-500/20 uppercase">
+                                In Progress
+                              </span>
+                            )}
+                          </div>
+
+                          <Link
+                            href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
+                            className="text-sm sm:text-base font-semibold text-ink hover:text-signal transition-colors block break-words"
+                          >
+                            {topic.title}
+                          </Link>
+
+                          {/* Completion checklist indicators */}
+                          <div className="flex items-center gap-3 text-xs font-mono pt-1">
+                            <span
+                              className={`flex items-center gap-1 ${
+                                hasMaster ? "text-emerald-700" : "text-ink-muted/70"
+                              }`}
+                              title={hasMaster ? "Master Short Ready" : "Short Video Not Compiled"}
+                            >
+                              <Video size={13} />
+                              <span className="text-[11px]">{hasMaster ? "Short Master Ready" : "No Master"}</span>
+                            </span>
+
+                            <span
+                              className={`flex items-center gap-1 ${
+                                hasDesc ? "text-emerald-700" : "text-ink-muted/70"
+                              }`}
+                              title={hasDesc ? "Description / Caption Ready" : "No Caption"}
+                            >
+                              <FileText size={13} />
+                              <span className="text-[11px]">{hasDesc ? "Caption Ready" : "No Caption"}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-line/40">
+                          {topic.youtubeUrl && (
+                            <a
+                              href={topic.youtubeUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-line bg-paper-card text-rose-700 hover:border-rose-300 text-xs font-semibold transition-all cursor-pointer"
+                              title="Watch Short on YouTube"
+                            >
+                              <Youtube size={13} /> Watch
+                            </a>
+                          )}
+
+                          <Link
+                            href={`/dashboard/channels/${channelSlug}/content_pillar/${pillarSlug}/topic/${topic.slug}`}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold transition-all cursor-pointer"
+                          >
+                            Open Studio <ChevronRight size={13} />
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTopic(topic.slug, e)}
+                            className="p-1.5 text-ink-muted/50 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                            title="Delete topic"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: COMPLETED VIDEOS */}
           {activeTab === "completed" && (
             <div>
               {completedVideos.length === 0 ? (
@@ -319,9 +665,14 @@ export default function ContentPillarDetail() {
                       className="border border-line bg-paper-card overflow-hidden hover:border-signal/40 transition-all flex flex-col justify-between"
                     >
                       <div className="p-4 space-y-2">
-                        <span className="px-2 py-0.5 text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 uppercase">
-                          Master Ready
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 uppercase">
+                            Master Ready
+                          </span>
+                          <span className="px-2 py-0.5 text-[10px] font-mono text-ink-muted border border-line uppercase">
+                            {video.videoType === "short" ? "9:16 Short" : "16:9 Longform"}
+                          </span>
+                        </div>
                         <h4 className="text-sm font-semibold text-ink line-clamp-2">
                           {video.title}
                         </h4>
@@ -353,12 +704,12 @@ export default function ContentPillarDetail() {
           className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
           style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", zIndex: 99999 }}
         >
-          <div className="relative w-full max-w-lg bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-6 animate-scale-in text-ink my-auto">
+          <div className="relative w-full max-w-lg bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-5 animate-scale-in text-ink my-auto">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2">
                 <Film size={18} className="text-signal" />
                 <h3 className="text-lg font-display font-semibold text-ink">
-                  New Content Topic
+                  New {newTopicVideoType === "short" ? "Short" : "Long Form"} Topic
                 </h3>
               </div>
               <button
@@ -371,12 +722,44 @@ export default function ContentPillarDetail() {
             </div>
 
             <form onSubmit={handleSaveTopic} className="space-y-4 text-xs">
+              {/* Video Format Choice */}
+              <div>
+                <label className="block font-semibold text-ink/80 mb-1.5">
+                  Target Format
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setNewTopicVideoType("longform")}
+                    className={`p-2.5 border cursor-pointer flex items-center gap-2 select-none transition-colors ${
+                      newTopicVideoType === "longform"
+                        ? "border-signal bg-signal/5 font-semibold text-signal"
+                        : "border-line bg-paper hover:border-line-dark text-ink"
+                    }`}
+                  >
+                    <Film size={14} />
+                    <span>Long Form (16:9)</span>
+                  </div>
+
+                  <div
+                    onClick={() => setNewTopicVideoType("short")}
+                    className={`p-2.5 border cursor-pointer flex items-center gap-2 select-none transition-colors ${
+                      newTopicVideoType === "short"
+                        ? "border-rose-500 bg-rose-50 font-semibold text-rose-700"
+                        : "border-line bg-paper hover:border-line-dark text-ink"
+                    }`}
+                  >
+                    <Smartphone size={14} />
+                    <span>Vertical Short (9:16)</span>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-semibold text-ink/80 mb-1" htmlFor="pt-titles">
                   Topic Name(s) *
                 </label>
                 <p className="text-[11px] text-ink-muted mb-2">
-                  Enter one or multiple topic names (one per line) to upload multiple topics under this pillar at once.
+                  Enter one or multiple topic names (one per line) to establish multiple topics under this pillar at once.
                 </p>
                 <textarea
                   id="pt-titles"
@@ -408,7 +791,7 @@ export default function ContentPillarDetail() {
                       ? "Creating Topics..."
                       : topicTitles.trim().split(/\r?\n/).filter(Boolean).length > 1
                       ? `Create ${topicTitles.trim().split(/\r?\n/).filter(Boolean).length} Topics`
-                      : "Create Topic"}
+                      : `Create ${newTopicVideoType === "short" ? "Short" : "Long Form"} Topic`}
                   </span>
                 </button>
               </div>
