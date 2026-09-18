@@ -197,27 +197,33 @@ function renderBannedPhrases(banned_phrases) {
  */
 const SECTION_BUILDERS = [
   {
+    key: "tone_and_voice",
     heading: "TONE & VOICE",
     build: (structure) => pickAliasedValue(structure, "tone_and_voice"),
   },
   {
+    key: "hook_instructions",
     heading: "HOOK INSTRUCTIONS (FIRST 15 SECONDS)",
     build: (structure) => pickAliasedValue(structure, "hook_instructions"),
   },
   {
+    key: "content_flow",
     heading: "CONTENT FLOW & IDEAS PROGRESSION",
     build: (structure) => renderContentFlow(structure.content_flow),
   },
   {
+    key: "pacing_and_delivery",
     heading: "PACING & DELIVERY RULES",
     build: (structure) =>
       renderPacingAndDelivery(structure.pacing_and_delivery),
   },
   {
+    key: "retention_rules",
     heading: "RETENTION & ENGAGEMENT RULES",
     build: (structure) => renderBulletList(structure.retention_rules),
   },
   {
+    key: "banned_phrases",
     heading: "BANNED CLICHÉS & PHRASES (STRICTLY FORBIDDEN)",
     build: (structure) => renderBannedPhrases(structure.banned_phrases),
   },
@@ -254,9 +260,11 @@ function renderCustomFields(structure) {
  * that commands the LLM to follow the channel's custom script style.
  *
  * @param {ScriptStructure|string|null|undefined} structureInput
+ * @param {Object} [options]
+ * @param {boolean} [options.includeTone=false] - Whether to render tone_and_voice (false by default to let Content Pillar Tone govern)
  * @returns {string}
  */
-export function formatScriptStructureForPrompt(structureInput) {
+export function formatScriptStructureForPrompt(structureInput, { includeTone = false } = {}) {
   let structure = structureInput ?? DEFAULT_SCRIPT_STRUCTURE;
 
   if (typeof structure === "string") {
@@ -281,7 +289,10 @@ export function formatScriptStructureForPrompt(structureInput) {
   const sections = [];
   let sectionNumber = 1;
 
-  for (const { heading, build } of SECTION_BUILDERS) {
+  for (const { key, heading, build } of SECTION_BUILDERS) {
+    if (key === "tone_and_voice" && !includeTone) {
+      continue;
+    }
     const body = build(structure);
     if (body) {
       sections.push(`### ${sectionNumber}. ${heading}\n${body}`);

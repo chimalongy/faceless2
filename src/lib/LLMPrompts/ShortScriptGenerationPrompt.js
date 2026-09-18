@@ -19,7 +19,7 @@ Target Length: {content_pillar_length}
 Target Word Count: {content_pillar_words_count}
 Description: {content_pillar_description}
 
-Use this pillar as the strategic narrative lens. It dictates the intellectual depth, emotional stakes, pacing, and angle of insight. Do not mention the pillar's name in the narration.
+Use this pillar as the strategic narrative lens. Its Tone ("{content_pillar_tone}") is the authoritative, singular tone directive that dictates the voice, intellectual depth, emotional stakes, and pacing of the narration. Do not mention the pillar's name in the narration.
 
 ## TOPIC
 {topic}
@@ -29,48 +29,11 @@ Build the entire script around this specific topic. Do not alter the title or di
 ---
 
 ## CHANNEL SCRIPT STRUCTURE & CONTENT BLUEPRINT
-You MUST strictly follow this channel's content structure and delivery blueprint below. It guides the content flow, hook formula, pacing rules, and prohibited words:
+You MUST strictly follow this channel's content structure and delivery blueprint below to design and pace the script. It is the authoritative blueprint for your hook formula, content flow, pacing rules, retention techniques, and prohibited words (executed entirely within the Content Pillar Tone):
 
 {channel_script_structure_block}
 
----
-
-## CRITICAL RETENTION & PACING RULES
-
-### 1. THE 0–3 SECOND ULTRA-HOOK (MANDATORY)
-Viewers swipe away within 1.5 seconds if you hesitate.
-- **LINE 1 MUST HIT LIKE LIGHTNING**: Start with a startling fact, question or a bold statement.
-- **ZERO THROAT-CLEARING**:
-  - NEVER open with greetings ("Hey guys", "In this video",  "Today we explore").
-  - NEVER open with poetic scene-setting ("Pour a cup...", "Imagine...").
-  - NEVER open with dictionary definitions or academic hedging.
-  - Plunge the viewer straight into the action, high-stakes paradox, or mechanism.
-
-### 2. SCRIPT FOR THE EAR, NOT A MAGAZINE ESSAY
-This is spoken narration for an engaging, fast-paced vertical video.
-- Short, punchy sentences with rapid information density.
-- Direct second-person address ("you", "your", "watch what happens").
-- Speak with authoritative clarity and strip out passive academic hedging.
-
-### 3. CURIOSITY LOOPS & ESCALATING STAKES
-Do not dump information as a flat list of facts. Structure the narration with escalating tension:
-- Expose the common myth or everyday assumption.
-- Dive immediately into the microscopic or behind-the-scenes mechanical truth.
-- Introduce the unexpected risk, hidden danger, or counterintuitive twist.
-
-### 4. VISCERAL, CLEAR MECHANISMS
-When explaining complex science, finance, or systems:
-- Make the invisible visible. Explain the step-by-step chain reaction inside the body or system clearly.
-- Use crisp, memorable analogies that make technical mechanisms instantly click.
-
-### 5. ACCURACY & INTELLECTUAL INTEGRITY
-- Ground all claims in real facts.
-- Do not fabricate clinical trials, statistics, or quotes.
-
-### 6. THE SEAMLESS RETENTION LOOP & PROFOUND ENDING
-Conclude with impact:
-- Deliver a mind-bending revelation or perspective shift that reframes how the viewer sees their world, OR
-- Seamlessly loop the final thought back into the opening hook so the Short can replay continuously on YouTube without a jarring break.
+Also, remember that the content_pillar_tone superceeds the channel script structure tone. You should only use the channel script structure tone if and only if the content pillar tone is not available.
 
 ---
 
@@ -156,7 +119,7 @@ export function getShortScriptGenerationSystemPrompt({
   const effectiveStructure =
     scriptStructure || script_structure || channelScriptStructure;
   const formattedStructureBlock =
-    formatScriptStructureForPrompt(effectiveStructure);
+    formatScriptStructureForPrompt(effectiveStructure, { includeTone: true });
 
   const placeholderMap = {
     "{channel_name}": effectiveChannelName,

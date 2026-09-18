@@ -230,11 +230,7 @@ export default function ContentPillarDetail() {
             <h1 className="text-2xl sm:text-3xl font-display font-semibold text-ink tracking-tight">
               {pillarName}
             </h1>
-            {pillar?.description && (
-              <p className="text-xs text-ink-muted max-w-2xl mt-1 leading-relaxed">
-                {pillar.description}
-              </p>
-            )}
+           
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
@@ -334,9 +330,7 @@ export default function ContentPillarDetail() {
                     <Film size={15} className="text-signal" />
                     <span>Long Form Topics ({longformTopics.length})</span>
                   </h3>
-                  <p className="text-xs text-ink-muted mt-0.5">
-                    16:9 widescreen video topics designed for full-length documentary and storytelling episodes.
-                  </p>
+                 
                 </div>
                 <button
                   type="button"
@@ -509,9 +503,7 @@ export default function ContentPillarDetail() {
                     <Smartphone size={15} className="text-rose-500" />
                     <span>Vertical Shorts ({shortsTopics.length})</span>
                   </h3>
-                  <p className="text-xs text-ink-muted mt-0.5">
-                    9:16 vertical shortform topics tailored for high-retention YouTube Shorts and TikTok feeds.
-                  </p>
+                 
                 </div>
                 <button
                   type="button"

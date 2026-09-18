@@ -34,7 +34,7 @@ Images must align with the content/context of the voice text (what is being spok
 Each scene must have:
 
 1. AUDIO TEXT (EXACT PRESERVATION):
-   \`audio_text\` must contain the exact, verbatim narration for that scene without any rewriting, omission, or duplication. All script words must be accounted for once, in exact sequence.
+   \`audio_text\` must contain the exact, verbatim narration for that scene without any rewriting, omission, or duplication. All script words must be accounted for once, in exact sequence. The audio text can be 1 to 3 sentences per scene.
 
 2. NUMBER OF IMAGES (number_of_images):
    The total count of images for this scene, matching the length of the \`images\` array.

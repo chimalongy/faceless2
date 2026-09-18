@@ -19,7 +19,7 @@ Target Length: {content_pillar_length}
 Target Word Count: {content_pillar_words_count}
 Description: {content_pillar_description}
 
-Use this pillar as the strategic narrative lens. It dictates the intellectual depth, emotional stakes, pacing, and angle of insight. Do not mention the pillar's name in the narration.
+Use this pillar as the strategic narrative lens. Its Tone ("{content_pillar_tone}") is the authoritative, singular tone directive that dictates the voice, intellectual depth, emotional stakes, and pacing of the narration. Do not mention the pillar's name in the narration.
 
 ## TOPIC
 {topic}
@@ -29,48 +29,11 @@ Build the entire script around this specific topic. Do not alter the title or di
 ---
 
 ## CHANNEL SCRIPT STRUCTURE & CONTENT BLUEPRINT
-You MUST strictly follow this channel's content structure and delivery blueprint below. It guides the content flow, hook formula, pacing rules, and prohibited words:
+You MUST strictly follow this channel's content structure and delivery blueprint below to design and pace the script. It is the authoritative blueprint for your hook formula, content flow, pacing rules, retention techniques, and prohibited words (executed entirely within the Content Pillar Tone):
 
 {channel_script_structure_block}
 
----
-
-## CRITICAL RETENTION & PACING RULES
-
-### 1. THE FIRST 15 SECONDS (MANDATORY HIGH-STAKES HOOK)
-The opening sentence determines whether the viewer stays or clicks away.
-- **LINE 1 MUST HIT IMMEDIATELY**: Start with a startling fact, an unexpected biological or financial reality, high physical/emotional stakes, or by immediately destroying a dangerous misconception.
-- **ZERO THROAT-CLEARING**:
-  - NEVER open with poetic scene-setting ("Pour a cup and look at the light...", "Imagine standing on a hill...", "Throughout human history...").
-  - NEVER open with linguistic or geographical roll-calls ("In country X it's called A, in country Y it's called B...").
-  - NEVER open with dictionary definitions, botanical taxonomy, or academic hedging ("The first thing it changes may not be X, it may be Y...").
-- In the first 30 seconds, hook the viewer with the central conflict: what they thought was happening vs. the shocking mechanical reality of what actually happens.
-
-### 2. SCRIPT FOR THE EAR, NOT A MAGAZINE ESSAY
-This is spoken narration for an engaging video, NOT a college textbook or literary journal article.
-- Write with punch, momentum, and vivid imagery.
-- Speak with authoritative clarity and strip out passive academic hedging ("it could perhaps be argued", "some might say").
-
-### 3. CURIOSITY LOOPS & ESCALATING STAKES
-Do not dump information as a flat list of facts. Structure the narration with escalating tension:
-- Expose the common myth or everyday assumption.
-- Dive into the microscopic or behind-the-scenes mechanical truth.
-- Introduce the unexpected risk, hidden danger, or counterintuitive twist.
-- Explain the real-world consequences and how to navigate them.
-- Close each section with a lingering question or revelation that pulls the listener into the next section.
-
-### 4. VISCERAL, CLEAR MECHANISMS
-When explaining complex science, finance, or systems:
-- Make the invisible visible. Explain the step-by-step chain reaction inside the body or system clearly.
-- Use crisp, memorable analogies that make technical mechanisms instantly click.
-
-### 5. ACCURACY & INTELLECTUAL INTEGRITY
-- Ground all claims in real science, physiology, or economics.
-- Do not fabricate clinical trials, statistics, or quotes.
-- Distinguish verified mechanisms from early laboratory findings without losing dramatic narrative energy.
-
-### 6. ENDING WITH IMPACT
-Conclude not with a boring recap, but with a profound realization or perspective shift that reframes how the viewer sees their own body, money, or world.
+Also, remember that the content_pillar_tone superceeds the channel script structure tone. You should only use the channel script structure tone if and only if the content pillar tone is not available.
 
 ---
 
@@ -155,7 +118,7 @@ export function getScriptGenerationSystemPrompt({
   }
 
   const effectiveStructure = scriptStructure || script_structure || channelScriptStructure;
-  const formattedStructureBlock = formatScriptStructureForPrompt(effectiveStructure);
+  const formattedStructureBlock = formatScriptStructureForPrompt(effectiveStructure, { includeTone: true });
 
   return SCRIPT_GENERATION_SYSTEM_PROMPT.replaceAll("{channel_name}", effectiveChannelName)
     .replaceAll("{channel_niche}", effectiveNiche)
