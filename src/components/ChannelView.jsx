@@ -1176,7 +1176,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
           className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
           style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", zIndex: 99999 }}
         >
-          <div className="relative w-full max-w-lg bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-6 animate-scale-in text-ink my-auto">
+          <div className="relative w-full max-w-lg bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-5 animate-scale-in text-ink my-auto max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2">
                 <Layers size={18} className="text-signal" />
@@ -1203,7 +1203,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
               </div>
             </div>
 
-            <form onSubmit={handleSavePillar} className="space-y-4 text-xs">
+            <form onSubmit={handleSavePillar} className="space-y-4 text-xs flex-1 overflow-y-auto pr-1">
               <div>
                 <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-name">
                   Pillar Name *
@@ -1261,7 +1261,83 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
                 />
               </div>
 
-              <div className="pt-2 border-t border-line flex items-center justify-end gap-2">
+              {/* Target Length & Target Words Count */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-length">
+                    Target Content Length
+                  </label>
+                  <input
+                    id="p-length"
+                    type="text"
+                    value={pillarContentLength}
+                    onChange={(e) => setPillarContentLength(e.target.value)}
+                    placeholder="e.g. 15-20 minutes (~2500 words)"
+                    className="w-full h-9 px-3 border border-line-dark bg-white text-ink outline-none focus:border-signal"
+                  />
+                  <span className="text-[10px] text-ink-muted mt-0.5 block">
+                    Duration directive for script generation
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-ink/80 mb-1" htmlFor="p-words">
+                    Target Words Count
+                  </label>
+                  <input
+                    id="p-words"
+                    type="text"
+                    value={pillarContentWordsCount}
+                    onChange={(e) => setPillarContentWordsCount(e.target.value)}
+                    placeholder="e.g. 2,500 - 3,500 words"
+                    className="w-full h-9 px-3 border border-line-dark bg-white text-ink outline-none focus:border-signal"
+                  />
+                  <span className="text-[10px] text-ink-muted mt-0.5 block">
+                    Target words count for scripts
+                  </span>
+                </div>
+              </div>
+
+              {/* Recurring Main Character Settings */}
+              <div className="p-3 bg-paper-card border border-line space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={pillarUseMainChar}
+                      onChange={(e) => setPillarUseMainChar(e.target.checked)}
+                      className="accent-signal cursor-pointer"
+                    />
+                    <span className="font-semibold text-ink text-xs">
+                      Enable Recurring Main Character
+                    </span>
+                  </label>
+                  <span className="text-[10px] font-mono text-ink-muted">
+                    {pillarUseMainChar ? "Active" : "Disabled"}
+                  </span>
+                </div>
+
+                {pillarUseMainChar && (
+                  <div className="pt-2 border-t border-line/60 space-y-1 animate-fade-in">
+                    <label className="block font-semibold text-ink/80 text-[11px]" htmlFor="p-main-char-desc">
+                      Main Character Persona / Description *
+                    </label>
+                    <textarea
+                      id="p-main-char-desc"
+                      rows={2}
+                      value={pillarMainCharDesc}
+                      onChange={(e) => setPillarMainCharDesc(e.target.value)}
+                      placeholder="e.g. Archeologist in his late 40s who travels to forgotten ruins, analytical, wears a worn leather jacket..."
+                      className="w-full p-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal leading-relaxed text-xs"
+                    />
+                    <span className="text-[10px] text-ink-muted block">
+                      Injected into script prompts and character continuity directives.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-line flex items-center justify-end gap-2 mt-auto">
                 <button
                   type="button"
                   onClick={() => setCreatePillarModalOpen(false)}
