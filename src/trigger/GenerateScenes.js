@@ -7,6 +7,7 @@ import {
 } from "@/lib/LLMPrompts/SceneGenerationPrompt";
 import { getShortSceneGenerationPrompt } from "@/lib/LLMPrompts/ShortSceneGenerationPrompt";
 import { resolveLlmBaseUrl } from "@/lib/llm-provider";
+import { getShortOutroScene, DEFAULT_SHORT_OUTRO_SCENE } from "@/lib/defaultShortOutroScene";
 
 export const generateScenesTask = task({
   id: "generate-scenes",
@@ -369,6 +370,19 @@ export const generateScenesTask = task({
       const aggregateError = `All ${executionAccounts.length} LLM account(s) failed during scene generation:\n${errors.join("\n")}`;
       logger.error("[GenerateScenes] Execution failed for all accounts.", { errors });
       throw new Error(aggregateError);
+    }
+
+    // Always inject the default outro scene as the last scene for shorts
+    if (isShort && parsedScenes.length > 0) {
+      const lastScene = parsedScenes[parsedScenes.length - 1];
+      const isAlreadyOutro = Boolean(
+        lastScene &&
+        lastScene.audio_text?.trim() === DEFAULT_SHORT_OUTRO_SCENE.audio_text.trim()
+      );
+      if (!isAlreadyOutro) {
+        parsedScenes.push(getShortOutroScene(parsedScenes.length + 1));
+        logger.log(`[GenerateScenes] Appended default shorts outro scene as scene #${parsedScenes.length}.`);
+      }
     }
 
     // 6. Save the generated scenes JSON in the Neon PostgreSQL database

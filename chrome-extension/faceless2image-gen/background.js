@@ -8,11 +8,22 @@ const DEFAULT_BASE_URL = "http://localhost:3000";
 const DEFAULTS = {
   pollTimeoutSec: 240,
   gapSec: 2,
-  autoDownload: true,
+  autoDownload: false,
 };
 
 let RUN = null;
 let PENDING_NAMES = [];
+
+async function getAutoDownload() {
+  const { autoDownload } = await chrome.storage.local.get("autoDownload");
+  return autoDownload === true;
+}
+
+chrome.storage.local.get("autoDownload").then(({ autoDownload }) => {
+  if (typeof autoDownload === "boolean") {
+    DEFAULTS.autoDownload = autoDownload;
+  }
+}).catch(() => {});
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -403,8 +414,9 @@ async function runLoop() {
     } else {
       await waitForCompletion(tabId, beforeImg + beforeVid);
 
-      // Download the result (only for actual scene prompts)
-      if (!RUN.stopped && DEFAULTS.autoDownload) {
+      // Download the result (only when autoDownload is enabled)
+      const shouldDownload = RUN.autoDownload !== undefined ? RUN.autoDownload : DEFAULTS.autoDownload;
+      if (!RUN.stopped && shouldDownload) {
         await downloadJob(tabId, job, beforeImg, beforeSrcs);
       }
       RUN.completedScenes = (RUN.completedScenes || 0) + (job.sceneNumbers?.length || 1);
@@ -666,6 +678,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         const topicSlug = sanitize(msg.topicSlug || "topic");
         const downloadFolder = `Faceless/${channelSlug}/${topicSlug}`;
 
+        const isAutoDl = msg.autoDownload !== undefined
+          ? Boolean(msg.autoDownload)
+          : await getAutoDownload();
+
         RUN = {
           queue: msg.queue,
           i: 0,
@@ -676,6 +692,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           stopped: false,
           running: true,
           downloadFolder,
+          autoDownload: isAutoDl,
         };
         runLoop();
         return sendResponse({ ok: true, count: msg.queue.length, totalScenes: RUN.totalScenes });
@@ -705,12 +722,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
       // ── Settings ──
       case "getSettings": {
-        const { baseUrl } = await chrome.storage.local.get("baseUrl");
-        return sendResponse({ ok: true, baseUrl: baseUrl || DEFAULT_BASE_URL });
+        const { baseUrl, autoDownload } = await chrome.storage.local.get(["baseUrl", "autoDownload"]);
+        return sendResponse({
+          ok: true,
+          baseUrl: baseUrl || DEFAULT_BASE_URL,
+          autoDownload: autoDownload === true,
+        });
       }
 
       case "saveSettings": {
-        await chrome.storage.local.set({ baseUrl: msg.baseUrl || DEFAULT_BASE_URL });
+        const toSet = {};
+        if (msg.baseUrl !== undefined) toSet.baseUrl = msg.baseUrl || DEFAULT_BASE_URL;
+        if (msg.autoDownload !== undefined) {
+          toSet.autoDownload = Boolean(msg.autoDownload);
+          DEFAULTS.autoDownload = Boolean(msg.autoDownload);
+          if (RUN) RUN.autoDownload = Boolean(msg.autoDownload);
+        }
+        await chrome.storage.local.set(toSet);
         return sendResponse({ ok: true });
       }
 

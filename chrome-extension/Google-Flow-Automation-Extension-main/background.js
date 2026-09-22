@@ -8,7 +8,7 @@ const DEFAULTS = {
   delaySec: 45,         // used when waitMode === "fixed"
   pollTimeoutSec: 240,  // max wait for one prompt to finish before moving on
   gapSec: 2,            // pause between prompts
-  autoDownload: true,   // download each result into the run folder
+  autoDownload: false,  // download each result into the run folder
   upscale: false,       // images only: upscale to 2048px (interpolated) before saving
   folder: "Flow-Automation",
 };

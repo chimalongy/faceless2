@@ -27,6 +27,8 @@ const pillarSelect = $("pillarSelect");
 const topicSelect = $("topicSelect");
 const startSceneInput = $("startSceneInput");
 const batchCountInput = $("batchCountInput");
+const autoDownloadCheckbox = $("autoDownloadCheckbox");
+const thumbAutoDownloadCheckbox = $("thumbAutoDownloadCheckbox");
 
 const thumbnailNavWrapper = $("thumbnailNavWrapper");
 const openThumbnailBtn = $("openThumbnailBtn");
@@ -144,23 +146,31 @@ function showThumbnailScreen() {
 
 // ── Init ──
 async function init() {
-  // Load saved base URL
+  // Load saved base URL and autoDownload
   const settings = await bg({ type: "getSettings" });
   if (settings.ok) {
     baseUrlInput.value = settings.baseUrl || "http://localhost:3000";
+    const isAutoDl = settings.autoDownload === true;
+    if (autoDownloadCheckbox) autoDownloadCheckbox.checked = isAutoDl;
+    if (thumbAutoDownloadCheckbox) thumbAutoDownloadCheckbox.checked = isAutoDl;
   }
 
-  // Load saved start scene & batch count
+  // Load saved start scene, batch count & autoDownload fallback
   try {
-    const { startScene, batchCount } = await chrome.storage.local.get([
+    const { startScene, batchCount, autoDownload } = await chrome.storage.local.get([
       "startScene",
       "batchCount",
+      "autoDownload",
     ]);
     if (startScene && startSceneInput) {
       startSceneInput.value = startScene;
     }
     if (batchCount && batchCountInput) {
       batchCountInput.value = batchCount;
+    }
+    if (typeof autoDownload === "boolean") {
+      if (autoDownloadCheckbox) autoDownloadCheckbox.checked = autoDownload;
+      if (thumbAutoDownloadCheckbox) thumbAutoDownloadCheckbox.checked = autoDownload;
     }
   } catch (_) {}
 
@@ -180,6 +190,22 @@ async function init() {
     updateProgress(state.i, state.total);
   }
 }
+
+function setAutoDownloadSetting(val) {
+  const enabled = Boolean(val);
+  if (autoDownloadCheckbox) autoDownloadCheckbox.checked = enabled;
+  if (thumbAutoDownloadCheckbox) thumbAutoDownloadCheckbox.checked = enabled;
+  chrome.storage.local.set({ autoDownload: enabled }).catch(() => {});
+  bg({ type: "saveSettings", autoDownload: enabled });
+}
+
+autoDownloadCheckbox?.addEventListener("change", (e) => {
+  setAutoDownloadSetting(e.target.checked);
+});
+
+thumbAutoDownloadCheckbox?.addEventListener("change", (e) => {
+  setAutoDownloadSetting(e.target.checked);
+});
 
 startSceneInput?.addEventListener("change", () => {
   const val = Math.max(1, parseInt(startSceneInput.value) || 1);
@@ -494,12 +520,17 @@ generateThumbnailBtn?.addEventListener("click", async () => {
   thumbStatusText.textContent = "Sending thumbnail instruction to Flow agent…";
   generateThumbnailBtn.disabled = true;
 
+  const isAutoDl = thumbAutoDownloadCheckbox
+    ? thumbAutoDownloadCheckbox.checked
+    : (autoDownloadCheckbox?.checked ?? false);
+
   const res = await bg({
     type: "start",
     queue,
     totalScenes: 1,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
+    autoDownload: isAutoDl,
   });
 
   if (res.ok) {
@@ -769,6 +800,7 @@ async function generateSingleScene(scene) {
     totalScenes: items.length,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
+    autoDownload: autoDownloadCheckbox?.checked ?? false,
   });
 
   if (res.ok) {
@@ -833,6 +865,7 @@ genSelectedBtn.addEventListener("click", async () => {
     totalScenes: allItems.length,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
+    autoDownload: autoDownloadCheckbox?.checked ?? false,
   });
 
   if (res.ok) {
@@ -965,6 +998,7 @@ startBtn.addEventListener("click", async () => {
     totalScenes: totalImagesCount,
     channelSlug: selectedChannelSlug,
     topicSlug: selectedTopicSlug,
+    autoDownload: autoDownloadCheckbox?.checked ?? false,
   });
 
   if (res.ok) {
@@ -1008,6 +1042,8 @@ function setRunningUI(running, paused) {
   if (genSelectedBtn) genSelectedBtn.disabled = running;
   if (openThumbnailBtn) openThumbnailBtn.disabled = running;
   if (generateThumbnailBtn) generateThumbnailBtn.disabled = running;
+  if (autoDownloadCheckbox) autoDownloadCheckbox.disabled = running;
+  if (thumbAutoDownloadCheckbox) thumbAutoDownloadCheckbox.disabled = running;
   pauseBtn.disabled = !running;
   stopBtn.disabled = !running;
   pauseBtn.textContent = paused ? "Resume" : "Pause";

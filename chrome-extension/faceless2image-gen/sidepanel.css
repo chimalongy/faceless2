@@ -151,12 +151,26 @@ select:disabled {
   cursor: pointer;
   font-size: 12px;
   color: var(--text-secondary);
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.checkbox-label:hover {
+  color: var(--text-primary);
 }
 
 .checkbox-label input[type="checkbox"] {
   width: 14px;
   height: 14px;
   accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.options-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 2px 2px 4px;
 }
 
 /* ─── BUTTONS ─── */
