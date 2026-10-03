@@ -1,6 +1,6 @@
 import { task, logger } from "@trigger.dev/sdk";
 import JSZip from "jszip";
-import { uploadToR2, deleteFromR2, getR2Client, getBucketName } from "@/lib/storage";
+import { uploadToR2, deleteFromR2, getR2Client, getBucketName, getPublicBaseUrl } from "@/lib/storage";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { parseImageFileName } from "@/lib/scene-images";
@@ -13,17 +13,22 @@ export const extractZipImagesTask = task({
       topicSlug,
       zipFileKey,
       zipBase64,
+      bucketName,
     } = payload;
 
     if (!channelSlug || !topicSlug) {
       throw new Error("channelSlug and topicSlug are required for extract-zip-images task.");
     }
 
+    let cleanKey = null;
+    let extractionSucceeded = false;
+
     logger.log("Starting ZIP extraction task for scene images and thumbnail...", {
       channelSlug,
       topicSlug,
       hasBase64: !!zipBase64,
       hasKey: !!zipFileKey,
+      bucket: bucketName || getBucketName(),
     });
 
     try {
@@ -34,12 +39,34 @@ export const extractZipImagesTask = task({
         zipBuffer = Buffer.from(zipBase64, "base64");
       } else if (zipFileKey) {
         const client = getR2Client();
-        const bucket = getBucketName();
+        const bucket = bucketName || getBucketName();
         if (!client) throw new Error("Cloudflare R2 client is not configured.");
+
+        // Normalize the S3 key: remove leading slashes, decode URL encodings, strip URL prefix if any
+        cleanKey = zipFileKey.trim();
+        const publicBase = getPublicBaseUrl ? getPublicBaseUrl() : "";
+        if (publicBase && cleanKey.startsWith(publicBase)) {
+          cleanKey = cleanKey.slice(publicBase.length);
+        }
+        const r2DevMatch = cleanKey.split(".r2.dev/");
+        if (r2DevMatch.length > 1) {
+          cleanKey = r2DevMatch[1];
+        }
+        try {
+          if (cleanKey.startsWith("http://") || cleanKey.startsWith("https://")) {
+            cleanKey = new URL(cleanKey).pathname;
+          }
+        } catch {}
+        cleanKey = cleanKey.replace(/^\/+/, "");
+        try {
+          cleanKey = decodeURIComponent(cleanKey);
+        } catch {}
+
+        logger.log(`Fetching ZIP from R2 bucket "${bucket}" with key "${cleanKey}" (raw input: "${zipFileKey}")...`);
 
         const getCommand = new GetObjectCommand({
           Bucket: bucket,
-          Key: zipFileKey,
+          Key: cleanKey,
         });
 
         const response = await client.send(getCommand);
@@ -301,6 +328,8 @@ export const extractZipImagesTask = task({
         });
       }
 
+      extractionSucceeded = true;
+
       return {
         success: true,
         channelSlug,
@@ -311,11 +340,13 @@ export const extractZipImagesTask = task({
         images: results,
       };
     } finally {
-      // Guaranteed cleanup: delete temporary ZIP archive from R2
-      if (zipFileKey) {
-        logger.log(`Cleaning up temporary ZIP archive from R2: ${zipFileKey}`);
-        await deleteFromR2(zipFileKey).catch((delErr) => {
-          logger.warn(`Failed to clean up temporary ZIP: ${zipFileKey}`, delErr?.message);
+      // Guaranteed cleanup: ONLY delete temporary ZIP archive from R2 if extraction succeeded.
+      // If an error occurred, do NOT delete so automatic Trigger.dev retries (or debugging) can use it!
+      if (extractionSucceeded && zipFileKey) {
+        const keyToDelete = cleanKey || zipFileKey;
+        logger.log(`Cleaning up temporary ZIP archive from R2: ${keyToDelete}`);
+        await deleteFromR2(keyToDelete).catch((delErr) => {
+          logger.warn(`Failed to clean up temporary ZIP: ${keyToDelete}`, delErr?.message);
         });
       }
     }

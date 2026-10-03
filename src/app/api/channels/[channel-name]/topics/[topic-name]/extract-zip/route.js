@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { tasks, runs } from "@trigger.dev/sdk";
+import { getBucketName } from "@/lib/storage";
 
 export const maxDuration = 60; // Extend Vercel function timeout for ZIP processing
 
@@ -23,7 +24,7 @@ export async function POST(req, context) {
 
     if (contentType.includes("application/json")) {
       const body = await req.json();
-      zipFileKey = body.zipFileKey;
+      zipFileKey = body.zipFileKey ? String(body.zipFileKey).trim().replace(/^\/+/, "") : null;
       zipBase64 = body.zipBase64;
     } else {
       const formData = await req.formData();
@@ -43,16 +44,19 @@ export async function POST(req, context) {
       );
     }
 
+    const bucketName = getBucketName();
+
     console.log(
-      `[ExtractZipRoute] Triggering Trigger.dev task "extract-zip-images" (zipFileKey: ${zipFileKey || "none, using base64"})...`
+      `[ExtractZipRoute] Triggering Trigger.dev task "extract-zip-images" (bucket: ${bucketName}, zipFileKey: ${zipFileKey || "none, using base64"})...`
     );
 
-    // Dispatch Trigger.dev task with R2 temporary key (bypassing Vercel & Trigger payload limits)
+    // Dispatch Trigger.dev task with R2 temporary key and bucketName (bypassing Vercel & Trigger payload limits)
     const handle = await tasks.trigger("extract-zip-images", {
       channelSlug,
       topicSlug,
       zipFileKey,
       zipBase64,
+      bucketName,
     });
 
     const run = await runs.poll(handle.id, { pollIntervalMs: 1000 });

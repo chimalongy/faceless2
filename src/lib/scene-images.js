@@ -34,8 +34,10 @@ export function parseImageFileName(fullFileName) {
     };
   }
 
-  // Strip file extensions and trailing timestamps (e.g. .png_20260913055849 or .png)
-  let cleanName = fullFileName.replace(/\.[a-zA-Z0-9]+(?:_\d+)?$/i, "");
+  // Strip file extensions and trailing timestamps (e.g. .png_20260913055849.jpg, _20261003060624.jpg, etc.)
+  let cleanName = fullFileName;
+  cleanName = cleanName.replace(/\.[a-zA-Z0-9]+$/i, "");
+  cleanName = cleanName.replace(/[._-]\d{6,}$/i, "");
   cleanName = cleanName.replace(/\.[a-zA-Z0-9]+$/i, "");
 
   const baseName = cleanName.toLowerCase().replace(/^scene[-_]?/i, "");
@@ -60,12 +62,17 @@ export function parseImageFileName(fullFileName) {
   } else {
     // Fallback to primary scene number extraction
     const primaryPart = baseName.split("_")[0];
-    const numberMatch = primaryPart.match(/(\d+)/) || baseName.match(/(\d+)/) || fullFileName.match(/(\d+)/);
+    const numberMatch = primaryPart.match(/^(\d+)$/) || baseName.match(/^(\d+)$/) || primaryPart.match(/(\d+)/);
     if (numberMatch) {
       sceneIndex = parseInt(numberMatch[1], 10);
       imageIndex = 1;
       isMultiIndexed = false;
     }
+  }
+
+  // Guard against unrealistic numbers (e.g. year 2026 or timestamps) being treated as scene indices
+  if (sceneIndex !== null && (sceneIndex <= 0 || sceneIndex > 500)) {
+    sceneIndex = null;
   }
 
   return {

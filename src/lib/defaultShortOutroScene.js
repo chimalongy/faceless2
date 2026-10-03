@@ -1,12 +1,12 @@
 /**
  * Default Outro Scene Configuration for Short-Form Content (YouTube Shorts, TikTok, Reels)
- * 
+ *
  * Edit this configuration file at any time to modify:
  * - audio_text: The call-to-action narration spoken at the end
  * - images: The 9:16 vertical character/visual prompt
  * - transition: Transition effect into/out of this scene (e.g. "fade-out")
  * - ken_burns: Camera motion direction and intensity (e.g. "zoom-in")
- * 
+ *
  * This scene will automatically be appended as the final scene whenever
  * scenes are pasted for a short-form topic in the studio.
  */
