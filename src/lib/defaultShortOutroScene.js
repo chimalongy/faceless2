@@ -12,7 +12,8 @@
  */
 
 export const DEFAULT_SHORT_OUTRO_SCENE = {
-  audio_text: "If you enjoyed this, like, follow and share — @moneykoncepts.",
+  audio_text:
+    "If you enjoyed learning something today? Like this video, follow this channel, and share — @moneykoncepts.",
   number_of_images: 1,
   images: [
     {

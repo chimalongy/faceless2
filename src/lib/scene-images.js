@@ -62,7 +62,10 @@ export function parseImageFileName(fullFileName) {
   } else {
     // Fallback to primary scene number extraction
     const primaryPart = baseName.split("_")[0];
-    const numberMatch = primaryPart.match(/^(\d+)$/) || baseName.match(/^(\d+)$/) || primaryPart.match(/(\d+)/);
+    const numberMatch =
+      primaryPart.match(/^(\d+)$/) ||
+      baseName.match(/^(\d+)$/) ||
+      primaryPart.match(/(\d+)/);
     if (numberMatch) {
       sceneIndex = parseInt(numberMatch[1], 10);
       imageIndex = 1;
@@ -93,8 +96,9 @@ export function getImageIndex(item, sceneNum = null) {
   if (!name) return 1;
 
   // Check if name has format: scene-X-Y or X_Y or scene_X_image_Y
-  const multiMatch = name.match(/scene[-_](\d+)[-_](?:image[-_]?)?(\d+)/i) ||
-                     name.match(/^(\d+)[-_](?:image[-_]?)?(\d+)/i);
+  const multiMatch =
+    name.match(/scene[-_](\d+)[-_](?:image[-_]?)?(\d+)/i) ||
+    name.match(/^(\d+)[-_](?:image[-_]?)?(\d+)/i);
   if (multiMatch) {
     return parseInt(multiMatch[2], 10);
   }
