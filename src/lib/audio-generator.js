@@ -1,4 +1,4 @@
-import { getDbSql, initDbSchema } from "@/lib/db";
+import { getDbSql, initDbSchema } from "./db.js";
 
 /**
  * Get the configured maximum audio generations allowed per URL per month.
@@ -74,6 +74,58 @@ export const KOKORO_VOICES = [
 ];
 
 /**
+ * Qwen3-TTS 1.7B CustomVoice Catalog
+ */
+export const QWEN_VOICES = [
+  { id: "Ryan", name: "Ryan (Dynamic male with strong rhythmic drive)", lang: "English", gender: "male", description: "Dynamic male with strong rhythmic drive" },
+  { id: "Aiden", name: "Aiden (Sunny American male, clear midrange)", lang: "English", gender: "male", description: "Sunny American male, clear midrange" },
+  { id: "Vivian", name: "Vivian (Bright, slightly edgy young female)", lang: "Chinese", gender: "female", description: "Bright, slightly edgy young female" },
+  { id: "Serena", name: "Serena (Warm, gentle young female)", lang: "Chinese", gender: "female", description: "Warm, gentle young female" },
+  { id: "Uncle_Fu", name: "Uncle_Fu (Seasoned male, low and mellow timbre)", lang: "Chinese", gender: "male", description: "Seasoned male, low and mellow timbre" },
+  { id: "Dylan", name: "Dylan (Youthful male, clear and natural - Beijing dialect)", lang: "Chinese (Beijing dialect)", gender: "male", description: "Youthful male, clear and natural" },
+  { id: "Eric", name: "Eric (Lively male, slightly husky brightness - Sichuan dialect)", lang: "Chinese (Sichuan dialect)", gender: "male", description: "Lively male, slightly husky brightness" },
+  { id: "Ono_Anna", name: "Ono_Anna (Playful female, light and nimble)", lang: "Japanese", gender: "female", description: "Playful female, light and nimble" },
+  { id: "Sohee", name: "Sohee (Warm female with rich emotion)", lang: "Korean", gender: "female", description: "Warm female with rich emotion" },
+];
+
+/**
+ * Check if a given voice ID belongs to the Qwen3 voice catalog.
+ */
+export function isQwenVoice(voiceId) {
+  if (!voiceId || typeof voiceId !== "string") return false;
+  const normalized = voiceId.trim().toLowerCase();
+  return QWEN_VOICES.some((v) => v.id.toLowerCase() === normalized);
+}
+
+/**
+ * Resolve the Modal Qwen3-TTS API URL from general_settings or environment variables.
+ */
+export async function resolveModalQwenTtsUrl() {
+  const sql = getDbSql();
+  if (sql) {
+    try {
+      await initDbSchema();
+      const rows = await sql`
+        SELECT modal_qwen_tts_url AS "modalQwenTtsUrl"
+        FROM general_settings
+        ORDER BY id ASC
+        LIMIT 1;
+      `;
+      if (rows?.[0]?.modalQwenTtsUrl) {
+        return rows[0].modalQwenTtsUrl.trim();
+      }
+    } catch (err) {
+      console.warn("Could not query Modal Qwen TTS URL from database:", err.message);
+    }
+  }
+
+  return (
+    process.env.MODAL_QWEN_TTS_URL ||
+    "https://geniusdomainnames--qwen3-tts-custom-web.modal.run"
+  ).trim();
+}
+
+/**
  * Load all audio API keys and endpoints from the database.
  */
 export async function loadAudioEndpoints() {
@@ -147,27 +199,126 @@ export async function decrementAudioEndpointUsage(endpointId) {
 }
 
 /**
- * Synthesize speech audio using Kokoro-82M Modal Endpoint.
+ * Synthesize speech audio using either Qwen3-TTS 1.7B (Modal GPU) or Kokoro-82M.
  * 
  * @param {Object} options
  * @param {string} options.text - Narration text
- * @param {string} [options.voice="af_heart"] - Kokoro voice ID
+ * @param {string} [options.voice="af_heart"] - Voice ID (Kokoro or Qwen)
+ * @param {string} [options.ttsModel] - "qwen" | "kokoro" (auto-detected if voice is from Qwen catalog)
+ * @param {string} [options.instruct] - Tone/style instruction for Qwen3-TTS (channel audio_theme or pillar tone)
+ * @param {string} [options.audioTheme] - Alias for instruct
+ * @param {string} [options.language] - Optional explicit language (e.g. "English", "Chinese")
  * @param {number} [options.speed=1.0] - Speech rate (0.5 - 2.0)
  * @param {string} [options.format="wav"] - Format ("wav" | "pcm")
- * @param {number} [options.timeoutMs=120000] - Request timeout in ms
- * @returns {Promise<{ success: boolean, audioBuffer: Buffer, endpointUsed: string, remainingUsage: number, durationEstimate: string }>}
+ * @param {number} [options.timeoutMs=180000] - Request timeout in ms
+ * @returns {Promise<{ success: boolean, audioBuffer: Buffer, endpointUsed: string, remainingUsage: number, durationEstimate: string, ttsModel: string }>}
  */
 export async function generateAudio({
   text,
   voice = "af_heart",
+  ttsModel = null,
+  instruct = null,
+  audioTheme = null,
+  language = null,
   speed = 1.0,
   format = "wav",
-  timeoutMs = 120000,
+  timeoutMs = 180000,
 }) {
   if (!text || typeof text !== "string" || !text.trim()) {
     throw new Error("Text is required for audio narration synthesis.");
   }
 
+  // 1. Determine TTS model engine
+  const isQwen =
+    (ttsModel && ttsModel.toLowerCase().startsWith("qwen")) ||
+    isQwenVoice(voice);
+
+  // =========================================================================
+  // PATH A: Qwen3-TTS 1.7B CustomVoice (Style-instructed Modal GPU deployment)
+  // =========================================================================
+  if (isQwen) {
+    const targetBase = await resolveModalQwenTtsUrl();
+    let targetUrl = targetBase.replace(/\/+$/, "");
+    if (!targetUrl.endsWith("/synthesize")) {
+      targetUrl = `${targetUrl}/synthesize`;
+    }
+
+    // Resolve speaker: if current voice isn't in Qwen list, fallback to Ryan
+    const resolvedSpeaker = isQwenVoice(voice) ? voice : "Ryan";
+    const speakerMeta = QWEN_VOICES.find((v) => v.id.toLowerCase() === resolvedSpeaker.toLowerCase());
+
+    const finalInstruct = (instruct || audioTheme || "").trim();
+
+    console.log(
+      `[AudioGenerator] Synthesizing speech via Qwen3-TTS (${targetUrl}) | Speaker: ${resolvedSpeaker} | Instruct: "${finalInstruct || "None"}" | Speed: ${Number(speed) || 1.0}x | Words: ${text.split(/\s+/).length}`
+    );
+
+    const payload = {
+      text: text.trim(),
+      speaker: resolvedSpeaker,
+      voice: resolvedSpeaker,
+      language: language || speakerMeta?.lang || "English",
+      instruct: finalInstruct || undefined,
+      audio_theme: finalInstruct || undefined,
+      speed: Number(speed) || 1.0,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(targetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = Buffer.from(arrayBuffer);
+
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error("Qwen3-TTS endpoint responded with empty audio payload.");
+      }
+
+      // Estimate audio duration based on word count (~150 words/min)
+      const wordCount = text.trim().split(/\s+/).length;
+      const totalSeconds = Math.max(1, Math.round((wordCount / (150 * (Number(speed) || 1))) * 60));
+      const mins = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+      const secs = String(totalSeconds % 60).padStart(2, "0");
+      const durationEstimate = `${mins}:${secs}`;
+
+      console.log(
+        `[AudioGenerator] Success! Generated ${audioBuffer.length} bytes of Qwen3-TTS audio. Speaker: ${resolvedSpeaker}`
+      );
+
+      return {
+        success: true,
+        audioBuffer,
+        endpointUsed: `Qwen3-TTS (${resolvedSpeaker} @ Modal)`,
+        remainingUsage: 999,
+        durationEstimate,
+        format,
+        byteLength: audioBuffer.length,
+        ttsModel: "qwen",
+      };
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.error("[AudioGenerator] Qwen3-TTS generation failed:", err);
+      throw new Error(`Qwen3-TTS generation error: ${err.message}`);
+    }
+  }
+
+  // =========================================================================
+  // PATH B: Kokoro-82M Voice Catalog (Endpoints Pool)
+  // =========================================================================
   const endpoints = await loadAudioEndpoints();
 
   if (!endpoints || endpoints.length === 0) {
@@ -253,6 +404,7 @@ export async function generateAudio({
         durationEstimate,
         format,
         byteLength: audioBuffer.length,
+        ttsModel: "kokoro",
       };
     } catch (reqError) {
       console.warn(`[AudioGenerator] Failed synthesis on endpoint ${endpoint.accountEmail}:`, reqError.message);

@@ -18,8 +18,8 @@ import {
   CheckSquare,
   Square
 } from "lucide-react";
-import { useState, useRef } from "react";
-import { KOKORO_VOICES } from "@/lib/audio-generator";
+import { useState, useRef, useEffect } from "react";
+import { KOKORO_VOICES, QWEN_VOICES, isQwenVoice } from "@/lib/audio-generator";
 import toast from "react-hot-toast";
 
 export default function AudioTab({
@@ -29,6 +29,9 @@ export default function AudioTab({
   setSelectedVoice,
   audioSpeed = 1.0,
   setAudioSpeed,
+  ttsModel,
+  setTtsModel,
+  audioTheme = "",
   bgMusic,
   setBgMusic,
   isGeneratingAllAudios = false,
@@ -38,12 +41,43 @@ export default function AudioTab({
   handleDeleteMultipleSceneAudios,
   handleGenerateSceneAudio,
   handleGenerateAllAudios,
+  isShort = false,
 }) {
   const [playingSceneNum, setPlayingSceneNum] = useState(null);
   const [expandedPrompts, setExpandedPrompts] = useState({});
   const [downloadingAudios, setDownloadingAudios] = useState({});
   const [selectedScenes, setSelectedScenes] = useState(new Set());
   const audioRefs = useRef({});
+  const [activeModel, setActiveModel] = useState(() => {
+    if (ttsModel === "qwen" || ttsModel === "kokoro") return ttsModel;
+    return isQwenVoice(selectedVoice) ? "qwen" : "kokoro";
+  });
+
+  useEffect(() => {
+    if (ttsModel && (ttsModel === "qwen" || ttsModel === "kokoro") && ttsModel !== activeModel) {
+      setActiveModel(ttsModel);
+    }
+  }, [ttsModel]);
+
+  const handleModelChange = (model) => {
+    setActiveModel(model);
+    setTtsModel?.(model);
+    if (model === "kokoro" && isQwenVoice(selectedVoice)) {
+      setSelectedVoice("af_heart");
+    } else if (model === "qwen" && !isQwenVoice(selectedVoice)) {
+      setSelectedVoice("Ryan");
+    }
+  };
+
+  useEffect(() => {
+    if (isQwenVoice(selectedVoice) && activeModel !== "qwen") {
+      setActiveModel("qwen");
+      setTtsModel?.("qwen");
+    } else if (!isQwenVoice(selectedVoice) && activeModel === "qwen" && KOKORO_VOICES.some((v) => v.id === selectedVoice)) {
+      setActiveModel("kokoro");
+      setTtsModel?.("kokoro");
+    }
+  }, [selectedVoice]);
 
   let parsedScenes = [];
   try {
@@ -293,49 +327,133 @@ export default function AudioTab({
 
         {/* Voice Selection & Speed Multiplier */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {/* Voice Actor Selector */}
-          <div className="md:col-span-2">
-            <label
-              className="block text-xs font-semibold text-ink/80 mb-1.5"
-              htmlFor="kokoro-voice"
-            >
-              Kokoro AI Narrator Voice ({KOKORO_VOICES.length} Profiles Available)
-            </label>
-            <select
-              id="kokoro-voice"
-              value={selectedVoice}
-              onChange={(e) => setSelectedVoice(e.target.value)}
-              className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
-            >
-              <optgroup label="🇺🇸 American English (Female)">
-                {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "female").map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🇺🇸 American English (Male)">
-                {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "male").map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🇬🇧 British English">
-                {KOKORO_VOICES.filter((v) => v.lang === "en-GB").map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🌍 International Voices (ES, FR, IT, HI, JA)">
-                {KOKORO_VOICES.filter((v) => !v.lang.startsWith("en-")).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+          {/* Voice Actor Selector & Model Tabs */}
+          <div className="md:col-span-2 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label
+                className="block text-xs font-semibold text-ink/80"
+                htmlFor="tts-voice-select"
+              >
+                {activeModel === "qwen"
+                  ? `Qwen3-TTS 1.7B Speaker (${QWEN_VOICES.length} Profiles Available)`
+                  : `Kokoro AI Voice (${KOKORO_VOICES.length} Profiles Available)`}
+              </label>
+
+              {/* Model toggle pills */}
+              <div className="inline-flex items-center p-0.5 bg-paper-dark border border-line text-[10px] font-mono">
+                <button
+                  type="button"
+                  onClick={() => handleModelChange("kokoro")}
+                  className={`px-2 py-0.5 transition-all cursor-pointer ${
+                    activeModel === "kokoro"
+                      ? "bg-white text-ink font-bold shadow-xs border border-line"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  Kokoro-82M
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleModelChange("qwen")}
+                  className={`px-2 py-0.5 transition-all cursor-pointer ${
+                    activeModel === "qwen"
+                      ? "bg-signal text-white font-bold shadow-xs"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  Qwen3-TTS
+                </button>
+              </div>
+            </div>
+
+            {activeModel === "qwen" ? (
+              <select
+                id="tts-voice-select"
+                value={selectedVoice}
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
+              >
+                <optgroup label="🇺🇸 English Native Speakers">
+                  {QWEN_VOICES.filter((v) => v.lang === "English").map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🇨🇳 Chinese Native Speakers">
+                  {QWEN_VOICES.filter((v) => v.lang.startsWith("Chinese")).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🇯🇵 Japanese Native Speaker">
+                  {QWEN_VOICES.filter((v) => v.lang === "Japanese").map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🇰🇷 Korean Native Speaker">
+                  {QWEN_VOICES.filter((v) => v.lang === "Korean").map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            ) : (
+              <select
+                id="tts-voice-select"
+                value={selectedVoice}
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
+              >
+                <optgroup label="🇺🇸 American English (Female)">
+                  {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "female").map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🇺🇸 American English (Male)">
+                  {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "male").map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🇬🇧 British English">
+                  {KOKORO_VOICES.filter((v) => v.lang === "en-GB").map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🌍 International Voices (ES, FR, IT, HI, JA)">
+                  {KOKORO_VOICES.filter((v) => !v.lang.startsWith("en-")).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            )}
+
+            {activeModel === "qwen" && (
+              <p className="text-[11px] text-amber-800 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-xs flex items-center gap-1.5 font-mono">
+                <Sparkles size={11} className="text-amber-600 shrink-0" />
+                <span>
+                  {audioTheme ? (
+                    <>
+                      Audio Theme instruction: <strong className="font-semibold text-amber-950">"{audioTheme}"</strong>
+                    </>
+                  ) : (
+                    "Qwen3-TTS receives your channel Audio Theme as a style instruction."
+                  )}
+                </span>
+              </p>
+            )}
           </div>
 
           {/* Voice Speed Multiplier */}

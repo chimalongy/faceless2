@@ -59,6 +59,7 @@ export async function initDbSchema() {
         banner_url TEXT,
         avatar_url TEXT,
         default_voice TEXT DEFAULT 'af_heart',
+        tts_model TEXT DEFAULT 'kokoro',
         postershive_api TEXT,
         script_structure JSONB,
         channel_tags TEXT,
@@ -76,6 +77,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS banner_url TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS tts_model TEXT DEFAULT 'kokoro';`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS channel_tags TEXT;`;
@@ -229,6 +231,7 @@ export async function initDbSchema() {
         modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run',
         modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run',
         modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run',
+        modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run',
         show_shorts_title_overlay BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -255,6 +258,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS show_shorts_title_overlay BOOLEAN DEFAULT false;`;
     } catch {}
 

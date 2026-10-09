@@ -21,7 +21,12 @@ export async function POST(req, context) {
       scriptText,
       voice = "af_heart",
       speed = 1.0,
+      ttsModel,
+      instruct,
+      audioTheme,
     } = body;
+
+    const resolvedInstruct = (instruct || audioTheme || "").trim() || undefined;
 
     // 1. Single Scene or Custom Text Generation
     if (sceneIndex !== undefined && sceneIndex !== null) {
@@ -33,7 +38,7 @@ export async function POST(req, context) {
         );
       }
 
-      console.log(`[GenerateAudioRoute] Triggering Trigger.dev task "generate-scene-audio" for Scene ${sceneIndex} (Voice: ${voice})...`);
+      console.log(`[GenerateAudioRoute] Triggering Trigger.dev task "generate-scene-audio" for Scene ${sceneIndex} (Voice: ${voice}, Model: ${ttsModel || 'default'})...`);
 
       const handle = await tasks.trigger("generate-scene-audio", {
         channelSlug,
@@ -42,6 +47,8 @@ export async function POST(req, context) {
         voice,
         speed,
         sceneIndex,
+        ...(ttsModel ? { ttsModel } : {}),
+        ...(resolvedInstruct ? { instruct: resolvedInstruct } : {}),
       });
 
       const run = await runs.poll(handle.id, { pollIntervalMs: 1000 });
@@ -77,6 +84,8 @@ export async function POST(req, context) {
         scenes,
         voice,
         speed,
+        ...(ttsModel ? { ttsModel } : {}),
+        ...(resolvedInstruct ? { instruct: resolvedInstruct } : {}),
       });
 
       const run = await runs.poll(handle.id, { pollIntervalMs: 1200 });

@@ -49,6 +49,7 @@ export async function GET() {
         modal_video_render_url AS "modalVideoRenderUrl",
         modal_scene_merger_url AS "modalSceneMergerUrl",
         modal_audio_transcription_url AS "modalAudioTranscriptionUrl",
+        modal_qwen_tts_url AS "modalQwenTtsUrl",
         show_shorts_title_overlay AS "showShortsTitleOverlay",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
@@ -95,6 +96,7 @@ export async function GET() {
     const modalVideoRenderUrl = generalData.modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run";
     const modalSceneMergerUrl = generalData.modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run";
     const modalAudioTranscriptionUrl = generalData.modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run";
+    const modalQwenTtsUrl = generalData.modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run";
 
     return NextResponse.json({
       success: true,
@@ -115,6 +117,7 @@ export async function GET() {
       modalVideoRenderUrl,
       modalSceneMergerUrl,
       modalAudioTranscriptionUrl,
+      modalQwenTtsUrl,
       showShortsTitleOverlay: Boolean(generalData.showShortsTitleOverlay),
       generalSettings: generalData,
       imageEndpoints: imageRows || [],
@@ -163,6 +166,7 @@ export async function POST(request) {
       modalVideoRenderUrl = "https://me-chimaobi--faceless-video-renderer-api.modal.run",
       modalSceneMergerUrl = "https://chima-geniusdomains--faceless-scene-merger-api.modal.run",
       modalAudioTranscriptionUrl = "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run",
+      modalQwenTtsUrl = "https://geniusdomainnames--qwen3-tts-custom-web.modal.run",
       showShortsTitleOverlay = false,
     } = body;
 
@@ -186,6 +190,7 @@ export async function POST(request) {
     const modalRenderUrl = (modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run").trim();
     const modalMergerUrl = (modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run").trim();
     const modalTranscribeUrl = (modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run").trim();
+    const modalQwenUrl = (modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {
@@ -208,6 +213,7 @@ export async function POST(request) {
           modal_video_render_url = ${modalRenderUrl},
           modal_scene_merger_url = ${modalMergerUrl},
           modal_audio_transcription_url = ${modalTranscribeUrl},
+          modal_qwen_tts_url = ${modalQwenUrl},
           show_shorts_title_overlay = ${Boolean(showShortsTitleOverlay)},
           updated_at = NOW()
         WHERE id = ${existing[0].id};
@@ -231,6 +237,7 @@ export async function POST(request) {
           modal_video_render_url,
           modal_scene_merger_url,
           modal_audio_transcription_url,
+          modal_qwen_tts_url,
           show_shorts_title_overlay,
           created_at,
           updated_at
@@ -252,6 +259,7 @@ export async function POST(request) {
           ${modalRenderUrl},
           ${modalMergerUrl},
           ${modalTranscribeUrl},
+          ${modalQwenUrl},
           ${Boolean(showShortsTitleOverlay)},
           NOW(),
           NOW()

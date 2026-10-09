@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS channels (
     banner_url TEXT,
     avatar_url TEXT,
     default_voice TEXT DEFAULT 'af_heart',
+    tts_model TEXT DEFAULT 'kokoro',
     postershive_api TEXT,
     script_structure JSONB,
     channel_tags TEXT,
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS general_settings (
     modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run',
     modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run',
     modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run',
+    modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run',
     show_shorts_title_overlay BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

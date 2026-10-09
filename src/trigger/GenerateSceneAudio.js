@@ -16,8 +16,6 @@ export const generateSceneAudioTask = task({
       speed = 1.0,
     } = payload;
 
-    const selectedVoice = payload.voice || payload.voiceId || "af_heart";
-
     if (!channelSlug || typeof channelSlug !== "string" || !channelSlug.trim()) {
       throw new Error("channelSlug is required and must be passed to generate-scene-audio task.");
     }
@@ -25,6 +23,56 @@ export const generateSceneAudioTask = task({
     if (!topicSlug || typeof topicSlug !== "string" || !topicSlug.trim()) {
       throw new Error("topicSlug is required and must be passed to generate-scene-audio task.");
     }
+
+    // Resolve channel context: tts_model, default_voice, audio_theme
+    let resolvedTtsModel = payload.ttsModel || null;
+    let resolvedVoice = payload.voice || payload.voiceId || null;
+    let resolvedInstruct = payload.instruct || payload.audioTheme || null;
+
+    try {
+      const sql = getDbSql();
+      if (sql) {
+        await initDbSchema();
+        const cRows = await sql`
+          SELECT id, default_voice, audio_theme, tts_model
+          FROM channels
+          WHERE slug = ${channelSlug}
+          LIMIT 1;
+        `;
+        if (cRows && cRows.length > 0) {
+          const ch = cRows[0];
+          if (!resolvedTtsModel) {
+            resolvedTtsModel = ch.tts_model || "kokoro";
+          }
+          if (!resolvedVoice) {
+            resolvedVoice = ch.default_voice || (resolvedTtsModel === "qwen" ? "Ryan" : "af_heart");
+          }
+          if (!resolvedInstruct) {
+            resolvedInstruct = ch.audio_theme || null;
+          }
+        }
+
+        // Fallback: If channel audio_theme is empty, inspect content pillar tone
+        if (!resolvedInstruct) {
+          const tRows = await sql`
+            SELECT pillar_id FROM topics WHERE slug = ${topicSlug} LIMIT 1;
+          `;
+          if (tRows?.[0]?.pillar_id) {
+            const pRows = await sql`
+              SELECT tone FROM content_pillars WHERE id = ${tRows[0].pillar_id} LIMIT 1;
+            `;
+            if (pRows?.[0]?.tone) {
+              resolvedInstruct = pRows[0].tone;
+            }
+          }
+        }
+      }
+    } catch (dbErr) {
+      logger.warn("Could not load channel audio strategy from database:", dbErr);
+    }
+
+    if (!resolvedTtsModel) resolvedTtsModel = "kokoro";
+    if (!resolvedVoice) resolvedVoice = resolvedTtsModel === "qwen" ? "Ryan" : "af_heart";
 
     // Support both single scene invocation and batch array invocation
     let sceneList = [];
@@ -38,7 +86,9 @@ export const generateSceneAudioTask = task({
         {
           scene_number: sceneIndex,
           audio_text: singleText,
-          voice: selectedVoice,
+          voice: resolvedVoice,
+          ttsModel: resolvedTtsModel,
+          instruct: resolvedInstruct,
           speed,
         },
       ];
@@ -49,7 +99,9 @@ export const generateSceneAudioTask = task({
     logger.log(`Starting scene audio narration task for ${sceneList.length} scene(s)...`, {
       channelSlug,
       topicSlug,
-      voice: selectedVoice,
+      ttsModel: resolvedTtsModel,
+      voice: resolvedVoice,
+      instruct: resolvedInstruct ? `"${resolvedInstruct.slice(0, 50)}..."` : "None",
       totalScenes: sceneList.length,
       isSingleScene,
     });
@@ -79,12 +131,19 @@ export const generateSceneAudioTask = task({
         };
       }
 
-      logger.log(`[Parallel Audio] Synthesizing Scene ${currentSceneIndex}...`);
+      const sceneVoice = scene.voice || resolvedVoice;
+      const sceneTtsModel = scene.ttsModel || resolvedTtsModel;
+      const sceneInstruct = scene.instruct || resolvedInstruct;
+
+      logger.log(`[Parallel Audio] Synthesizing Scene ${currentSceneIndex} via ${sceneTtsModel} (Voice: ${sceneVoice})...`);
 
       try {
         const audioResult = await generateAudio({
           text: sceneText,
-          voice: scene.voice || selectedVoice,
+          voice: sceneVoice,
+          ttsModel: sceneTtsModel,
+          instruct: sceneInstruct,
+          audioTheme: sceneInstruct,
           speed: scene.speed || speed,
           format: "wav",
         });
@@ -133,7 +192,8 @@ export const generateSceneAudioTask = task({
             channelSlug,
             topicSlug,
             sceneIndex: String(currentSceneIndex),
-            voice: scene.voice || selectedVoice,
+            voice: sceneVoice,
+            ttsModel: sceneTtsModel,
             endpointUsed: audioResult.endpointUsed,
           },
         });
@@ -160,39 +220,39 @@ export const generateSceneAudioTask = task({
                   file_key,
                   file_name,
                   mime_type,
-                  size_bytes
-                ) VALUES (
+                  size_bytes,
+                  created_at
+                )
+                VALUES (
                   ${topicId},
                   ${channelId},
                   'audio',
                   ${currentSceneIndex},
                   ${uploadResult.publicUrl},
                   ${uploadResult.key},
-                  ${`${topicSlug}-scene-${currentSceneIndex}.wav`},
+                  ${`Scene ${currentSceneIndex} Audio.wav`},
                   'audio/wav',
-                  ${audioResult.audioBuffer.length}
+                  ${audioResult.byteLength},
+                  NOW()
                 );
               `;
             }
           }
         } catch (dbErr) {
-          logger.warn(`Could not save DB audio record for scene ${currentSceneIndex}:`, { error: dbErr.message });
+          logger.warn(`Could not record audio asset in DB for scene ${currentSceneIndex}:`, dbErr.message);
         }
-
-        logger.log(`[Parallel Audio] Scene ${currentSceneIndex} audio generated successfully!`);
 
         return {
           sceneIndex: currentSceneIndex,
           success: true,
-          audioUrl: uploadResult.publicUrl,
           publicUrl: uploadResult.publicUrl,
           key: uploadResult.key,
           endpointUsed: audioResult.endpointUsed,
-          remainingUsage: audioResult.remainingUsage,
           durationEstimate: audioResult.durationEstimate,
+          ttsModel: audioResult.ttsModel,
         };
       } catch (err) {
-        logger.error(`[Parallel Audio] Failed scene ${currentSceneIndex}:`, { error: err.message });
+        logger.error(`Failed to generate audio for scene ${currentSceneIndex}:`, err);
         return {
           sceneIndex: currentSceneIndex,
           success: false,
@@ -201,36 +261,38 @@ export const generateSceneAudioTask = task({
       }
     }
 
-    // Run ALL scene audio tasks concurrently in parallel
+    // Process all scenes concurrently
+    logger.log(`Synthesizing narration for ${sceneList.length} scene(s)...`);
     const results = await Promise.all(sceneList.map((scene) => processSingleSceneAudio(scene)));
-    const completedCount = results.filter((r) => r.success && !r.skipped).length;
 
-    logger.log(`Completed ${completedCount}/${sceneList.length} scene audio generations.`);
+    const completed = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
 
-    const singleResult = isSingleScene && results.length > 0 ? results[0] : null;
+    logger.log(`Scene audio narration synthesis complete. ${completed.length} succeeded, ${failed.length} failed.`);
+
+    if (isSingleScene) {
+      const single = results[0];
+      if (!single.success) {
+        throw new Error(single.error || "Failed to generate single scene audio narration.");
+      }
+      return {
+        success: true,
+        sceneIndex: single.sceneIndex,
+        audioUrl: single.publicUrl,
+        key: single.key,
+        endpointUsed: single.endpointUsed,
+        durationEstimate: single.durationEstimate,
+        ttsModel: single.ttsModel,
+      };
+    }
 
     return {
-      success: isSingleScene ? Boolean(singleResult?.success) : true,
-      channelSlug,
-      topicSlug,
+      success: completed.length > 0,
       totalScenes: sceneList.length,
-      completedAudios: completedCount,
+      completedAudios: completed.length,
+      failedAudios: failed.length,
       audios: results,
-      results,
-      ...(singleResult
-        ? {
-            sceneIndex: singleResult.sceneIndex,
-            audioUrl: singleResult.audioUrl || singleResult.publicUrl,
-            publicUrl: singleResult.publicUrl,
-            key: singleResult.key,
-            endpointUsed: singleResult.endpointUsed,
-            remainingUsage: singleResult.remainingUsage,
-            durationEstimate: singleResult.durationEstimate,
-            error: singleResult.error,
-          }
-        : {}),
+      ttsModel: resolvedTtsModel,
     };
   },
 });
-
-export default generateSceneAudioTask;

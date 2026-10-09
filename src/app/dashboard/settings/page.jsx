@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [modalVideoRenderUrl, setModalVideoRenderUrl] = useState("https://me-chimaobi--faceless-video-renderer-api.modal.run");
   const [modalSceneMergerUrl, setModalSceneMergerUrl] = useState("https://chima-geniusdomains--faceless-scene-merger-api.modal.run");
   const [modalAudioTranscriptionUrl, setModalAudioTranscriptionUrl] = useState("https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run");
+  const [modalQwenTtsUrl, setModalQwenTtsUrl] = useState("https://geniusdomainnames--qwen3-tts-custom-web.modal.run");
   const [showShortsTitleOverlay, setShowShortsTitleOverlay] = useState(false);
   const [editingGeneral, setEditingGeneral] = useState(false);
 
@@ -98,6 +99,7 @@ export default function SettingsPage() {
           if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
           if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
           if (data.modalAudioTranscriptionUrl) setModalAudioTranscriptionUrl(data.modalAudioTranscriptionUrl);
+          if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
           if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
 
           if (Array.isArray(data.llmAccounts)) {
@@ -164,6 +166,7 @@ export default function SettingsPage() {
         if (p.modalVideoRenderUrl !== undefined) setModalVideoRenderUrl(p.modalVideoRenderUrl);
         if (p.modalSceneMergerUrl !== undefined) setModalSceneMergerUrl(p.modalSceneMergerUrl);
         if (p.modalAudioTranscriptionUrl !== undefined) setModalAudioTranscriptionUrl(p.modalAudioTranscriptionUrl);
+        if (p.modalQwenTtsUrl !== undefined) setModalQwenTtsUrl(p.modalQwenTtsUrl);
         if (p.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(p.showShortsTitleOverlay));
       }
     } catch {}
@@ -375,6 +378,7 @@ export default function SettingsPage() {
       modalVideoRenderUrl,
       modalSceneMergerUrl,
       modalAudioTranscriptionUrl,
+      modalQwenTtsUrl,
       showShortsTitleOverlay,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
@@ -409,6 +413,7 @@ export default function SettingsPage() {
         if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
         if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
         if (data.modalAudioTranscriptionUrl) setModalAudioTranscriptionUrl(data.modalAudioTranscriptionUrl);
+        if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
         if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
         if (Array.isArray(data.llmAccounts)) {
           setLlmAccounts(
@@ -1018,6 +1023,32 @@ export default function SettingsPage() {
                     />
                     <p className="text-[10px] text-ink-muted font-mono">
                       Modal Whisper API base URL for GPU-accelerated audio transcription and word timestamping.
+                    </p>
+                  </div>
+
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2 md:col-span-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="modal-qwen-tts-url">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound size={13} className="text-signal" />
+                        <span>Modal Qwen3-TTS 1.7B Endpoint</span>
+                      </span>
+                    </label>
+                    <input
+                      id="modal-qwen-tts-url"
+                      type="text"
+                      readOnly={!editingGeneral}
+                      disabled={!editingGeneral}
+                      value={modalQwenTtsUrl}
+                      onChange={(e) => setModalQwenTtsUrl(e.target.value)}
+                      placeholder="https://geniusdomainnames--qwen3-tts-custom-web.modal.run"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                        editingGeneral
+                          ? "bg-white border-line-dark focus:border-signal"
+                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                      }`}
+                    />
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      Modal FastAPI Qwen3-TTS base URL for instruction-driven, expressive voice narration.
                     </p>
                   </div>
 

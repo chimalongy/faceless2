@@ -45,7 +45,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { KOKORO_VOICES } from "@/lib/audio-generator";
+import { KOKORO_VOICES, QWEN_VOICES } from "@/lib/audio-generator";
 import { SUBTITLE_STYLES } from "@/lib/subtitle-generator";
 import {
   DEFAULT_SCRIPT_STRUCTURE,
@@ -94,6 +94,7 @@ export default function EditChannelPage() {
   const [thumbnailTheme, setThumbnailTheme] = useState("");
   const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
+  const [ttsModel, setTtsModel] = useState("kokoro");
   const [postershiveApi, setPostershiveApi] = useState("");
   const [channelTags, setChannelTags] = useState("");
   const [subtitlesShorts, setSubtitlesShorts] = useState(true);
@@ -142,6 +143,7 @@ export default function EditChannelPage() {
             setThumbnailTheme(c.thumbnailTheme || "");
             setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
+            setTtsModel(c.ttsModel || c.tts_model || "kokoro");
             setPostershiveApi(c.postershiveApi || "");
             setChannelTags(c.channelTags || c.channel_tags || "");
             setSubtitlesShorts(
@@ -200,6 +202,7 @@ export default function EditChannelPage() {
             setThumbnailTheme(found.thumbnailTheme || "");
             setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
+            setTtsModel(found.ttsModel || found.tts_model || "kokoro");
             setPostershiveApi(found.postershiveApi || "");
             setChannelTags(found.channelTags || found.channel_tags || "");
             setSubtitlesShorts(
@@ -303,6 +306,7 @@ export default function EditChannelPage() {
     setField(setThumbnailTheme, "thumbnailTheme", "thumbnail_theme", "thumbnailsTheme");
     setField(setAudioTheme, "audioTheme", "audio_theme", "soundTheme", "voiceoverTheme");
     setField(setDefaultVoice, "defaultVoice", "default_voice", "voice_id", "narrator_voice");
+    setField(setTtsModel, "ttsModel", "tts_model", "tts_engine", "ttsEngine");
     setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
     setField(setChannelTags, "channelTags", "channel_tags", "tags", "channel_tag", "channelTagsList");
     setField(setStatus, "status");
@@ -403,6 +407,7 @@ export default function EditChannelPage() {
         thumbnail_theme: thumbnailTheme.trim(),
         audio_theme: audioTheme.trim(),
         default_voice: defaultVoice,
+        tts_model: ttsModel,
         subtitles_shorts: subtitlesShorts,
         subtitles_longform: subtitlesLongform,
         subtitle_style: subtitleStyle,
@@ -484,6 +489,8 @@ export default function EditChannelPage() {
       thumbnailTheme: thumbnailTheme.trim(),
       audioTheme: audioTheme.trim(),
       defaultVoice,
+      ttsModel,
+      tts_model: ttsModel,
       postershiveApi: postershiveApi.trim(),
       channelTags: channelTags.trim(),
       channel_tags: channelTags.trim(),
@@ -786,70 +793,191 @@ export default function EditChannelPage() {
       )}
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* SECTION: CHANNEL DEFAULT NARRATOR VOICE */}
-        <section className="p-6 border border-line bg-paper-card space-y-4">
+        {/* SECTION: CHANNEL DEFAULT NARRATOR VOICE & TTS MODEL */}
+        <section className="p-6 border border-line bg-paper-card space-y-5">
           <div className="flex items-center justify-between border-b border-line pb-3">
             <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
               <span className="p-1.5 bg-signal/10 text-signal">
                 <Mic size={16} />
               </span>
-              <span>Channel Default Narrator Voice</span>
+              <span>Channel Default Narrator Voice & TTS Engine</span>
             </div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5">
-              Kokoro-82M Voice Engine
+              {ttsModel === "qwen" ? "Qwen3-TTS 1.7B Engine" : "Kokoro-82M Voice Engine"}
             </span>
           </div>
 
-          <div className="space-y-3">
+          {/* Model Selection Toggle */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-ink">
+              Text-to-Speech Engine
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option 1: Kokoro */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTtsModel("kokoro");
+                  if (QWEN_VOICES.some((v) => v.id.toLowerCase() === defaultVoice.toLowerCase())) {
+                    setDefaultVoice("af_heart");
+                  }
+                }}
+                className={`p-3 border text-left flex items-start gap-3 transition-all ${
+                  ttsModel === "kokoro"
+                    ? "border-signal bg-signal/5 ring-1 ring-signal"
+                    : "border-line bg-white hover:border-line-dark"
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0 ${
+                    ttsModel === "kokoro" ? "border-signal bg-signal" : "border-line-dark bg-white"
+                  }`}
+                >
+                  {ttsModel === "kokoro" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                    <span>Kokoro-82M TTS</span>
+                    <span className="text-[9px] font-mono uppercase bg-paper-dark border border-line px-1.5 py-0.5">
+                      Fast & Lightweight
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+                    Standard high-speed synthesis with 26 natural voice profiles across American, British, and international accents.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Qwen3 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTtsModel("qwen");
+                  if (!QWEN_VOICES.some((v) => v.id.toLowerCase() === defaultVoice.toLowerCase())) {
+                    setDefaultVoice("Ryan");
+                  }
+                }}
+                className={`p-3 border text-left flex items-start gap-3 transition-all ${
+                  ttsModel === "qwen"
+                    ? "border-signal bg-signal/5 ring-1 ring-signal"
+                    : "border-line bg-white hover:border-line-dark"
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0 ${
+                    ttsModel === "qwen" ? "border-signal bg-signal" : "border-line-dark bg-white"
+                  }`}
+                >
+                  {ttsModel === "qwen" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                    <span>Qwen3-TTS 1.7B CustomVoice</span>
+                    <span className="text-[9px] font-mono uppercase bg-signal/10 text-signal border border-signal/20 px-1.5 py-0.5 font-semibold">
+                      GPU Instructed
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+                    High-expressiveness Modal GPU model. Automatically receives your channel's <strong>Audio_theme</strong> as style & tone instructions.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Dynamic Voice Actor Selector based on Model */}
+          <div className="space-y-3 pt-1">
             <div>
               <label
                 className="block text-xs font-semibold text-ink mb-1"
                 htmlFor="channel-default-voice"
               >
-                Default Voice Actor ({KOKORO_VOICES.length} Profiles Available)
+                {ttsModel === "qwen"
+                  ? `Qwen3-TTS Speaker Profile (${QWEN_VOICES.length} Voices Available)`
+                  : `Kokoro Voice Actor (${KOKORO_VOICES.length} Profiles Available)`}
               </label>
               <p className="text-xs text-ink-muted leading-relaxed">
-                Select the channel's standard narrator voice. Once configured, this voice profile will automatically be pre-selected in the Audio tab when generating speech for topics.
+                {ttsModel === "qwen"
+                  ? "Select the primary speaker. Qwen3-TTS shapes vocal timbre, emotion, and cadence using this speaker combined with your channel Audio Theme."
+                  : "Select the channel's standard narrator voice. Once configured, this voice profile will automatically be pre-selected in the Audio tab when generating speech for topics."}
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
               <div className="md:col-span-2">
-                <select
-                  id="channel-default-voice"
-                  value={defaultVoice}
-                  onChange={(e) => setDefaultVoice(e.target.value)}
-                  className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
-                >
-                  <optgroup label="🇺🇸 American English (Female)">
-                    {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "female").map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🇺🇸 American English (Male)">
-                    {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "male").map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🇬🇧 British English">
-                    {KOKORO_VOICES.filter((v) => v.lang === "en-GB").map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🌍 International Voices (ES, FR, IT, HI, JA)">
-                    {KOKORO_VOICES.filter((v) => !v.lang.startsWith("en-")).map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
+                {ttsModel === "qwen" ? (
+                  <select
+                    id="channel-default-voice"
+                    value={defaultVoice}
+                    onChange={(e) => setDefaultVoice(e.target.value)}
+                    className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
+                  >
+                    <optgroup label="🇺🇸 English Native Speakers">
+                      {QWEN_VOICES.filter((v) => v.lang === "English").map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🇨🇳 Chinese Native Speakers">
+                      {QWEN_VOICES.filter((v) => v.lang.startsWith("Chinese")).map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🇯🇵 Japanese Native Speaker">
+                      {QWEN_VOICES.filter((v) => v.lang === "Japanese").map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🇰🇷 Korean Native Speaker">
+                      {QWEN_VOICES.filter((v) => v.lang === "Korean").map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                ) : (
+                  <select
+                    id="channel-default-voice"
+                    value={defaultVoice}
+                    onChange={(e) => setDefaultVoice(e.target.value)}
+                    className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
+                  >
+                    <optgroup label="🇺🇸 American English (Female)">
+                      {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "female").map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🇺🇸 American English (Male)">
+                      {KOKORO_VOICES.filter((v) => v.lang === "en-US" && v.gender === "male").map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🇬🇧 British English">
+                      {KOKORO_VOICES.filter((v) => v.lang === "en-GB").map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🌍 International Voices (ES, FR, IT, HI, JA)">
+                      {KOKORO_VOICES.filter((v) => !v.lang.startsWith("en-")).map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                )}
               </div>
 
               {/* Active Voice Pill Badge */}
@@ -858,13 +986,38 @@ export default function EditChannelPage() {
                   <Volume2 size={14} />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] font-mono text-ink-muted uppercase block font-semibold">Active Default</span>
+                  <span className="text-[9px] font-mono text-ink-muted uppercase block font-semibold">
+                    {ttsModel === "qwen" ? "Active Qwen3 Speaker" : "Active Kokoro Voice"}
+                  </span>
                   <p className="text-xs font-semibold text-ink truncate font-mono">
-                    {KOKORO_VOICES.find((v) => v.id === defaultVoice)?.name || defaultVoice}
+                    {ttsModel === "qwen"
+                      ? QWEN_VOICES.find((v) => v.id.toLowerCase() === defaultVoice.toLowerCase())?.name || defaultVoice
+                      : KOKORO_VOICES.find((v) => v.id === defaultVoice)?.name || defaultVoice}
                   </p>
                 </div>
               </div>
             </div>
+
+            {/* Qwen Style Instruction Link Banner */}
+            {ttsModel === "qwen" && (
+              <div className="mt-2 p-3 bg-amber-500/5 border border-amber-500/20 text-xs text-ink/80 rounded-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-700">
+                  <Sparkles size={13} />
+                  <span>Style Instruction Linked to Channel Audio Theme</span>
+                </div>
+                <p className="text-[11px] text-ink-muted">
+                  {audioTheme.trim() ? (
+                    <>
+                      Current instruction prompt: <em className="font-mono text-ink font-semibold">"{audioTheme.trim()}"</em> (configured in the Brand Strategy section below).
+                    </>
+                  ) : (
+                    <>
+                      No <strong>Audio_theme</strong> defined yet. Fill in the "Audio_theme" field under Brand Strategy below to give Qwen specific instructions on tone, pacing, and acoustic mood.
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </section>
 

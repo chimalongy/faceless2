@@ -108,6 +108,8 @@ export default function TopicStudioPage() {
 
   // 4. Audio State
   const [selectedVoice, setSelectedVoice] = useState("af_heart");
+  const [ttsModel, setTtsModel] = useState("kokoro");
+  const [audioTheme, setAudioTheme] = useState("");
   const [audioSpeed, setAudioSpeed] = useState(1.0);
   const [bgMusic, setBgMusic] = useState("Ethereal Sub-bass & Ambient Wind");
   const [sceneAudios, setSceneAudios] = useState({});
@@ -333,6 +335,12 @@ export default function TopicStudioPage() {
             const cData = await channelRes.json();
             if (cData?.channel?.defaultVoice) {
               setSelectedVoice(cData.channel.defaultVoice);
+            }
+            if (cData?.channel?.ttsModel) {
+              setTtsModel(cData.channel.ttsModel);
+            }
+            if (cData?.channel?.audioTheme) {
+              setAudioTheme(cData.channel.audioTheme);
             }
             if (cData?.channel?.postershiveApi) {
               setPostershiveApi(cData.channel.postershiveApi);
@@ -778,6 +786,9 @@ export default function TopicStudioPage() {
           scriptText,
           voice: selectedVoice,
           speed: audioSpeed,
+          ttsModel,
+          instruct: audioTheme,
+          audioTheme: audioTheme,
         }),
       });
 
@@ -850,6 +861,9 @@ export default function TopicStudioPage() {
           scenes: scenesToGenerate,
           voice: selectedVoice,
           speed: audioSpeed,
+          ttsModel,
+          instruct: audioTheme,
+          audioTheme: audioTheme,
         }),
       });
 
@@ -2358,6 +2372,9 @@ export default function TopicStudioPage() {
               setSelectedVoice={setSelectedVoice}
               audioSpeed={audioSpeed}
               setAudioSpeed={setAudioSpeed}
+              ttsModel={ttsModel}
+              setTtsModel={setTtsModel}
+              audioTheme={audioTheme}
               bgMusic={bgMusic}
               setBgMusic={setBgMusic}
               isGeneratingAllAudios={isGeneratingAllAudios}
