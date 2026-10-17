@@ -134,7 +134,7 @@ export async function PUT(request, { params }) {
     const body = await request.json();
     const title = body.title?.trim();
     const scenesJson = body.scenesJson ? JSON.stringify(body.scenesJson) : null;
-    const storyDesc = body.storyDescription !== undefined ? body.storyDescription : (body.story_description !== undefined ? body.story_description : (body.story_discription !== undefined ? body.story_discription : null));
+    const storyDesc = body.storyDescription !== undefined ? body.storyDescription : (body.story_description !== undefined ? body.story_description : null);
 
     let pillarId = undefined;
     if (body.pillarSlug || body.pillar) {

@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS general_settings (
     modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run',
     modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run',
     modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run',
+    modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run',
     show_shorts_title_overlay BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

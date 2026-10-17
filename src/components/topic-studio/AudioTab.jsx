@@ -53,6 +53,19 @@ export default function AudioTab({
     return isQwenVoice(selectedVoice) ? "qwen" : "kokoro";
   });
 
+  const [customVoiceClones, setCustomVoiceClones] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/voice-clones")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data.voices)) {
+          setCustomVoiceClones(data.voices);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (ttsModel && (ttsModel === "qwen" || ttsModel === "kokoro") && ttsModel !== activeModel) {
       setActiveModel(ttsModel);
@@ -373,6 +386,15 @@ export default function AudioTab({
                 onChange={(e) => setSelectedVoice(e.target.value)}
                 className="w-full h-10 px-3.5 border border-line bg-white text-xs text-ink outline-none focus:border-signal cursor-pointer font-sans"
               >
+                {customVoiceClones.length > 0 && (
+                  <optgroup label="🧬 Custom Cloned Voices">
+                    {customVoiceClones.map((v) => (
+                      <option key={v.voice_name} value={v.voice_name}>
+                        {v.voice_name} (Custom Clone)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 <optgroup label="🇺🇸 English Native Speakers">
                   {QWEN_VOICES.filter((v) => v.lang === "English").map((v) => (
                     <option key={v.id} value={v.id}>

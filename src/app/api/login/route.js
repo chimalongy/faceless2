@@ -34,3 +34,9 @@ export async function POST(request) {
 
   return response;
 }
+
+export async function DELETE() {
+  const response = NextResponse.json({ ok: true });
+  response.cookies.delete("faceless_studio_admin_session");
+  return response;
+}

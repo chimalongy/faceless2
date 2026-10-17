@@ -97,6 +97,7 @@ export async function GET() {
     const modalSceneMergerUrl = generalData.modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run";
     const modalAudioTranscriptionUrl = generalData.modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run";
     const modalQwenTtsUrl = generalData.modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run";
+    const modalQwenVoiceCloneUrl = generalData.modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run";
 
     return NextResponse.json({
       success: true,
@@ -118,6 +119,7 @@ export async function GET() {
       modalSceneMergerUrl,
       modalAudioTranscriptionUrl,
       modalQwenTtsUrl,
+      modalQwenVoiceCloneUrl,
       showShortsTitleOverlay: Boolean(generalData.showShortsTitleOverlay),
       generalSettings: generalData,
       imageEndpoints: imageRows || [],
@@ -191,6 +193,7 @@ export async function POST(request) {
     const modalMergerUrl = (modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run").trim();
     const modalTranscribeUrl = (modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run").trim();
     const modalQwenUrl = (modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run").trim();
+    const modalVoiceCloneUrl = (modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {
@@ -214,6 +217,7 @@ export async function POST(request) {
           modal_scene_merger_url = ${modalMergerUrl},
           modal_audio_transcription_url = ${modalTranscribeUrl},
           modal_qwen_tts_url = ${modalQwenUrl},
+          modal_qwen_voice_clone_url = ${modalVoiceCloneUrl},
           show_shorts_title_overlay = ${Boolean(showShortsTitleOverlay)},
           updated_at = NOW()
         WHERE id = ${existing[0].id};
@@ -238,6 +242,7 @@ export async function POST(request) {
           modal_scene_merger_url,
           modal_audio_transcription_url,
           modal_qwen_tts_url,
+          modal_qwen_voice_clone_url,
           show_shorts_title_overlay,
           created_at,
           updated_at
@@ -260,6 +265,7 @@ export async function POST(request) {
           ${modalMergerUrl},
           ${modalTranscribeUrl},
           ${modalQwenUrl},
+          ${modalVoiceCloneUrl},
           ${Boolean(showShortsTitleOverlay)},
           NOW(),
           NOW()

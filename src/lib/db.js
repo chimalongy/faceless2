@@ -143,7 +143,24 @@ export async function initDbSchema() {
 
     try {
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_description TEXT;`;
-      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_discription TEXT;`;
+      // Safely migrate any legacy data from misspelled story_discription column, then drop it
+      try {
+        await sql`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'topics' AND column_name = 'story_discription'
+            ) THEN
+              UPDATE topics 
+              SET story_description = story_discription 
+              WHERE story_description IS NULL AND story_discription IS NOT NULL;
+              
+              ALTER TABLE topics DROP COLUMN story_discription;
+            END IF;
+          END $$;
+        `;
+      } catch {}
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS video_type TEXT DEFAULT 'longform';`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS aspect_ratio TEXT DEFAULT '16:9';`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS parent_topic_id INT REFERENCES topics(id) ON DELETE SET NULL;`;
@@ -232,6 +249,7 @@ export async function initDbSchema() {
         modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run',
         modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run',
         modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run',
+        modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run',
         show_shorts_title_overlay BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -259,6 +277,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS show_shorts_title_overlay BOOLEAN DEFAULT false;`;
     } catch {}
 

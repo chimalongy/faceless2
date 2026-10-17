@@ -23,7 +23,8 @@ import {
   Eye,
   EyeOff,
   Cpu,
-  Calendar
+  Calendar,
+  Mic
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -56,6 +57,7 @@ export default function SettingsPage() {
   const [modalSceneMergerUrl, setModalSceneMergerUrl] = useState("https://chima-geniusdomains--faceless-scene-merger-api.modal.run");
   const [modalAudioTranscriptionUrl, setModalAudioTranscriptionUrl] = useState("https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run");
   const [modalQwenTtsUrl, setModalQwenTtsUrl] = useState("https://geniusdomainnames--qwen3-tts-custom-web.modal.run");
+  const [modalQwenVoiceCloneUrl, setModalQwenVoiceCloneUrl] = useState("https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run");
   const [showShortsTitleOverlay, setShowShortsTitleOverlay] = useState(false);
   const [editingGeneral, setEditingGeneral] = useState(false);
 
@@ -100,6 +102,7 @@ export default function SettingsPage() {
           if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
           if (data.modalAudioTranscriptionUrl) setModalAudioTranscriptionUrl(data.modalAudioTranscriptionUrl);
           if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
+          if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
           if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
 
           if (Array.isArray(data.llmAccounts)) {
@@ -379,6 +382,7 @@ export default function SettingsPage() {
       modalSceneMergerUrl,
       modalAudioTranscriptionUrl,
       modalQwenTtsUrl,
+      modalQwenVoiceCloneUrl,
       showShortsTitleOverlay,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
@@ -414,6 +418,7 @@ export default function SettingsPage() {
         if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
         if (data.modalAudioTranscriptionUrl) setModalAudioTranscriptionUrl(data.modalAudioTranscriptionUrl);
         if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
+        if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
         if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
         if (Array.isArray(data.llmAccounts)) {
           setLlmAccounts(
@@ -1049,6 +1054,33 @@ export default function SettingsPage() {
                     />
                     <p className="text-[10px] text-ink-muted font-mono">
                       Modal FastAPI Qwen3-TTS base URL for instruction-driven, expressive voice narration.
+                    </p>
+                  </div>
+
+                  {/* 4b. Modal Qwen3-TTS Voice Cloning Endpoint */}
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="modal-qwen-voice-clone-url">
+                      <span className="flex items-center gap-1.5">
+                        <Mic size={13} className="text-signal" />
+                        <span>Modal Voice Cloning Endpoint</span>
+                      </span>
+                    </label>
+                    <input
+                      id="modal-qwen-voice-clone-url"
+                      type="text"
+                      readOnly={!editingGeneral}
+                      disabled={!editingGeneral}
+                      value={modalQwenVoiceCloneUrl}
+                      onChange={(e) => setModalQwenVoiceCloneUrl(e.target.value)}
+                      placeholder="https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                        editingGeneral
+                          ? "bg-white border-line-dark focus:border-signal"
+                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                      }`}
+                    />
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      Modal FastAPI Voice Cloning base URL for registering reference audio and generating zero-shot cloned speech.
                     </p>
                   </div>
 

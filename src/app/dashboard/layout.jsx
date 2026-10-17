@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, Settings2, Menu, X, LogOut, Radio } from "lucide-react";
+import { LayoutGrid, Settings2, Menu, X, LogOut, Radio, Mic } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -8,6 +8,7 @@ import { Toaster } from "react-hot-toast";
 
 const navigation = [
   { label: "Overview", href: "/dashboard", icon: LayoutGrid },
+  { label: "Voice Cloning", href: "/dashboard/voice-clones", icon: Mic },
   { label: "Settings", href: "/dashboard/settings", icon: Settings2 },
 ];
 
@@ -19,7 +20,9 @@ export default function DashboardLayout({ children }) {
   // Derive active label or channel title
   const activeLabel =
     navigation.find((item) => item.href === pathname)?.label ??
-    (pathname.includes("/edit")
+    (pathname.includes("/voice-clones")
+      ? "Voice Cloning Desk"
+      : pathname.includes("/edit")
       ? "Edit Channel Desk"
       : pathname.includes("/topic/")
       ? "Content Topic Studio"

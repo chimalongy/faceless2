@@ -207,7 +207,7 @@ export const generateStoryDescriptionTask = task({
       );
     }
 
-    // 6. Persist to Database (both story_description and fallback story_discription if present)
+    // 6. Persist to Database
     try {
       await sql`
         UPDATE topics
