@@ -67,11 +67,29 @@ export async function POST(request) {
       return NextResponse.json({ error: "Reference audio file is required" }, { status: 400 });
     }
 
-    const result = await createVoiceClone({
-      voiceName: voiceName.trim(),
-      refText: refText.trim(),
-      refAudioBase64,
-    });
+    let result = null;
+    try {
+      const { tasks, runs } = await import("@trigger.dev/sdk");
+      const handle = await tasks.trigger("voice-cloner", {
+        action: "register",
+        voiceName: voiceName.trim(),
+        refText: refText.trim(),
+        refAudioBase64,
+      });
+
+      const run = await runs.poll(handle.id, { pollIntervalMs: 1000 });
+      if (run.status !== "COMPLETED") {
+        throw new Error(run.error?.message || `Voice cloner task ended with status ${run.status}`);
+      }
+      result = run.output?.registration || run.output;
+    } catch (triggerErr) {
+      console.warn("[VoiceClonesRoute] Trigger.dev execution error or unavailable, falling back to direct Modal call:", triggerErr.message);
+      result = await createVoiceClone({
+        voiceName: voiceName.trim(),
+        refText: refText.trim(),
+        refAudioBase64,
+      });
+    }
 
     return NextResponse.json({
       success: true,

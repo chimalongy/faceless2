@@ -228,7 +228,40 @@ export async function generateAudio({
     throw new Error("Text is required for audio narration synthesis.");
   }
 
-  // 1. Determine TTS model engine
+  // 1. Check if this is a custom cloned voice
+  const isClone =
+    ttsModel === "clone" ||
+    ttsModel === "qwen_clone" ||
+    (!isQwenVoice(voice) && !KOKORO_VOICES.some((v) => v.id.toLowerCase() === (voice || "").toLowerCase()));
+
+  if (isClone && voice) {
+    console.log(`[AudioGenerator] Synthesizing speech via Voice Clone ("${voice}")`);
+    const { generateClonedAudio } = await import("./voice-cloner.js");
+    const audioBuffer = await generateClonedAudio({
+      voiceName: voice,
+      text: text.trim(),
+      language: language || "English",
+    });
+
+    const wordCount = text.trim().split(/\s+/).length;
+    const totalSeconds = Math.max(1, Math.round((wordCount / (150 * (Number(speed) || 1))) * 60));
+    const mins = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const secs = String(totalSeconds % 60).padStart(2, "0");
+    const durationEstimate = `${mins}:${secs}`;
+
+    return {
+      success: true,
+      audioBuffer,
+      endpointUsed: `Voice Clone (${voice} @ Modal)`,
+      remainingUsage: 999,
+      durationEstimate,
+      format,
+      byteLength: audioBuffer.length,
+      ttsModel: "clone",
+    };
+  }
+
+  // 2. Determine TTS model engine
   const isQwen =
     (ttsModel && ttsModel.toLowerCase().startsWith("qwen")) ||
     isQwenVoice(voice);

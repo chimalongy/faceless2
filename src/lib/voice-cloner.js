@@ -1,6 +1,6 @@
 import { getDbSql, initDbSchema } from "./db.js";
 
-const DEFAULT_MODAL_VOICE_CLONE_URL = "https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run";
+const DEFAULT_MODAL_VOICE_CLONE_URL = "https://geniusdomainnames--qwen3-tts-voice-cloner.us-east.modal.run";
 
 /**
  * Resolves the configured Modal Qwen Voice Cloning endpoint URL.

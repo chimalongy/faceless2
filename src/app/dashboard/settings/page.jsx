@@ -57,7 +57,7 @@ export default function SettingsPage() {
   const [modalSceneMergerUrl, setModalSceneMergerUrl] = useState("https://chima-geniusdomains--faceless-scene-merger-api.modal.run");
   const [modalAudioTranscriptionUrl, setModalAudioTranscriptionUrl] = useState("https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run");
   const [modalQwenTtsUrl, setModalQwenTtsUrl] = useState("https://geniusdomainnames--qwen3-tts-custom-web.modal.run");
-  const [modalQwenVoiceCloneUrl, setModalQwenVoiceCloneUrl] = useState("https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run");
+  const [modalQwenVoiceCloneUrl, setModalQwenVoiceCloneUrl] = useState("https://geniusdomainnames--qwen3-tts-voice-cloner.us-east.modal.run");
   const [showShortsTitleOverlay, setShowShortsTitleOverlay] = useState(false);
   const [editingGeneral, setEditingGeneral] = useState(false);
 
@@ -1072,7 +1072,7 @@ export default function SettingsPage() {
                       disabled={!editingGeneral}
                       value={modalQwenVoiceCloneUrl}
                       onChange={(e) => setModalQwenVoiceCloneUrl(e.target.value)}
-                      placeholder="https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run"
+                      placeholder="https://geniusdomainnames--qwen3-tts-voice-cloner.us-east.modal.run"
                       className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
                         editingGeneral
                           ? "bg-white border-line-dark focus:border-signal"

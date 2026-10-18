@@ -16,11 +16,40 @@ export async function POST(request) {
       return NextResponse.json({ error: "Text to synthesize is required" }, { status: 400 });
     }
 
-    const audioBuffer = await generateClonedAudio({
-      voiceName: voiceName.trim(),
-      text: text.trim(),
-      language: language.trim() || "English",
-    });
+    let audioBuffer = null;
+    let audioUrl = null;
+
+    try {
+      const { tasks, runs } = await import("@trigger.dev/sdk");
+      const handle = await tasks.trigger("voice-cloner", {
+        action: "generate",
+        voiceName: voiceName.trim(),
+        text: text.trim(),
+        language: language.trim() || "English",
+        saveToR2: true,
+      });
+
+      const run = await runs.poll(handle.id, { pollIntervalMs: 1000 });
+      if (run.status !== "COMPLETED") {
+        throw new Error(run.error?.message || `Voice synthesis task ended with status ${run.status}`);
+      }
+
+      if (run.output?.audioBase64) {
+        audioBuffer = Buffer.from(run.output.audioBase64, "base64");
+      }
+      audioUrl = run.output?.audioUrl || null;
+    } catch (triggerErr) {
+      console.warn("[VoiceClonesGenerate] Trigger.dev error or unavailable, falling back to direct Modal call:", triggerErr.message);
+      audioBuffer = await generateClonedAudio({
+        voiceName: voiceName.trim(),
+        text: text.trim(),
+        language: language.trim() || "English",
+      });
+    }
+
+    if (!audioBuffer) {
+      throw new Error("No audio returned from voice cloning service");
+    }
 
     return new Response(audioBuffer, {
       status: 200,
@@ -28,6 +57,7 @@ export async function POST(request) {
         "Content-Type": "audio/wav",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(voiceName.trim())}-speech.wav"`,
         "Cache-Control": "no-store",
+        ...(audioUrl ? { "X-Audio-Url": audioUrl } : {}),
       },
     });
   } catch (error) {

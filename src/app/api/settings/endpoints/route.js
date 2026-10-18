@@ -50,6 +50,7 @@ export async function GET() {
         modal_scene_merger_url AS "modalSceneMergerUrl",
         modal_audio_transcription_url AS "modalAudioTranscriptionUrl",
         modal_qwen_tts_url AS "modalQwenTtsUrl",
+        modal_qwen_voice_clone_url AS "modalQwenVoiceCloneUrl",
         show_shorts_title_overlay AS "showShortsTitleOverlay",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
@@ -97,7 +98,7 @@ export async function GET() {
     const modalSceneMergerUrl = generalData.modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run";
     const modalAudioTranscriptionUrl = generalData.modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run";
     const modalQwenTtsUrl = generalData.modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run";
-    const modalQwenVoiceCloneUrl = generalData.modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run";
+    const modalQwenVoiceCloneUrl = generalData.modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.us-east.modal.run";
 
     return NextResponse.json({
       success: true,
@@ -193,7 +194,7 @@ export async function POST(request) {
     const modalMergerUrl = (modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run").trim();
     const modalTranscribeUrl = (modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run").trim();
     const modalQwenUrl = (modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run").trim();
-    const modalVoiceCloneUrl = (modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-clone.us-east.modal.run").trim();
+    const modalVoiceCloneUrl = (modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.us-east.modal.run").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {
