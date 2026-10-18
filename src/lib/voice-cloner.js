@@ -17,17 +17,34 @@ export async function resolveModalVoiceCloneUrl() {
         LIMIT 1;
       `;
       if (rows?.[0]?.modalQwenVoiceCloneUrl) {
-        return rows[0].modalQwenVoiceCloneUrl.trim().replace(/\/+$/, "");
+        let url = rows[0].modalQwenVoiceCloneUrl.trim().replace(/\/+$/, "");
+        // Automatically migrate legacy typo URL if stored in DB
+        if (url.includes("qwen3-tts-clone.us-east.modal.run") || url.includes("qwen3-tts-clone.modal.run")) {
+          url = url.replace("qwen3-tts-clone", "qwen3-tts-voice-cloner");
+          // Self-heal the database row in the background
+          sql`
+            UPDATE general_settings
+            SET modal_qwen_voice_clone_url = ${url}, updated_at = NOW()
+            WHERE id = ${rows[0].id || 1};
+          `.catch(() => {});
+        }
+        return url;
       }
     } catch (err) {
       console.warn("Could not query Modal Voice Clone URL from database:", err.message);
     }
   }
 
-  return (
+  let envOrDef = (
     process.env.MODAL_QWEN_VOICE_CLONE_URL ||
     DEFAULT_MODAL_VOICE_CLONE_URL
   ).trim().replace(/\/+$/, "");
+
+  if (envOrDef.includes("qwen3-tts-clone")) {
+    envOrDef = envOrDef.replace("qwen3-tts-clone", "qwen3-tts-voice-cloner");
+  }
+
+  return envOrDef;
 }
 
 /**
@@ -127,7 +144,7 @@ export async function createVoiceClone({ voiceName, refText, refAudioBase64 }) {
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       const detail = errData.detail || errData.error || `HTTP ${res.status}`;
-      throw new Error(detail);
+      throw new Error(`${detail} (called: ${baseUrl}/new-clone)`);
     }
 
     const result = await res.json();
