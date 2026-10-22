@@ -170,6 +170,7 @@ export async function POST(request) {
       modalSceneMergerUrl = "https://chima-geniusdomains--faceless-scene-merger-api.modal.run",
       modalAudioTranscriptionUrl = "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run",
       modalQwenTtsUrl = "https://geniusdomainnames--qwen3-tts-custom-web.modal.run",
+      modalQwenVoiceCloneUrl = "https://geniusdomainnames--qwen3-tts-voice-cloner.us-east.modal.run",
       showShortsTitleOverlay = false,
     } = body;
 
@@ -345,6 +346,11 @@ export async function POST(request) {
         gemma_base_url AS "gemmaBaseUrl",
         open_router_base_url AS "openRouterBaseUrl",
         nvidia_base_url AS "nvidiaBaseUrl",
+        modal_video_render_url AS "modalVideoRenderUrl",
+        modal_scene_merger_url AS "modalSceneMergerUrl",
+        modal_audio_transcription_url AS "modalAudioTranscriptionUrl",
+        modal_qwen_tts_url AS "modalQwenTtsUrl",
+        modal_qwen_voice_clone_url AS "modalQwenVoiceCloneUrl",
         show_shorts_title_overlay AS "showShortsTitleOverlay",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
@@ -388,6 +394,11 @@ export async function POST(request) {
       gemmaBaseUrl: refreshedGen.gemmaBaseUrl || gemmaUrl,
       openRouterBaseUrl: refreshedGen.openRouterBaseUrl || openRouterUrl,
       nvidiaBaseUrl: refreshedGen.nvidiaBaseUrl || nvidiaUrl,
+      modalVideoRenderUrl: refreshedGen.modalVideoRenderUrl || modalRenderUrl,
+      modalSceneMergerUrl: refreshedGen.modalSceneMergerUrl || modalMergerUrl,
+      modalAudioTranscriptionUrl: refreshedGen.modalAudioTranscriptionUrl || modalTranscribeUrl,
+      modalQwenTtsUrl: refreshedGen.modalQwenTtsUrl || modalQwenUrl,
+      modalQwenVoiceCloneUrl: refreshedGen.modalQwenVoiceCloneUrl || modalVoiceCloneUrl,
       showShortsTitleOverlay: Boolean(refreshedGen.showShortsTitleOverlay),
       generalSettings: refreshedGen,
       imageEndpoints: refreshedImageRows || [],

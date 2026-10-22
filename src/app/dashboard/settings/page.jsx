@@ -27,6 +27,7 @@ import {
   Mic
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 
 const SETTINGS_STORAGE_KEY = "faceless_studio_settings";
 
@@ -147,32 +148,6 @@ export default function SettingsPage() {
     }
 
     loadEndpointsFromDb();
-
-    // Fallback/sync General Settings from localStorage
-    try {
-      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (stored) {
-        const p = JSON.parse(stored);
-        if (p.defaultLlmSource !== undefined) setDefaultLlmSource(p.defaultLlmSource);
-        if (p.defaultLlmModel !== undefined) setDefaultLlmModel(p.defaultLlmModel);
-        if (p.scriptGenSource !== undefined) setScriptGenSource(p.scriptGenSource);
-        if (p.scriptGenStrictSource !== undefined) setScriptGenStrictSource(Boolean(p.scriptGenStrictSource));
-        if (p.scriptGenModel !== undefined) setScriptGenModel(p.scriptGenModel);
-        if (p.scriptGenStrictModel !== undefined) setScriptGenStrictModel(Boolean(p.scriptGenStrictModel));
-        if (p.sceneGenSource !== undefined) setSceneGenSource(p.sceneGenSource);
-        if (p.sceneGenStrictSource !== undefined) setSceneGenStrictSource(Boolean(p.sceneGenStrictSource));
-        if (p.sceneGenModel !== undefined) setSceneGenModel(p.sceneGenModel);
-        if (p.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(p.sceneGenStrictModel));
-        if (p.gemmaBaseUrl !== undefined) setGemmaBaseUrl(p.gemmaBaseUrl);
-        if (p.openRouterBaseUrl !== undefined) setOpenRouterBaseUrl(p.openRouterBaseUrl);
-        if (p.nvidiaBaseUrl !== undefined) setNvidiaBaseUrl(p.nvidiaBaseUrl);
-        if (p.modalVideoRenderUrl !== undefined) setModalVideoRenderUrl(p.modalVideoRenderUrl);
-        if (p.modalSceneMergerUrl !== undefined) setModalSceneMergerUrl(p.modalSceneMergerUrl);
-        if (p.modalAudioTranscriptionUrl !== undefined) setModalAudioTranscriptionUrl(p.modalAudioTranscriptionUrl);
-        if (p.modalQwenTtsUrl !== undefined) setModalQwenTtsUrl(p.modalQwenTtsUrl);
-        if (p.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(p.showShortsTitleOverlay));
-      }
-    } catch {}
   }, []);
 
   // LLM Accounts Handlers
@@ -396,83 +371,89 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.defaultLlmSource !== undefined) setDefaultLlmSource(data.defaultLlmSource);
-        if (data.defaultLlmModel) setDefaultLlmModel(data.defaultLlmModel);
 
-        if (data.scriptGenSource !== undefined) setScriptGenSource(data.scriptGenSource);
-        if (data.scriptGenStrictSource !== undefined) setScriptGenStrictSource(Boolean(data.scriptGenStrictSource));
-        if (data.scriptGenModel) setScriptGenModel(data.scriptGenModel);
-        if (data.scriptGenStrictModel !== undefined) setScriptGenStrictModel(Boolean(data.scriptGenStrictModel));
-
-        if (data.sceneGenSource !== undefined) setSceneGenSource(data.sceneGenSource);
-        if (data.sceneGenStrictSource !== undefined) setSceneGenStrictSource(Boolean(data.sceneGenStrictSource));
-        if (data.sceneGenModel) setSceneGenModel(data.sceneGenModel);
-        if (data.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(data.sceneGenStrictModel));
-
-        if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
-        if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
-        if (data.nvidiaBaseUrl) setNvidiaBaseUrl(data.nvidiaBaseUrl);
-        if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
-        if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
-        if (data.modalAudioTranscriptionUrl) setModalAudioTranscriptionUrl(data.modalAudioTranscriptionUrl);
-        if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
-        if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
-        if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
-        if (Array.isArray(data.llmAccounts)) {
-          setLlmAccounts(
-            data.llmAccounts.map((item) => ({
-              id: item.id ? String(item.id) : `llm-${Date.now()}`,
-              accountEmail: item.accountEmail || item.account_email || "",
-              source: item.source || "gemini",
-              accountId: item.accountId || item.account_id || "",
-              apiToken: item.apiToken || item.api_token || "",
-              created: item.created || item.createdAt || null,
-              updated: item.updated || item.updatedAt || null,
-            }))
-          );
-        }
-        if (Array.isArray(data.imageEndpoints)) {
-          setImageEndpoints(
-            data.imageEndpoints.map((item) => ({
-              id: item.id ? String(item.id) : `img-${Date.now()}`,
-              accountEmail: item.accountEmail || "",
-              genUrl: item.genUrl || "",
-              usage: parseInt(item.usage, 10) || 0,
-            }))
-          );
-        }
-        if (Array.isArray(data.audioEndpoints)) {
-          setAudioEndpoints(
-            data.audioEndpoints.map((item) => ({
-              id: item.id ? String(item.id) : `aud-${Date.now()}`,
-              accountEmail: item.accountEmail || "",
-              genUrl: item.genUrl || "",
-              usage: parseInt(item.usage, 10) || 0,
-            }))
-          );
-        }
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server responded with status ${res.status}`);
       }
+
+      const data = await res.json();
+      if (data.defaultLlmSource !== undefined) setDefaultLlmSource(data.defaultLlmSource);
+      if (data.defaultLlmModel) setDefaultLlmModel(data.defaultLlmModel);
+
+      if (data.scriptGenSource !== undefined) setScriptGenSource(data.scriptGenSource);
+      if (data.scriptGenStrictSource !== undefined) setScriptGenStrictSource(Boolean(data.scriptGenStrictSource));
+      if (data.scriptGenModel) setScriptGenModel(data.scriptGenModel);
+      if (data.scriptGenStrictModel !== undefined) setScriptGenStrictModel(Boolean(data.scriptGenStrictModel));
+
+      if (data.sceneGenSource !== undefined) setSceneGenSource(data.sceneGenSource);
+      if (data.sceneGenStrictSource !== undefined) setSceneGenStrictSource(Boolean(data.sceneGenStrictSource));
+      if (data.sceneGenModel) setSceneGenModel(data.sceneGenModel);
+      if (data.sceneGenStrictModel !== undefined) setSceneGenStrictModel(Boolean(data.sceneGenStrictModel));
+
+      if (data.gemmaBaseUrl) setGemmaBaseUrl(data.gemmaBaseUrl);
+      if (data.openRouterBaseUrl) setOpenRouterBaseUrl(data.openRouterBaseUrl);
+      if (data.nvidiaBaseUrl) setNvidiaBaseUrl(data.nvidiaBaseUrl);
+      if (data.modalVideoRenderUrl) setModalVideoRenderUrl(data.modalVideoRenderUrl);
+      if (data.modalSceneMergerUrl) setModalSceneMergerUrl(data.modalSceneMergerUrl);
+      if (data.modalAudioTranscriptionUrl) setModalAudioTranscriptionUrl(data.modalAudioTranscriptionUrl);
+      if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
+      if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
+      if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
+      if (Array.isArray(data.llmAccounts)) {
+        setLlmAccounts(
+          data.llmAccounts.map((item) => ({
+            id: item.id ? String(item.id) : `llm-${Date.now()}`,
+            accountEmail: item.accountEmail || item.account_email || "",
+            source: item.source || "gemini",
+            accountId: item.accountId || item.account_id || "",
+            apiToken: item.apiToken || item.api_token || "",
+            created: item.created || item.createdAt || null,
+            updated: item.updated || item.updatedAt || null,
+          }))
+        );
+      }
+      if (Array.isArray(data.imageEndpoints)) {
+        setImageEndpoints(
+          data.imageEndpoints.map((item) => ({
+            id: item.id ? String(item.id) : `img-${Date.now()}`,
+            accountEmail: item.accountEmail || "",
+            genUrl: item.genUrl || "",
+            usage: parseInt(item.usage, 10) || 0,
+          }))
+        );
+      }
+      if (Array.isArray(data.audioEndpoints)) {
+        setAudioEndpoints(
+          data.audioEndpoints.map((item) => ({
+            id: item.id ? String(item.id) : `aud-${Date.now()}`,
+            accountEmail: item.accountEmail || "",
+            genUrl: item.genUrl || "",
+            usage: parseInt(item.usage, 10) || 0,
+          }))
+        );
+      }
+
+      // Clear any outdated localStorage cache so database is always authority
+      try {
+        localStorage.removeItem(SETTINGS_STORAGE_KEY);
+      } catch {}
+
+      // Lock all fields after successful save
+      setEditingGeneral(false);
+      setEditingLlmIds({});
+      setEditingImageIds({});
+      setEditingAudioIds({});
+
+      setSaved(true);
+      toast.success("Settings successfully saved to database!");
+      setTimeout(() => setSaved(false), 3000);
     } catch (dbErr) {
-      console.warn("Could not persist endpoints to DB:", dbErr);
+      console.error("Could not persist endpoints to DB:", dbErr);
+      toast.error(`Failed to save settings: ${dbErr.message}`);
     } finally {
       setIsSavingDb(false);
     }
-
-    // Save to localStorage as backup
-    try {
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
-    } catch {}
-
-    // Lock all fields after successful save to protect content
-    setEditingGeneral(false);
-    setEditingLlmIds({});
-    setEditingImageIds({});
-    setEditingAudioIds({});
-
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
   }
 
   const tabs = [
