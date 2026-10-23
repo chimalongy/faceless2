@@ -101,8 +101,8 @@ export async function decrementEndpointUsage(endpointId) {
  * 
  * @param {Object} options
  * @param {string} options.prompt - The full image prompt
- * @param {number} [options.width=1664] - Image width
- * @param {number} [options.height=928] - Image height
+ * @param {number} [options.width=1376] - Image width
+ * @param {number} [options.height=768] - Image height
  * @param {number} [options.numInferenceSteps=50] - Inference steps
  * @param {number} [options.seed=42] - Seed
  * @param {number} [options.timeoutMs=300000] - Timeout in milliseconds (default: 5 min)
@@ -110,15 +110,20 @@ export async function decrementEndpointUsage(endpointId) {
  */
 export async function generateImage({
   prompt,
-  width = 1664,
-  height = 928,
+  width = 1376,
+  height = 768,
   numInferenceSteps = 50,
-  seed = 42,
+  seed = null,
   timeoutMs = 300000,
 }) {
   if (!prompt || typeof prompt !== "string") {
     throw new Error("Prompt is required for image generation.");
   }
+
+  const finalSeed =
+    seed !== undefined && seed !== null
+      ? Number(seed)
+      : Math.floor(Math.random() * 2147483647) + 1;
 
   // 1. Load all API keys and endpoints
   const endpoints = await loadImageEndpoints();
@@ -146,7 +151,7 @@ export async function generateImage({
     }
 
     console.log(
-      `[ImageGenerator] Attempting generation with endpoint: ${endpoint.accountEmail} (${endpoint.genUrl}) - Remaining Quota: ${currentUsage}`
+      `[ImageGenerator] Attempting generation with endpoint: ${endpoint.accountEmail} (${endpoint.genUrl}) - Seed: ${finalSeed} - Remaining Quota: ${currentUsage}`
     );
 
     const payload = {
@@ -154,7 +159,7 @@ export async function generateImage({
       width,
       height,
       num_inference_steps: numInferenceSteps,
-      seed,
+      seed: finalSeed,
     };
 
     try {
@@ -177,11 +182,9 @@ export async function generateImage({
 
       const data = await response.json();
 
-      if (data && data.status === "success") {
+      const isSuccess = data && (data.status === "success" || Boolean(data.image_base64));
+      if (isSuccess && data.image_base64) {
         const base64Data = data.image_base64;
-        if (!base64Data) {
-          throw new Error("Endpoint responded with success but no image_base64 payload was returned.");
-        }
 
         const imageBuffer = Buffer.from(base64Data, "base64");
 

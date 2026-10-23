@@ -1330,8 +1330,8 @@ export default function TopicStudioPage() {
         body: JSON.stringify({
           sceneIndex: sceneNum,
           prompt,
-          width: isShort ? 928 : 1664,
-          height: isShort ? 1664 : 928,
+          width: isShort ? 768 : 1376,
+          height: isShort ? 1376 : 768,
         }),
       });
 
@@ -1429,8 +1429,8 @@ export default function TopicStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scenes: scenesToGenerate,
-          width: isShort ? 928 : 1664,
-          height: isShort ? 1664 : 928,
+          width: isShort ? 768 : 1376,
+          height: isShort ? 1376 : 768,
         }),
       });
 

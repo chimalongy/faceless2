@@ -13,8 +13,8 @@ export const generateSceneImagesTask = task({
       sceneIndex = null,
       prompt = "",
       globalThemePrompt = "",
-      width = 1664,
-      height = 928,
+      width = 1376,
+      height = 768,
       numInferenceSteps = 50,
       seed = 42,
     } = payload;
@@ -91,12 +91,17 @@ export const generateSceneImagesTask = task({
       logger.log(`[Parallel] Dispatching generation for Scene ${currentSceneIndex}...`);
 
       try {
+        const resolvedSeed =
+          scene.seed !== undefined && scene.seed !== null
+            ? Number(scene.seed)
+            : Math.floor(Math.random() * 2147483647) + 1;
+
         const genResult = await generateImage({
           prompt: fullPrompt,
           width: scene.width || width,
           height: scene.height || height,
           numInferenceSteps: scene.numInferenceSteps || numInferenceSteps,
-          seed: scene.seed !== undefined ? scene.seed : seed,
+          seed: resolvedSeed,
         });
 
         // Clean up previous scene image from Cloudflare R2 and Neon DB if regenerating
