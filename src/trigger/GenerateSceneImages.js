@@ -2,6 +2,7 @@ import { task, logger } from "@trigger.dev/sdk";
 import { generateImage } from "@/lib/image-generator";
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { getImageIndex } from "@/lib/scene-images";
 
 export const generateSceneImagesTask = task({
   id: "generate-scene-images",
@@ -11,6 +12,7 @@ export const generateSceneImagesTask = task({
       topicSlug,
       scenes = [],
       sceneIndex = null,
+      imageIndex = null,
       prompt = "",
       globalThemePrompt = "",
       width = 1376,
@@ -27,7 +29,7 @@ export const generateSceneImagesTask = task({
       throw new Error("topicSlug is required and must be passed to generate-scene-images task.");
     }
 
-    // Support both single scene invocation and batch array invocation
+    // Support both single scene/frame invocation and batch array invocation
     let sceneList = [];
     const isSingleScene = sceneIndex !== null && sceneIndex !== undefined;
 
@@ -37,6 +39,7 @@ export const generateSceneImagesTask = task({
       sceneList = [
         {
           scene_number: sceneIndex,
+          imageIndex: imageIndex ? Number(imageIndex) : 1,
           image_prompt: prompt,
           width,
           height,
@@ -48,63 +51,116 @@ export const generateSceneImagesTask = task({
       throw new Error("Either a valid scenes array or (sceneIndex + prompt) is required for generate-scene-images task.");
     }
 
-    logger.log(`Starting scene images generation task for ${sceneList.length} scene(s)...`, {
+    // Expand scenes into individual frame generation tasks to support multiple images per scene
+    const frameTasks = [];
+
+    for (let sIdx = 0; sIdx < sceneList.length; sIdx++) {
+      const scene = sceneList[sIdx];
+      const sNum = scene.scene_number || scene.scene_index || scene.index || (sIdx + 1);
+
+      if (isSingleScene) {
+        const targetFrameIndex = imageIndex ? Number(imageIndex) : (scene.imageIndex ? Number(scene.imageIndex) : 1);
+        frameTasks.push({
+          sceneNumber: sNum,
+          imageIndex: targetFrameIndex,
+          prompt: scene.image_prompt || prompt,
+          seed: scene.seed !== undefined ? scene.seed : seed,
+          width: scene.width || width,
+          height: scene.height || height,
+          numInferenceSteps: scene.numInferenceSteps || numInferenceSteps,
+          hasMultiple: targetFrameIndex > 1,
+          hasImage: false,
+          existingImageUrl: "",
+        });
+      } else if (Array.isArray(scene.images) && scene.images.length > 0) {
+        const hasMultiple = scene.images.length > 1 || Number(scene.number_of_images) > 1;
+        scene.images.forEach((imgDef, i) => {
+          const fIndex = imgDef.image_number ? Number(imgDef.image_number) : (i + 1);
+          frameTasks.push({
+            sceneNumber: sNum,
+            imageIndex: fIndex,
+            prompt: imgDef.image_prompt || imgDef.prompt || scene.image_prompt || "",
+            seed: imgDef.seed !== undefined ? imgDef.seed : scene.seed,
+            width: scene.width || width,
+            height: scene.height || height,
+            numInferenceSteps: scene.numInferenceSteps || numInferenceSteps,
+            hasMultiple: hasMultiple || fIndex > 1,
+            hasImage: Boolean(imgDef.hasImage),
+            existingImageUrl: imgDef.existingImageUrl || imgDef.url || "",
+          });
+        });
+      } else {
+        const hasMultiple = Number(scene.number_of_images) > 1;
+        frameTasks.push({
+          sceneNumber: sNum,
+          imageIndex: scene.imageIndex || 1,
+          prompt: scene.image_prompt || scene.prompt || scene.visual_prompt || scene.description || "",
+          seed: scene.seed,
+          width: scene.width || width,
+          height: scene.height || height,
+          numInferenceSteps: scene.numInferenceSteps || numInferenceSteps,
+          hasMultiple,
+          hasImage: Boolean(scene.hasImage),
+          existingImageUrl: scene.existingImageUrl || scene.url || "",
+        });
+      }
+    }
+
+    logger.log(`Starting image generation task: ${frameTasks.length} frame(s) across ${sceneList.length} scene(s)...`, {
       channelSlug,
       topicSlug,
       totalScenes: sceneList.length,
+      totalFrames: frameTasks.length,
       isSingleScene,
     });
 
-    // Helper to generate an individual scene image
-    async function processSingleScene(scene) {
-      const currentSceneIndex = scene.scene_number || scene.scene_index || scene.index || 1;
+    // Helper to generate an individual frame
+    async function processSingleFrame(taskItem) {
+      const currentSceneIndex = taskItem.sceneNumber;
+      const currentFrameIndex = taskItem.imageIndex;
 
-      // Skip if this scene was already flagged as having an image (batch mode only)
-      if (!isSingleScene && (scene.existingImageUrl || scene.hasImage)) {
-        logger.log(`Skipping scene ${currentSceneIndex} because image already exists.`);
+      // Skip if this specific frame was already flagged as having an image (batch mode only)
+      if (!isSingleScene && (taskItem.hasImage || taskItem.existingImageUrl)) {
+        logger.log(`Skipping Scene ${currentSceneIndex} Frame #${currentFrameIndex} because image already exists.`);
         return {
           sceneIndex: currentSceneIndex,
+          imageIndex: currentFrameIndex,
           success: true,
           skipped: true,
-          publicUrl: scene.existingImageUrl || "",
+          publicUrl: taskItem.existingImageUrl || "",
         };
       }
 
-      const scenePromptText =
-        scene.image_prompt ||
-        scene.images?.[0]?.image_prompt ||
-        scene.prompt ||
-        scene.visual_prompt ||
-        scene.description ||
-        "";
+      const scenePromptText = taskItem.prompt || "";
       const fullPrompt = `${globalThemePrompt} ${scenePromptText}`.trim();
 
       if (!fullPrompt) {
-        logger.warn(`Skipping scene ${currentSceneIndex} due to empty prompt.`);
+        logger.warn(`Skipping Scene ${currentSceneIndex} Frame #${currentFrameIndex} due to empty prompt.`);
         return {
           sceneIndex: currentSceneIndex,
+          imageIndex: currentFrameIndex,
           success: false,
           error: "Empty prompt",
         };
       }
 
-      logger.log(`[Parallel] Dispatching generation for Scene ${currentSceneIndex}...`);
+      logger.log(`[Sequential] Generating Scene ${currentSceneIndex} Frame #${currentFrameIndex}...`);
 
       try {
         const resolvedSeed =
-          scene.seed !== undefined && scene.seed !== null
-            ? Number(scene.seed)
+          taskItem.seed !== undefined && taskItem.seed !== null
+            ? Number(taskItem.seed)
             : Math.floor(Math.random() * 2147483647) + 1;
 
         const genResult = await generateImage({
           prompt: fullPrompt,
-          width: scene.width || width,
-          height: scene.height || height,
-          numInferenceSteps: scene.numInferenceSteps || numInferenceSteps,
+          width: taskItem.width || width,
+          height: taskItem.height || height,
+          numInferenceSteps: taskItem.numInferenceSteps || numInferenceSteps,
           seed: resolvedSeed,
         });
 
-        // Clean up previous scene image from Cloudflare R2 and Neon DB if regenerating
+        // Clean up previous image asset ONLY for this specific frame of this scene
         try {
           const sql = getDbSql();
           if (sql && currentSceneIndex !== null) {
@@ -116,29 +172,35 @@ export const generateSceneImagesTask = task({
 
             if (channelId && topicId) {
               const oldRows = await sql`
-                SELECT file_key FROM topic_assets
+                SELECT id, file_key, file_name FROM topic_assets
                 WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'image' AND scene_index = ${currentSceneIndex};
               `;
               if (oldRows && oldRows.length > 0) {
                 for (const row of oldRows) {
-                  if (row.file_key) {
-                    await deleteFromR2(row.file_key).catch(() => {});
+                  const rowFrameIdx = getImageIndex(row.file_name, currentSceneIndex);
+                  if (rowFrameIdx === currentFrameIndex) {
+                    if (row.file_key) {
+                      await deleteFromR2(row.file_key).catch(() => {});
+                    }
+                    await sql`
+                      DELETE FROM topic_assets
+                      WHERE id = ${row.id};
+                    `;
                   }
                 }
-                await sql`
-                  DELETE FROM topic_assets
-                  WHERE topic_id = ${topicId} AND channel_id = ${channelId} AND asset_type = 'image' AND scene_index = ${currentSceneIndex};
-                `;
               }
             }
           }
         } catch (cleanErr) {
-          logger.warn(`Could not clean up old image before saving new one for scene ${currentSceneIndex}:`, cleanErr.message);
+          logger.warn(`Could not clean up old image for scene ${currentSceneIndex} frame ${currentFrameIndex}:`, cleanErr.message);
         }
 
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const key = `channels/${channelSlug}/topics/${topicSlug}/images/scene-${currentSceneIndex}-${timestamp}-${randomSuffix}.png`;
+        const isMulti = taskItem.hasMultiple || currentFrameIndex > 1;
+        const imageSuffix = isMulti ? `-${currentFrameIndex}` : "";
+        const assetFileName = `scene-${currentSceneIndex}${imageSuffix}.png`;
+        const key = `channels/${channelSlug}/topics/${topicSlug}/images/scene-${currentSceneIndex}${imageSuffix}-${timestamp}-${randomSuffix}.png`;
 
         const uploadResult = await uploadToR2({
           key,
@@ -148,11 +210,12 @@ export const generateSceneImagesTask = task({
             channelSlug,
             topicSlug,
             sceneIndex: String(currentSceneIndex),
+            imageIndex: String(currentFrameIndex),
             endpointUsed: genResult.endpointUsed,
           },
         });
 
-        // Record in DB
+        // Record in Neon DB
         try {
           const sql = getDbSql();
           if (sql) {
@@ -182,7 +245,7 @@ export const generateSceneImagesTask = task({
                   ${currentSceneIndex},
                   ${uploadResult.publicUrl},
                   ${uploadResult.key},
-                  ${`${topicSlug}-scene-${currentSceneIndex}.png`},
+                  ${assetFileName},
                   'image/png',
                   ${genResult.imageBuffer.length}
                 );
@@ -190,42 +253,44 @@ export const generateSceneImagesTask = task({
             }
           }
         } catch (dbErr) {
-          logger.warn(`Could not save DB record for scene ${currentSceneIndex}:`, { error: dbErr.message });
+          logger.warn(`Could not save DB record for scene ${currentSceneIndex} frame ${currentFrameIndex}:`, { error: dbErr.message });
         }
 
-        logger.log(`[Parallel] Scene ${currentSceneIndex} completed successfully!`);
+        logger.log(`[Sequential] Scene ${currentSceneIndex} Frame #${currentFrameIndex} completed successfully!`);
 
         return {
           sceneIndex: currentSceneIndex,
+          imageIndex: currentFrameIndex,
           success: true,
           imageUrl: uploadResult.publicUrl,
           publicUrl: uploadResult.publicUrl,
           key: uploadResult.key,
+          name: assetFileName,
           endpointUsed: genResult.endpointUsed,
           remainingUsage: genResult.remainingUsage,
         };
       } catch (err) {
-        logger.error(`[Parallel] Failed to generate image for scene ${currentSceneIndex}:`, { error: err.message });
+        logger.error(`[Sequential] Failed to generate Scene ${currentSceneIndex} Frame #${currentFrameIndex}:`, { error: err.message });
         return {
           sceneIndex: currentSceneIndex,
+          imageIndex: currentFrameIndex,
           success: false,
           error: err.message,
         };
       }
     }
 
-    // Run scenes sequentially one by one so single-container Modal GPU doesn't drop/cancel queued requests
+    // Run frame tasks sequentially so single-container Modal GPU doesn't drop/cancel queued requests
     const results = [];
-    for (let i = 0; i < sceneList.length; i++) {
-      const scene = sceneList[i];
-      const currentNum = scene.scene_number || scene.scene_index || scene.index || (i + 1);
-      logger.log(`[Sequential ${i + 1}/${sceneList.length}] Processing Scene ${currentNum}...`);
-      const sceneRes = await processSingleScene(scene);
-      results.push(sceneRes);
+    for (let i = 0; i < frameTasks.length; i++) {
+      const taskItem = frameTasks[i];
+      logger.log(`[Sequential ${i + 1}/${frameTasks.length}] Processing Scene ${taskItem.sceneNumber} Frame #${taskItem.imageIndex}...`);
+      const frameRes = await processSingleFrame(taskItem);
+      results.push(frameRes);
     }
 
     const completedCount = results.filter((r) => r.success && !r.skipped).length;
-    logger.log(`Completed ${completedCount}/${sceneList.length} scene image generations.`);
+    logger.log(`Completed ${completedCount}/${frameTasks.length} image frame generations across ${sceneList.length} scenes.`);
 
     // If single scene mode, provide top-level convenient properties as well
     const singleResult = isSingleScene && results.length > 0 ? results[0] : null;
@@ -235,15 +300,18 @@ export const generateSceneImagesTask = task({
       channelSlug,
       topicSlug,
       totalScenes: sceneList.length,
+      totalFrames: frameTasks.length,
       completedFrames: completedCount,
       frames: results,
       results,
       ...(singleResult
         ? {
             sceneIndex: singleResult.sceneIndex,
+            imageIndex: singleResult.imageIndex,
             imageUrl: singleResult.imageUrl || singleResult.publicUrl,
             publicUrl: singleResult.publicUrl,
             key: singleResult.key,
+            name: singleResult.name,
             endpointUsed: singleResult.endpointUsed,
             remainingUsage: singleResult.remainingUsage,
             error: singleResult.error,

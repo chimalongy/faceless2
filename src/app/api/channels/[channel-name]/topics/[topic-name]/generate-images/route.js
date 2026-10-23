@@ -20,6 +20,7 @@ export async function POST(req, context) {
     // 1. Single Scene Generation -> Dispatches Trigger.dev task: generate-scene-images
     if (sceneIndex !== undefined && sceneIndex !== null) {
       const prompt = body.prompt;
+      const imageIndex = body.imageIndex ? Number(body.imageIndex) : 1;
       if (!prompt) {
         return NextResponse.json(
           { error: "Prompt is required for single scene generation" },
@@ -29,13 +30,14 @@ export async function POST(req, context) {
 
       const fullPrompt = `${globalThemePrompt} ${prompt}`.trim();
 
-      console.log(`[GenerateImagesRoute] Triggering Trigger.dev task "generate-scene-images" for ${channelSlug}/${topicSlug} (Scene ${sceneIndex})...`);
+      console.log(`[GenerateImagesRoute] Triggering Trigger.dev task "generate-scene-images" for ${channelSlug}/${topicSlug} (Scene ${sceneIndex} Frame #${imageIndex})...`);
 
       const handle = await tasks.trigger("generate-scene-images", {
         channelSlug,
         topicSlug,
         prompt: fullPrompt,
         sceneIndex,
+        imageIndex,
         ...(body.width ? { width: body.width } : {}),
         ...(body.height ? { height: body.height } : {}),
       });
@@ -58,8 +60,10 @@ export async function POST(req, context) {
       return NextResponse.json({
         success: output.success !== false,
         sceneIndex: output.sceneIndex || sceneIndex,
+        imageIndex: output.imageIndex || imageIndex || 1,
         imageUrl: output.imageUrl || output.publicUrl,
         key: output.key,
+        name: output.name,
         endpointUsed: output.endpointUsed,
         remainingUsage: output.remainingUsage,
         error: output.error,
@@ -97,12 +101,15 @@ export async function POST(req, context) {
       return NextResponse.json({
         success: true,
         totalScenes: output.totalScenes,
+        totalFrames: output.totalFrames || output.frames?.length,
         completedCount: output.completedFrames,
-        results: output.frames.map((f) => ({
+        results: (output.frames || output.results || []).map((f) => ({
           sceneIndex: f.sceneIndex,
+          imageIndex: f.imageIndex || 1,
           success: f.success,
-          imageUrl: f.publicUrl,
+          imageUrl: f.imageUrl || f.publicUrl,
           key: f.key,
+          name: f.name,
           endpointUsed: f.endpointUsed,
           remainingUsage: f.remainingUsage,
           error: f.error,

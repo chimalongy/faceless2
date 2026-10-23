@@ -1329,6 +1329,7 @@ export default function TopicStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sceneIndex: sceneNum,
+          imageIndex: imageIndex || 1,
           prompt,
           width: isShort ? 768 : 1376,
           height: isShort ? 1376 : 768,
@@ -1342,28 +1343,30 @@ export default function TopicStudioPage() {
           const current = next[sceneNum] || {
             url: data.imageUrl,
             key: data.key,
-            name: `Scene ${sceneNum} Image`,
+            name: data.name || `Scene ${sceneNum} Image`,
             endpointUsed: data.endpointUsed,
             images: [],
           };
           let newImages = Array.isArray(current.images) ? [...current.images] : [];
+          const targetIndex = imageIndex ? Number(imageIndex) : 1;
           const newImg = {
             url: data.imageUrl,
             key: data.key,
-            name: `Scene ${sceneNum} Image ${imageIndex || (newImages.length + 1)}`,
+            name: data.name || `Scene ${sceneNum} Image ${targetIndex}`,
             endpointUsed: data.endpointUsed,
+            imageIndex: targetIndex,
           };
-          if (imageIndex !== null && imageIndex !== undefined) {
-            const idx = imageIndex - 1;
-            if (idx >= 0 && idx < newImages.length) {
-              newImages[idx] = newImg;
-            } else {
-              newImages.push(newImg);
-            }
+
+          const existingIdx = newImages.findIndex(
+            (img, idx) => getImageIndex(img, sceneNum) === targetIndex || img.imageIndex === targetIndex || (targetIndex === 1 && idx === 0 && newImages.length <= 1)
+          );
+          if (existingIdx >= 0) {
+            newImages[existingIdx] = newImg;
           } else {
-            if (newImages.length === 0) newImages.push(newImg);
-            else newImages[0] = newImg;
+            newImages.push(newImg);
           }
+
+          newImages = sortSceneImages(newImages, sceneNum);
           next[sceneNum] = {
             ...current,
             url: newImages[0]?.url || data.imageUrl,
@@ -1399,15 +1402,45 @@ export default function TopicStudioPage() {
       return;
     }
 
-    // Filter out scenes that already have generated/uploaded images
-    const scenesToGenerate = parsed.filter((scene) => {
+    // Filter out scenes where all required image frames are already generated/uploaded
+    const scenesToGenerate = [];
+
+    parsed.forEach((scene) => {
       const sNum = scene.scene_number;
       const existing = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
-      return !existing || !existing.url;
+      const totalReq = Array.isArray(scene.images) && scene.images.length > 0
+        ? scene.images.length
+        : (Number(scene.number_of_images) || 1);
+
+      const existingList = Array.isArray(existing?.images) && existing.images.length > 0
+        ? existing.images
+        : (existing?.url ? [{ url: existing.url, key: existing.key, name: existing.name }] : []);
+
+      const loadedCount = existingList.filter((img) => Boolean(img?.url)).length;
+
+      // If missing one or more frames, include this scene in the generation payload
+      if (loadedCount < totalReq) {
+        const sceneClone = { ...scene };
+        if (Array.isArray(scene.images) && scene.images.length > 0) {
+          sceneClone.images = scene.images.map((imgDef, idx) => {
+            const frameNum = imgDef.image_number ? Number(imgDef.image_number) : (idx + 1);
+            const foundExisting = existingList.find((ex) => getImageIndex(ex, sNum) === frameNum);
+            return {
+              ...imgDef,
+              hasImage: Boolean(foundExisting?.url),
+              existingImageUrl: foundExisting?.url || "",
+            };
+          });
+        } else {
+          sceneClone.hasImage = Boolean(existing?.url);
+          sceneClone.existingImageUrl = existing?.url || "";
+        }
+        scenesToGenerate.push(sceneClone);
+      }
     });
 
     if (scenesToGenerate.length === 0) {
-      toast("All scenes already have images generated.", {
+      toast("All scene images have already been generated.", {
         icon: "✨",
         style: {
           background: "#f0fdf4",
@@ -1442,17 +1475,48 @@ export default function TopicStudioPage() {
           data.results.forEach((r) => {
             if (r.success && r.imageUrl) {
               successCount++;
-              next[r.sceneIndex] = {
+              const sNum = r.sceneIndex;
+              const fNum = r.imageIndex || 1;
+              const current = next[sNum] || {
                 url: r.imageUrl,
                 key: r.key,
-                name: `Scene ${r.sceneIndex} Image`,
+                name: r.name || `Scene ${sNum} Image`,
                 endpointUsed: r.endpointUsed,
+                images: [],
+              };
+              let frameList = Array.isArray(current.images) ? [...current.images] : [];
+              const newImg = {
+                url: r.imageUrl,
+                key: r.key,
+                name: r.name || `Scene ${sNum} Image ${fNum}`,
+                endpointUsed: r.endpointUsed,
+                imageIndex: fNum,
+              };
+
+              const existingIdx = frameList.findIndex(
+                (item, idx) => getImageIndex(item, sNum) === fNum || item.imageIndex === fNum || (fNum === 1 && idx === 0 && frameList.length <= 1)
+              );
+              if (existingIdx >= 0) {
+                frameList[existingIdx] = newImg;
+              } else {
+                frameList.push(newImg);
+              }
+
+              frameList = sortSceneImages(frameList, sNum);
+
+              next[sNum] = {
+                ...current,
+                url: frameList[0]?.url || r.imageUrl,
+                key: frameList[0]?.key || r.key,
+                name: frameList[0]?.name || r.name,
+                endpointUsed: r.endpointUsed,
+                images: frameList,
               };
             }
           });
           return next;
         });
-        toast.success(`Generated ${successCount} scene image(s) successfully!`);
+        toast.success(`Generated ${successCount} image frame(s) successfully!`);
       } else {
         toast.error(data.error || "Failed to generate all images.");
       }

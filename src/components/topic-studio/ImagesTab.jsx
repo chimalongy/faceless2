@@ -135,7 +135,11 @@ export default function ImagesTab({
   const ungeneratedScenes = parsedScenes.filter((s) => {
     const sNum = s.scene_number;
     const imgData = sceneImages[sNum] || sceneImages[String(sNum)] || sceneImages[Number(sNum)];
-    return !imgData?.url && (!Array.isArray(imgData?.images) || imgData.images.length === 0);
+    const totalReq = Array.isArray(s.images) && s.images.length > 0 ? s.images.length : (Number(s.number_of_images) || 1);
+    const loadedCount = Array.isArray(imgData?.images) && imgData.images.length > 0
+      ? imgData.images.filter(img => Boolean(img?.url)).length
+      : (imgData?.url ? 1 : 0);
+    return loadedCount < totalReq;
   });
 
   const isAllUngeneratedSelected =
