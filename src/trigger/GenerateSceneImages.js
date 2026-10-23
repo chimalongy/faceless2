@@ -214,8 +214,15 @@ export const generateSceneImagesTask = task({
       }
     }
 
-    // Run ALL scenes concurrently in parallel
-    const results = await Promise.all(sceneList.map((scene) => processSingleScene(scene)));
+    // Run scenes sequentially one by one so single-container Modal GPU doesn't drop/cancel queued requests
+    const results = [];
+    for (let i = 0; i < sceneList.length; i++) {
+      const scene = sceneList[i];
+      const currentNum = scene.scene_number || scene.scene_index || scene.index || (i + 1);
+      logger.log(`[Sequential ${i + 1}/${sceneList.length}] Processing Scene ${currentNum}...`);
+      const sceneRes = await processSingleScene(scene);
+      results.push(sceneRes);
+    }
 
     const completedCount = results.filter((r) => r.success && !r.skipped).length;
     logger.log(`Completed ${completedCount}/${sceneList.length} scene image generations.`);
