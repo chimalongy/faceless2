@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
-import { AUDIO_EFFECT_PRESETS, buildAudioFilterString } from "@/lib/audio-effects";
+import { AUDIO_EFFECT_PRESETS, buildAudioFilterString } from "@/lib/audio-effects-config";
 
 export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
   const [loading, setLoading] = useState(true);
