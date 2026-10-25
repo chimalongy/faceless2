@@ -307,6 +307,26 @@ export async function initDbSchema(force = false) {
       await sql`CREATE INDEX IF NOT EXISTS idx_channel_image_pool_lookup ON channel_image_pool(channel_id, pool_type);`;
     } catch {}
 
+    // 10. Video Overlays Table (reusable video overlays for scene frames)
+    await sql`
+      CREATE TABLE IF NOT EXISTS video_overlays (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        file_key TEXT NOT NULL,
+        file_name TEXT,
+        mime_type TEXT DEFAULT 'video/mp4',
+        aspect_ratio TEXT DEFAULT 'all',
+        size_bytes BIGINT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_video_overlays_aspect ON video_overlays(aspect_ratio);`;
+    } catch {}
+
     isDbInitialized = true;
     return true;
   } catch (error) {

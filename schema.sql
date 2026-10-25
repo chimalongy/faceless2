@@ -189,3 +189,21 @@ CREATE INDEX IF NOT EXISTS idx_audio_endpoints_email ON audio_endpoints(account_
 CREATE INDEX IF NOT EXISTS idx_llm_accounts_email ON llm_accounts(account_email);
 CREATE INDEX IF NOT EXISTS idx_channel_image_pool_lookup ON channel_image_pool(channel_id, pool_type);
 
+-- 10. VIDEO OVERLAYS TABLE
+-- Global library of video overlays (film grain, light leaks, glitch, dust) for scene composition.
+CREATE TABLE IF NOT EXISTS video_overlays (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    file_url TEXT NOT NULL,
+    file_key TEXT NOT NULL,
+    file_name TEXT,
+    mime_type TEXT DEFAULT 'video/mp4',
+    aspect_ratio TEXT DEFAULT 'all', -- '16:9', '9:16', 'all'
+    size_bytes BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_overlays_aspect ON video_overlays(aspect_ratio);
+
+

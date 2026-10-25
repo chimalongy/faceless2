@@ -24,10 +24,12 @@ import {
   EyeOff,
   Cpu,
   Calendar,
-  Mic
+  Mic,
+  Layers
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
+import VideoOverlaysTab from "@/components/VideoOverlaysTab";
 
 const SETTINGS_STORAGE_KEY = "faceless_studio_settings";
 
@@ -461,6 +463,11 @@ export default function SettingsPage() {
       id: "general",
       label: "General Settings",
       icon: Sliders,
+    },
+    {
+      id: "video-overlays",
+      label: "Video Overlays",
+      icon: Layers,
     },
     {
       id: "llm-accounts",
@@ -1093,6 +1100,15 @@ export default function SettingsPage() {
                 </div>
               </div>
             </section>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: VIDEO OVERLAYS */}
+        {/* ========================================================================= */}
+        {activeTab === "video-overlays" && (
+          <div className="animate-slide-in">
+            <VideoOverlaysTab />
           </div>
         )}
 
@@ -1819,32 +1835,34 @@ export default function SettingsPage() {
         )}
 
         {/* Save Bar */}
-        <div className="flex items-center justify-between pt-6 border-t border-line">
-          <div>
-            {saved && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-sm border border-emerald-200">
-                <CheckCircle2 size={14} /> All settings and endpoints saved to database
-              </span>
-            )}
+        {activeTab !== "video-overlays" && (
+          <div className="flex items-center justify-between pt-6 border-t border-line">
+            <div>
+              {saved && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-sm border border-emerald-200">
+                  <CheckCircle2 size={14} /> All settings and endpoints saved to database
+                </span>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={isSavingDb}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-60"
+            >
+              {isSavingDb ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  <span>Saving to Database...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={15} />
+                  <span>Save All Settings</span>
+                </>
+              )}
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={isSavingDb}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-60"
-          >
-            {isSavingDb ? (
-              <>
-                <Loader2 size={15} className="animate-spin" />
-                <span>Saving to Database...</span>
-              </>
-            ) : (
-              <>
-                <Save size={15} />
-                <span>Save All Settings</span>
-              </>
-            )}
-          </button>
-        </div>
+        )}
       </form>
     </div>
   );
