@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { generateAudio } from "@/lib/audio-generator";
 import { applyAudioEffects, buildAudioFilterString, AUDIO_EFFECT_PRESETS } from "@/lib/audio-effects";
+import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 
 export const maxDuration = 60;
 
@@ -26,7 +27,8 @@ export async function GET(request, { params }) {
         default_voice AS "defaultVoice", 
         tts_model AS "ttsModel", 
         audio_theme AS "audioTheme", 
-        audio_effects AS "audioEffects"
+        audio_effects AS "audioEffects",
+        background_music AS "backgroundMusic"
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -46,6 +48,13 @@ export async function GET(request, { params }) {
       ttsModel: channel.ttsModel || "kokoro",
       audioTheme: channel.audioTheme || "",
       audioEffects: channel.audioEffects || { enabled: false, preset: "none" },
+      backgroundMusic: channel.backgroundMusic || {
+        enabled: false,
+        fileUrl: null,
+        fileKey: null,
+        fileName: null,
+        volume: 0.15,
+      },
       presets: AUDIO_EFFECT_PRESETS,
     });
   } catch (err) {
@@ -71,7 +80,7 @@ export async function POST(request, { params }) {
     await initDbSchema();
 
     const channelRows = await sql`
-      SELECT id, name, slug, default_voice, tts_model, audio_theme, audio_effects
+      SELECT id, name, slug, default_voice, tts_model, audio_theme, audio_effects, background_music
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -82,10 +91,93 @@ export async function POST(request, { params }) {
     }
 
     const channel = channelRows[0];
+
+    // Handle Multipart Form Upload for Background Music
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const file = formData.get("file");
+
+      if (!file || typeof file === "string") {
+        return NextResponse.json({ error: "No audio file provided for upload" }, { status: 400 });
+      }
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const originalName = file.name || "background-music.mp3";
+      const ext = originalName.includes(".") ? originalName.split(".").pop().toLowerCase() : "mp3";
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const key = `channels/${channelSlug}/background-music/bgm-${timestamp}-${randomSuffix}.${ext}`;
+      const mimeType = file.type || "audio/mpeg";
+
+      // If replacing an existing background music track, clean up the previous file from R2
+      const existingKey = channel.background_music?.fileKey;
+      if (existingKey) {
+        try {
+          await deleteFromR2(existingKey);
+        } catch (delErr) {
+          console.warn("[audio-effects] Failed to delete previous background music from R2:", delErr);
+        }
+      }
+
+      const uploadResult = await uploadToR2({
+        key,
+        buffer,
+        mimeType,
+        metadata: {
+          channelSlug,
+          originalName,
+          assetType: "background-music",
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        fileUrl: uploadResult.publicUrl,
+        fileKey: uploadResult.key,
+        fileName: originalName,
+        sizeBytes: buffer.length,
+      });
+    }
+
+    // JSON Payload Actions
     const body = await request.json();
     const action = body.action || "save";
 
-    // Sub-action: Preview audio filter with short synthesis
+    // Action: Delete background music file
+    if (action === "delete_music") {
+      const fileKey = body.fileKey || channel.background_music?.fileKey;
+      if (fileKey) {
+        try {
+          await deleteFromR2(fileKey);
+        } catch (delErr) {
+          console.warn("[audio-effects] Failed to delete background music from R2:", delErr);
+        }
+      }
+
+      const updatedBgMusic = {
+        ...(channel.background_music || {}),
+        enabled: false,
+        fileUrl: null,
+        fileKey: null,
+        fileName: null,
+      };
+
+      await sql`
+        UPDATE channels
+        SET background_music = ${JSON.stringify(updatedBgMusic)}::jsonb,
+            updated_at = NOW()
+        WHERE slug = ${channelSlug};
+      `;
+
+      return NextResponse.json({
+        success: true,
+        message: "Background music removed successfully",
+        backgroundMusic: updatedBgMusic,
+      });
+    }
+
+    // Action: Preview voice filter with sample synthesis
     if (action === "preview") {
       const sampleText = (
         body.text ||
@@ -123,20 +215,23 @@ export async function POST(request, { params }) {
       });
     }
 
-    // Default Action: Save audio_effects settings to database
-    const audioEffects = body.audioEffects || {};
+    // Action: Save audio_effects & background_music settings to database
+    const audioEffects = body.audioEffects !== undefined ? body.audioEffects : (channel.audio_effects || {});
+    const backgroundMusic = body.backgroundMusic !== undefined ? body.backgroundMusic : (channel.background_music || { enabled: false, volume: 0.15 });
 
     await sql`
       UPDATE channels
       SET audio_effects = ${JSON.stringify(audioEffects)}::jsonb,
+          background_music = ${JSON.stringify(backgroundMusic)}::jsonb,
           updated_at = NOW()
       WHERE slug = ${channelSlug};
     `;
 
     return NextResponse.json({
       success: true,
-      message: "Audio post-processing settings saved successfully",
+      message: "Audio and background music settings saved successfully",
       audioEffects,
+      backgroundMusic,
     });
   } catch (err) {
     console.error("Error updating audio effects:", err);

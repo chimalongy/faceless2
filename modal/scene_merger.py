@@ -515,6 +515,8 @@ def run_ffmpeg_merge(
     ffmpeg_threads: int,
     title_card_path: Path | None = None,
     is_short: bool = False,
+    bg_music_path: Path | None = None,
+    bg_music_volume: float = 0.15,
 ):
     width, height = output_dimensions(resolution)
 
@@ -542,29 +544,65 @@ def run_ffmpeg_merge(
         str(concat_path),
     ]
 
-    if is_short and title_card_path and title_card_path.exists():
+    has_title = bool(is_short and title_card_path and title_card_path.exists())
+    has_bg_music = bool(bg_music_path and bg_music_path.exists())
+
+    next_idx = 1
+    title_idx = None
+    bg_idx = None
+
+    if has_title:
         command.extend(["-i", str(title_card_path)])
-        top_y = 200 if height >= 1920 else int(height * 0.10)
+        title_idx = next_idx
+        next_idx += 1
+
+    if has_bg_music:
+        command.extend(["-stream_loop", "-1", "-i", str(bg_music_path)])
+        bg_idx = next_idx
+        next_idx += 1
+
+    top_y = 200 if height >= 1920 else int(height * 0.10)
+
+    if has_title and has_bg_music:
         filter_complex = (
             f"[0:v]{scale_filter}[base];"
-            f"[base][1:v]overlay=(W-w)/2:{top_y}:format=auto[v]"
+            f"[base][{title_idx}:v]overlay=(W-w)/2:{top_y}:format=auto[v];"
+            f"[{bg_idx}:a]volume={bg_music_volume:.2f}[bg];"
+            f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[a]"
         )
         command.extend([
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            "[v]",
-            "-map",
-            "0:a:0",
+            "-filter_complex", filter_complex,
+            "-map", "[v]",
+            "-map", "[a]",
+            "-shortest",
+        ])
+    elif has_title and not has_bg_music:
+        filter_complex = (
+            f"[0:v]{scale_filter}[base];"
+            f"[base][{title_idx}:v]overlay=(W-w)/2:{top_y}:format=auto[v]"
+        )
+        command.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[v]",
+            "-map", "0:a:0",
+        ])
+    elif not has_title and has_bg_music:
+        filter_complex = (
+            f"[0:v]{scale_filter}[v];"
+            f"[{bg_idx}:a]volume={bg_music_volume:.2f}[bg];"
+            f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[a]"
+        )
+        command.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[v]",
+            "-map", "[a]",
+            "-shortest",
         ])
     else:
         command.extend([
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a:0",
-            "-vf",
-            scale_filter,
+            "-map", "0:v:0",
+            "-map", "0:a:0",
+            "-vf", scale_filter,
         ])
 
     command.extend([
@@ -1082,6 +1120,23 @@ def merge_all_job(
                     f"Title badge was requested but could not be generated: {e}"
                 ) from e
 
+        # Download channel background music if enabled
+        bg_music = payload.get("backgroundMusic") or payload.get("background_music") or {}
+        bg_music_path = None
+        bg_music_volume = 0.15
+        if bg_music.get("enabled") and (bg_music.get("fileUrl") or bg_music.get("file_url")):
+            music_url = bg_music.get("fileUrl") or bg_music.get("file_url")
+            try:
+                bg_music_volume = float(bg_music.get("volume", 0.15))
+                bg_music_volume = max(0.0, min(1.0, bg_music_volume))
+                music_file = job_dir / "bg_music.audio"
+                download_http(music_url, music_file)
+                if music_file.exists() and music_file.stat().st_size > 0:
+                    bg_music_path = music_file
+            except Exception as bg_err:
+                print(f"[modal-merge] Could not download background music ({bg_err}), proceeding without music.")
+                bg_music_path = None
+
         run_ffmpeg_merge(
             concat_path=concat_path,
             output_path=output_path,
@@ -1094,6 +1149,8 @@ def merge_all_job(
             ffmpeg_threads=ffmpeg_threads,
             title_card_path=title_card_path,
             is_short=is_short,
+            bg_music_path=bg_music_path,
+            bg_music_volume=bg_music_volume,
         )
 
         duration = get_video_duration(
@@ -1299,6 +1356,7 @@ def api():
         showShortsTitleOverlay: bool = False
         topicTitle: str = ""
         shortsOverlayText: str = Field(default="", max_length=120)
+        backgroundMusic: dict | None = None
 
 
         fps: int = Field(

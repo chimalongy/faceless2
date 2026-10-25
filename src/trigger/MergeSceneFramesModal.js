@@ -182,17 +182,26 @@ export const mergeSceneFramesModalTask = task({
       Boolean(payload.isShort) ||
       ["1080x1920", "shorts", "vertical", "9:16", "720x1280"].includes(String(resolution).toLowerCase());
 
-    if (!isShortTopic && topicSlug) {
+    let channelBgMusic = null;
+    if (channelSlug) {
       try {
         const sql = getDbSql();
         if (sql) {
           await initDbSchema();
-          const tRows = await sql`
-            SELECT COALESCE(video_type, 'longform') AS "videoType"
-            FROM topics WHERE slug = ${topicSlug} LIMIT 1;
+          const cRows = await sql`
+            SELECT background_music AS "backgroundMusic"
+            FROM channels WHERE slug = ${channelSlug} LIMIT 1;
           `;
-          if (tRows?.[0]?.videoType === "short") {
-            isShortTopic = true;
+          channelBgMusic = cRows?.[0]?.backgroundMusic || null;
+
+          if (!isShortTopic && topicSlug) {
+            const tRows = await sql`
+              SELECT COALESCE(video_type, 'longform') AS "videoType"
+              FROM topics WHERE slug = ${topicSlug} LIMIT 1;
+            `;
+            if (tRows?.[0]?.videoType === "short") {
+              isShortTopic = true;
+            }
           }
         }
       } catch (_) {}
@@ -238,6 +247,7 @@ export const mergeSceneFramesModalTask = task({
       showShortsTitleOverlay: Boolean(isShortTopic && payload.showShortsTitleOverlay),
       topicTitle: String(payload.topicTitle || topicSlug).trim(),
       shortsOverlayText: String(payload.shortsOverlayText || "").trim(),
+      backgroundMusic: payload.backgroundMusic || channelBgMusic || null,
     };
 
     // 3. Submit merge request to Modal

@@ -47,6 +47,8 @@ export async function GET(request, { params }) {
         subtitles_longform AS "subtitlesLongform",
         subtitle_style AS "subtitleStyle",
         use_image_pool AS "useImagePool",
+        audio_effects AS "audioEffects",
+        background_music AS "backgroundMusic",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -140,6 +142,7 @@ export async function PUT(request, { params }) {
         subtitles_longform = ${body.subtitlesLongform !== undefined ? Boolean(body.subtitlesLongform) : (body.subtitles_longform !== undefined ? Boolean(body.subtitles_longform) : false)},
         subtitle_style = ${body.subtitleStyle || body.subtitle_style || 'yellow_highlight'},
         use_image_pool = ${body.useImagePool !== undefined ? Boolean(body.useImagePool) : (body.use_image_pool !== undefined ? Boolean(body.use_image_pool) : false)},
+        background_music = ${body.backgroundMusic !== undefined ? (typeof body.backgroundMusic === "string" ? body.backgroundMusic : JSON.stringify(body.backgroundMusic)) : sql`background_music`}::jsonb,
         status = ${body.status || 'Active'},
         updated_at = NOW()
       WHERE slug = ${channelSlug}

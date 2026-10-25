@@ -46,12 +46,14 @@ export const mergeSceneFramesTask = task({
     let channelId = null;
     let topicId = null;
 
+    let channelBgMusic = null;
     if (sql) {
       await initDbSchema();
-      const cRows = await sql`SELECT id FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
+      const cRows = await sql`SELECT id, background_music AS "backgroundMusic" FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
       const tRows = await sql`SELECT id, COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
       channelId = cRows?.[0]?.id || null;
       topicId = tRows?.[0]?.id || null;
+      channelBgMusic = cRows?.[0]?.backgroundMusic || null;
       if (tRows?.[0]?.videoType) {
         payload.videoType = tRows[0].videoType;
       }
@@ -195,15 +197,73 @@ export const mergeSceneFramesTask = task({
       }
 
       const topY = targetHeight >= 1920 ? 200 : Math.round(targetHeight * 0.10);
+
+      // Download channel background music if enabled
+      const bgMusicConfig = payload.backgroundMusic || channelBgMusic;
+      let bgMusicPath = null;
+      let bgMusicVolume = 0.15;
+      if (bgMusicConfig?.enabled && bgMusicConfig?.fileUrl) {
+        try {
+          bgMusicVolume = Number.isFinite(Number(bgMusicConfig.volume))
+            ? Math.max(0, Math.min(1, Number(bgMusicConfig.volume)))
+            : 0.15;
+          const bgFileName = "channel_bg_music.audio";
+          bgMusicPath = path.join(tmpDir, bgFileName);
+          logger.log(`Downloading background music from ${bgMusicConfig.fileUrl} (Volume: ${Math.round(bgMusicVolume * 100)}%)...`);
+          const bgRes = await fetch(bgMusicConfig.fileUrl);
+          if (bgRes.ok) {
+            fs.writeFileSync(bgMusicPath, Buffer.from(await bgRes.arrayBuffer()));
+            logger.log(`Background music successfully downloaded to ${bgMusicPath}`);
+          } else {
+            logger.warn(`Failed to download background music: HTTP ${bgRes.status}. Continuing without music.`);
+            bgMusicPath = null;
+          }
+        } catch (bgErr) {
+          logger.warn("Could not download background music:", bgErr?.message || bgErr);
+          bgMusicPath = null;
+        }
+      }
+
       const inputArgs = [`-f concat`, `-safe 0`, `-i "${concatListPath}"`];
       let filterArgs = [];
+      let extraFlags = [];
 
-      if (titleCardPath && fs.existsSync(titleCardPath)) {
+      let hasTitleCard = Boolean(titleCardPath && fs.existsSync(titleCardPath));
+      let hasBgMusic = Boolean(bgMusicPath && fs.existsSync(bgMusicPath));
+
+      let nextInputIdx = 1;
+      let titleCardInputIdx = null;
+      let bgMusicInputIdx = null;
+
+      if (hasTitleCard) {
         inputArgs.push(`-i "${titleCardPath}"`);
+        titleCardInputIdx = nextInputIdx++;
+      }
+
+      if (hasBgMusic) {
+        // -stream_loop -1 loops background music infinitely through the duration of the video
+        inputArgs.push(`-stream_loop -1`, `-i "${bgMusicPath}"`);
+        bgMusicInputIdx = nextInputIdx++;
+        extraFlags.push(`-shortest`);
+      }
+
+      if (hasTitleCard && hasBgMusic) {
         filterArgs = [
-          `-filter_complex "[0:v]${scaleFilter}[base];[base][1:v]overlay=(W-w)/2:${topY}:format=auto[v]"`,
+          `-filter_complex "[0:v]${scaleFilter}[base];[base][${titleCardInputIdx}:v]overlay=(W-w)/2:${topY}:format=auto[v];[${bgMusicInputIdx}:a]volume=${bgMusicVolume.toFixed(2)}[bg_vol];[0:a][bg_vol]amix=inputs=2:duration=first:dropout_transition=2[a]"`,
+          `-map "[v]"`,
+          `-map "[a]"`,
+        ];
+      } else if (hasTitleCard && !hasBgMusic) {
+        filterArgs = [
+          `-filter_complex "[0:v]${scaleFilter}[base];[base][${titleCardInputIdx}:v]overlay=(W-w)/2:${topY}:format=auto[v]"`,
           `-map "[v]"`,
           `-map 0:a:0?`,
+        ];
+      } else if (!hasTitleCard && hasBgMusic) {
+        filterArgs = [
+          `-filter_complex "[0:v]${scaleFilter}[v];[${bgMusicInputIdx}:a]volume=${bgMusicVolume.toFixed(2)}[bg_vol];[0:a][bg_vol]amix=inputs=2:duration=first:dropout_transition=2[a]"`,
+          `-map "[v]"`,
+          `-map "[a]"`,
         ];
       } else {
         filterArgs = [
@@ -217,6 +277,7 @@ export const mergeSceneFramesTask = task({
         `"${ffmpeg}" -y`,
         ...inputArgs,
         ...filterArgs,
+        ...extraFlags,
         `-c:v libx264`,
         `-preset veryfast`,
         `-crf 19`,

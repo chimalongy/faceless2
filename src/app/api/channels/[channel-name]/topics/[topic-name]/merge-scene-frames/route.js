@@ -46,6 +46,7 @@ export async function POST(req, context) {
       showShortsTitleOverlay: resolvedShowShortsTitleOverlay,
       topicTitle: topicTitle || topicSlug,
       shortsOverlayText: overlayText,
+      backgroundMusic: body.backgroundMusic || undefined,
     });
 
     console.log(`[MergeSceneFramesRoute] Task triggered with run ID: ${handle.id}, polling for completion...`);

@@ -14,7 +14,9 @@ import {
   Info,
   Radio,
   Music,
-  Code2
+  Code2,
+  Upload,
+  Trash2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
@@ -39,6 +41,15 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
   );
   const [previewing, setPreviewing] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+
+  // Background Music State
+  const [bgMusicEnabled, setBgMusicEnabled] = useState(false);
+  const [bgMusicFileUrl, setBgMusicFileUrl] = useState(null);
+  const [bgMusicFileKey, setBgMusicFileKey] = useState(null);
+  const [bgMusicFileName, setBgMusicFileName] = useState(null);
+  const [bgMusicVolume, setBgMusicVolume] = useState(0.15);
+  const [uploadingMusic, setUploadingMusic] = useState(false);
+  const [deletingMusic, setDeletingMusic] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -67,6 +78,14 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
           setEqGain(fx.equalizer.gain !== undefined ? Number(fx.equalizer.gain) : 2.5);
         }
         setCustomFilter(fx.customFilter || "");
+
+        // Background Music
+        const bg = data.backgroundMusic || {};
+        setBgMusicEnabled(Boolean(bg.enabled));
+        setBgMusicFileUrl(bg.fileUrl || null);
+        setBgMusicFileKey(bg.fileKey || null);
+        setBgMusicFileName(bg.fileName || null);
+        setBgMusicVolume(bg.volume !== undefined ? Number(bg.volume) : 0.15);
       } else {
         toast.error(data.error || "Failed to load audio settings");
       }
@@ -75,6 +94,73 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
       toast.error(err.message || "Could not load audio settings");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Upload Background Music
+  async function handleUploadMusic(file) {
+    if (!file) return;
+    if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
+      toast.error("Please select a valid audio file (.mp3, .wav, .m4a, .aac, .ogg)");
+      return;
+    }
+
+    setUploadingMusic(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to upload background music");
+      }
+
+      setBgMusicFileUrl(data.fileUrl);
+      setBgMusicFileKey(data.fileKey);
+      setBgMusicFileName(data.fileName);
+      setBgMusicEnabled(true);
+      toast.success(`Uploaded "${data.fileName}". Remember to click Save Audio Settings.`);
+    } catch (err) {
+      console.error("Music upload error:", err);
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setUploadingMusic(false);
+    }
+  }
+
+  // Delete Background Music Track
+  async function handleDeleteMusic() {
+    if (!confirm("Are you sure you want to remove this background music track?")) return;
+    setDeletingMusic(true);
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_music",
+          fileKey: bgMusicFileKey,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to remove background music");
+      }
+
+      setBgMusicFileUrl(null);
+      setBgMusicFileKey(null);
+      setBgMusicFileName(null);
+      setBgMusicEnabled(false);
+      toast.success("Background music track removed.");
+    } catch (err) {
+      console.error("Delete music error:", err);
+      toast.error(err.message || "Failed to remove music track");
+    } finally {
+      setDeletingMusic(false);
     }
   }
 
@@ -135,12 +221,21 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
         customFilter: preset === "custom" ? customFilter : "",
       };
 
+      const backgroundMusic = {
+        enabled: bgMusicEnabled,
+        fileUrl: bgMusicFileUrl,
+        fileKey: bgMusicFileKey,
+        fileName: bgMusicFileName,
+        volume: bgMusicVolume,
+      };
+
       const res = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "save",
           audioEffects,
+          backgroundMusic,
         }),
       });
 
@@ -153,7 +248,7 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
       }
 
       if (res.ok && data.success) {
-        toast.success("Audio post-processing settings saved!");
+        toast.success("Audio post-processing and background music settings saved!");
       } else {
         throw new Error(data.error || "Failed to save settings");
       }
@@ -545,16 +640,242 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
         )}
       </div>
 
+      {/* Background Music Settings Section */}
+      <div className="p-6 border border-line bg-paper-card space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Music size={18} />
+              </span>
+              <h2 className="text-base font-display font-bold text-ink">
+                Background Music Settings
+              </h2>
+            </div>
+            <p className="text-xs text-ink-muted max-w-2xl">
+              Add ambient background music to your channel. The audio track is automatically looped across the entire video duration and mixed with the scene voiceovers after all scenes are merged.
+            </p>
+          </div>
+
+          {/* Master Toggle */}
+          <div className="flex items-center gap-3 p-3 bg-paper border border-line shrink-0">
+            <span className="text-xs font-semibold text-ink">
+              {bgMusicEnabled ? (
+                <span className="text-emerald-600 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Music Enabled
+                </span>
+              ) : (
+                <span className="text-ink-muted">Music Disabled</span>
+              )}
+            </span>
+            <label className="relative inline-flex items-center cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={bgMusicEnabled}
+                onChange={(e) => setBgMusicEnabled(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-signal"></div>
+            </label>
+          </div>
+        </div>
+
+        {bgMusicEnabled ? (
+          <div className="space-y-6">
+            {/* 1. Music File Upload Area */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-ink uppercase tracking-wider font-mono flex items-center gap-2">
+                  <Upload size={14} className="text-signal" />
+                  <span>1. Background Audio Track</span>
+                </h3>
+                {bgMusicFileUrl && (
+                  <span className="text-[11px] font-mono text-emerald-600 flex items-center gap-1">
+                    <Check size={12} />
+                    <span>Track Uploaded</span>
+                  </span>
+                )}
+              </div>
+
+              {bgMusicFileUrl ? (
+                <div className="p-4 border border-line bg-paper space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-sm bg-signal/10 text-signal flex items-center justify-center shrink-0">
+                        <Music size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate">
+                          {bgMusicFileName || "background-music.mp3"}
+                        </p>
+                        <p className="text-[10px] text-ink-muted font-mono truncate">
+                          Stored on Cloudflare R2 • Ready for master merge looping
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-paper-card hover:bg-line/40 border border-line text-xs font-medium text-ink cursor-pointer transition-all">
+                        <Upload size={12} />
+                        <span>Replace Track</span>
+                        <input
+                          type="file"
+                          accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) handleUploadMusic(e.target.files[0]);
+                          }}
+                          disabled={uploadingMusic}
+                          className="sr-only"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleDeleteMusic}
+                        disabled={deletingMusic}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-medium cursor-pointer transition-all disabled:opacity-50"
+                      >
+                        {deletingMusic ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={12} />
+                        )}
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-line/60">
+                    <audio
+                      controls
+                      src={bgMusicFileUrl}
+                      className="w-full h-9"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <label className="block p-8 border-2 border-dashed border-line hover:border-signal/60 bg-paper transition-all cursor-pointer text-center space-y-3 group">
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleUploadMusic(e.target.files[0]);
+                    }}
+                    disabled={uploadingMusic}
+                    className="sr-only"
+                  />
+                  {uploadingMusic ? (
+                    <div className="space-y-2">
+                      <Loader2 size={24} className="animate-spin text-signal mx-auto" />
+                      <p className="text-xs font-semibold text-ink">Uploading music track to Cloudflare R2...</p>
+                      <p className="text-[11px] text-ink-muted">Please wait while the audio file is stored.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-signal/10 group-hover:bg-signal/20 text-signal flex items-center justify-center mx-auto transition-colors">
+                        <Upload size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-ink">
+                          Click to upload background music track
+                        </p>
+                        <p className="text-[11px] text-ink-muted mt-0.5">
+                          Supports MP3, WAV, M4A, AAC, OGG (auto-looped during video merge)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </label>
+              )}
+            </div>
+
+            {/* 2. Volume Slider Component */}
+            <div className="p-4 border border-line bg-paper space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-ink flex items-center gap-2">
+                  <Volume2 size={15} className="text-signal" />
+                  <span>2. Background Music Volume</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-signal px-2 py-0.5 bg-signal/10 border border-signal/20">
+                    {Math.round(bgMusicVolume * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setBgMusicVolume(0.15)}
+                    title="Reset to 15% recommended volume"
+                    className="p-1 hover:bg-line/40 text-ink-muted hover:text-ink transition-colors"
+                  >
+                    <RotateCcw size={12} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Slider Track */}
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="0.00"
+                  max="1.00"
+                  step="0.01"
+                  value={bgMusicVolume}
+                  onChange={(e) => setBgMusicVolume(parseFloat(e.target.value))}
+                  className="w-full h-2 bg-line rounded-lg appearance-none cursor-pointer accent-signal"
+                />
+                <div className="flex justify-between text-[10px] text-ink-muted font-mono">
+                  <span>Mute (0%)</span>
+                  <span className={bgMusicVolume >= 0.10 && bgMusicVolume <= 0.25 ? "text-signal font-bold" : ""}>
+                    Recommended: 15%
+                  </span>
+                  <span>Full (100%)</span>
+                </div>
+              </div>
+
+              {/* Volume Guide */}
+              <div className="text-[11px] text-ink-muted bg-paper-card p-3 border border-line flex items-start gap-2">
+                <Info size={14} className="text-signal shrink-0 mt-0.5" />
+                <div className="space-y-0.5 leading-relaxed">
+                  <p>
+                    <strong>Acoustic Level Guide:</strong> 10%–20% creates a subtle, atmospheric foundation without masking the spoken narration. Higher volumes (&gt;35%) may drown out the voiceover.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-paper border border-line text-xs text-ink-muted flex items-center gap-2.5">
+            <Info size={14} className="text-ink-muted shrink-0" />
+            <span>Background music is turned off. Completed videos will only contain synthesized scene voiceover audio.</span>
+          </div>
+        )}
+      </div>
+
       {/* Save Action Bar */}
       <div className="p-4 border border-line bg-paper-card flex items-center justify-between">
-        <div className="text-xs text-ink-muted font-mono">
-          {enabled ? (
-            <span className="text-emerald-600 font-semibold">
-              Filter will automatically apply to all upcoming scene audio generations.
-            </span>
-          ) : (
-            <span>Post-processing is currently turned off. Raw TTS will be used.</span>
-          )}
+        <div className="text-xs text-ink-muted font-mono space-y-0.5">
+          <div>
+            {enabled ? (
+              <span className="text-emerald-600 font-semibold">
+                Voice filter is active.
+              </span>
+            ) : (
+              <span>Voice post-processing is bypassed (raw TTS).</span>
+            )}
+          </div>
+          <div>
+            {bgMusicEnabled && bgMusicFileUrl ? (
+              <span className="text-emerald-600 font-semibold">
+                Background music enabled ({Math.round(bgMusicVolume * 100)}% vol) — will loop across merged video.
+              </span>
+            ) : bgMusicEnabled ? (
+              <span className="text-amber-600 font-semibold">
+                Background music enabled, but no track uploaded yet.
+              </span>
+            ) : (
+              <span>Background music disabled.</span>
+            )}
+          </div>
         </div>
 
         <button
