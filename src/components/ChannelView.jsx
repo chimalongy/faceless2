@@ -24,7 +24,8 @@ import {
   Sparkles,
   AlertCircle,
   Smartphone,
-  Scissors
+  Scissors,
+  Volume2
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
