@@ -1,5 +1,6 @@
 import { task, logger } from "@trigger.dev/sdk";
 import { generateAudio } from "@/lib/audio-generator";
+import { applyAudioEffects } from "@/lib/audio-effects";
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
 
@@ -24,17 +25,18 @@ export const generateSceneAudioTask = task({
       throw new Error("topicSlug is required and must be passed to generate-scene-audio task.");
     }
 
-    // Resolve channel context: tts_model, default_voice, audio_theme
+    // Resolve channel context: tts_model, default_voice, audio_theme, audio_effects
     let resolvedTtsModel = payload.ttsModel || null;
     let resolvedVoice = payload.voice || payload.voiceId || null;
     let resolvedInstruct = payload.instruct || payload.audioTheme || null;
+    let resolvedAudioEffects = payload.audioEffects || null;
 
     try {
       const sql = getDbSql();
       if (sql) {
         await initDbSchema();
         const cRows = await sql`
-          SELECT id, default_voice, audio_theme, tts_model
+          SELECT id, default_voice, audio_theme, tts_model, audio_effects
           FROM channels
           WHERE slug = ${channelSlug}
           LIMIT 1;
@@ -49,6 +51,9 @@ export const generateSceneAudioTask = task({
           }
           if (!resolvedInstruct) {
             resolvedInstruct = ch.audio_theme || null;
+          }
+          if (!resolvedAudioEffects && ch.audio_effects) {
+            resolvedAudioEffects = ch.audio_effects;
           }
         }
 
@@ -180,13 +185,31 @@ export const generateSceneAudioTask = task({
           logger.warn(`Could not clean up old audio before saving new one for scene ${currentSceneIndex}:`, cleanErr.message);
         }
 
+        // Apply Channel FFmpeg Post-Processing Audio Effects (Pitch, EQ, etc.)
+        let finalAudioBuffer = audioResult.audioBuffer;
+        let appliedFilter = "";
+
+        if (resolvedAudioEffects && resolvedAudioEffects.enabled) {
+          try {
+            logger.log(`[AudioEffects] Applying post-processing filter to Scene ${currentSceneIndex}...`);
+            const fxResult = await applyAudioEffects(finalAudioBuffer, resolvedAudioEffects);
+            if (fxResult?.changed && fxResult?.buffer) {
+              finalAudioBuffer = fxResult.buffer;
+              appliedFilter = fxResult.filterApplied;
+              logger.log(`[AudioEffects] Successfully applied filter "${appliedFilter}" to Scene ${currentSceneIndex}`);
+            }
+          } catch (fxErr) {
+            logger.error(`[AudioEffects] Filter failed for Scene ${currentSceneIndex}, continuing with original audio:`, fxErr);
+          }
+        }
+
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 8);
         const key = `channels/${channelSlug}/topics/${topicSlug}/audio/scene-${currentSceneIndex}-${timestamp}-${randomSuffix}.wav`;
 
         const uploadResult = await uploadToR2({
           key,
-          buffer: audioResult.audioBuffer,
+          buffer: finalAudioBuffer,
           mimeType: "audio/wav",
           metadata: {
             channelSlug,
@@ -195,6 +218,7 @@ export const generateSceneAudioTask = task({
             voice: sceneVoice,
             ttsModel: sceneTtsModel,
             endpointUsed: audioResult.endpointUsed,
+            audioFilter: appliedFilter || "none",
           },
         });
 

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS channels (
     avatar_url TEXT,
     default_voice TEXT DEFAULT 'af_heart',
     tts_model TEXT DEFAULT 'kokoro',
+    audio_effects JSONB DEFAULT '{"enabled": false}'::jsonb,
     postershive_api TEXT,
     script_structure JSONB,
     channel_tags TEXT,

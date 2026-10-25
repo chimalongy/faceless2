@@ -92,6 +92,7 @@ export async function initDbSchema(force = false) {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_longform BOOLEAN DEFAULT FALSE;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitle_style TEXT DEFAULT 'yellow_highlight';`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS use_image_pool BOOLEAN DEFAULT FALSE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS audio_effects JSONB DEFAULT '{"enabled": false}'::jsonb;`;
     } catch {}
 
     // 2. Content Pillars Table

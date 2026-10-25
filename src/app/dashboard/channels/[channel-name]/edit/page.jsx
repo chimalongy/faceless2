@@ -1287,6 +1287,42 @@ export default function EditChannelPage() {
           </div>
         </section>
 
+        {/* SECTION: AUDIO POST-PROCESSING CONFIGURATION */}
+        <section className="p-6 border border-line bg-paper-card space-y-6">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Sliders size={16} />
+              </span>
+              <span>Audio Post-Processing (FFmpeg Filters)</span>
+            </div>
+            <Link
+              href={`/dashboard/channels/${channelSlug}/audio-settings`}
+              className="text-xs font-semibold text-signal hover:text-signal-hover hover:underline flex items-center gap-1"
+            >
+              <span>Open Audio Settings Studio</span> &rarr;
+            </Link>
+          </div>
+
+          <div className="p-4 border border-line bg-white/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <Volume2 size={15} className="text-signal" />
+                <span className="text-xs font-bold text-ink">Deep Voice & Pitch Modulation</span>
+              </div>
+              <p className="text-[11px] text-ink-muted leading-relaxed">
+                Configure voice pitch shift (e.g. 0.75x stoic deep voice), resonance equalizers, and custom FFmpeg filters to be applied automatically to all generated scene audios before cloud upload.
+              </p>
+            </div>
+            <Link
+              href={`/dashboard/channels/${channelSlug}/audio-settings`}
+              className="px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shrink-0 cursor-pointer"
+            >
+              Configure Filters
+            </Link>
+          </div>
+        </section>
+
         {/* SECTION 0: CHANNEL ARTWORK & VISUAL BRANDING */}
         <section className="p-6 border border-line bg-paper-card space-y-6">
           <div className="flex items-center justify-between border-b border-line pb-3">
