@@ -44,6 +44,7 @@ export default function VideoOverlaysTab() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadPercent, setUploadPercent] = useState(0);
 
   // Gallery interactive states
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -63,7 +64,14 @@ export default function VideoOverlaysTab() {
     setLoading(true);
     try {
       const res = await fetch("/api/settings/overlays");
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text.slice(0, 150) || `Server error (${res.status})`);
+      }
+
       if (res.ok && data.success) {
         setOverlays(data.overlays || []);
       } else {
@@ -71,7 +79,7 @@ export default function VideoOverlaysTab() {
       }
     } catch (err) {
       console.error("Error loading overlays:", err);
-      toast.error("Error connecting to server");
+      toast.error(err.message || "Error connecting to server");
     } finally {
       setLoading(false);
     }
@@ -83,7 +91,7 @@ export default function VideoOverlaysTab() {
     return item.aspectRatio === aspectFilter || item.aspectRatio === "all";
   });
 
-  // Handle upload submission
+  // Handle direct-to-R2 upload submission
   async function handleUploadSubmit(e) {
     e.preventDefault();
     if (!selectedFile) {
@@ -92,36 +100,112 @@ export default function VideoOverlaysTab() {
     }
 
     setIsUploading(true);
-    setUploadProgress("Uploading overlay to storage...");
+    setUploadPercent(0);
+    setUploadProgress("Authorizing storage upload...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("name", uploadName.trim() || selectedFile.name.replace(/\.[^/.]+$/, ""));
-      formData.append("aspectRatio", uploadAspect);
-
-      const res = await fetch("/api/settings/overlays", {
+      // Step 1: Request presigned R2 upload URL
+      const presignRes = await fetch("/api/settings/overlays", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "presign",
+          fileName: selectedFile.name,
+          mimeType: selectedFile.type,
+        }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast.success(`Overlay "${data.overlay.name}" uploaded successfully!`);
+      const presignText = await presignRes.text();
+      let presignData = {};
+      try {
+        presignData = JSON.parse(presignText);
+      } catch {
+        throw new Error(presignText.slice(0, 150) || `Server returned ${presignRes.status}`);
+      }
+
+      if (!presignRes.ok || !presignData.uploadUrl) {
+        throw new Error(presignData.error || "Failed to obtain storage authorization");
+      }
+
+      // Step 2: Upload binary directly to Cloudflare R2 via XMLHttpRequest with progress tracking
+      setUploadProgress("Uploading 0%...");
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", presignData.uploadUrl, true);
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const percent = Math.min(99, Math.round((evt.loaded / evt.total) * 100));
+            const loadedMB = (evt.loaded / 1024 / 1024).toFixed(1);
+            const totalMB = (evt.total / 1024 / 1024).toFixed(1);
+            setUploadPercent(percent);
+            setUploadProgress(`${loadedMB}MB / ${totalMB}MB (${percent}%)`);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadPercent(100);
+            resolve();
+          } else {
+            reject(new Error(`Storage rejected file (status ${xhr.status}). Check R2 CORS settings.`));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Storage upload network error. Ensure Cloudflare R2 allows PUT requests."));
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error("Storage upload timed out."));
+        };
+
+        xhr.send(selectedFile);
+      });
+
+      // Step 3: Record metadata in DB
+      setUploadProgress("Registering overlay...");
+      const finalName = uploadName.trim() || selectedFile.name.replace(/\.[^/.]+$/, "");
+      const createRes = await fetch("/api/settings/overlays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          name: finalName,
+          fileUrl: presignData.publicUrl,
+          fileKey: presignData.key,
+          fileName: selectedFile.name,
+          mimeType: selectedFile.type || "video/mp4",
+          aspectRatio: uploadAspect,
+          sizeBytes: selectedFile.size,
+        }),
+      });
+
+      const createText = await createRes.text();
+      let createData = {};
+      try {
+        createData = JSON.parse(createText);
+      } catch {
+        throw new Error(createText.slice(0, 150) || `Server returned ${createRes.status}`);
+      }
+
+      if (createRes.ok && createData.success) {
+        toast.success(`Overlay "${createData.overlay?.name || finalName}" uploaded successfully!`);
         setUploadModalOpen(false);
         setSelectedFile(null);
         setUploadName("");
         setUploadAspect("all");
         loadOverlays();
       } else {
-        toast.error(data.error || "Failed to upload video overlay");
+        throw new Error(createData.error || "Failed to save overlay to database");
       }
     } catch (err) {
       console.error("Upload error:", err);
-      toast.error("Failed to upload: " + err.message);
+      toast.error(err.message || "Failed to upload video overlay");
     } finally {
       setIsUploading(false);
       setUploadProgress("");
+      setUploadPercent(0);
     }
   }
 
@@ -138,7 +222,14 @@ export default function VideoOverlaysTab() {
         body: JSON.stringify({ ids: idsToDelete }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text.slice(0, 150) || `Server error (${res.status})`);
+      }
+
       if (res.ok && data.success) {
         toast.success(`Deleted ${data.deletedCount} overlay(s).`);
         setSelectedIds(new Set());
@@ -148,7 +239,7 @@ export default function VideoOverlaysTab() {
       }
     } catch (err) {
       console.error("Delete error:", err);
-      toast.error("Failed to delete overlay(s)");
+      toast.error(err.message || "Failed to delete overlay(s)");
     } finally {
       setDeleting(false);
     }
@@ -508,6 +599,25 @@ export default function VideoOverlaysTab() {
                   <option value="9:16">9:16 Vertical (Shorts / Reels only)</option>
                 </select>
               </div>
+
+              {/* Progress Indicator */}
+              {isUploading && (
+                <div className="p-3 bg-paper-subtle border border-line space-y-1.5 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-ink font-semibold flex items-center gap-1.5">
+                      <Loader2 size={13} className="animate-spin text-signal shrink-0" />
+                      <span className="truncate">{uploadProgress || "Uploading..."}</span>
+                    </span>
+                    <span className="text-signal font-bold shrink-0">{uploadPercent}%</span>
+                  </div>
+                  <div className="w-full bg-line h-2 overflow-hidden rounded-xs">
+                    <div
+                      className="bg-signal h-full transition-all duration-150"
+                      style={{ width: `${uploadPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="pt-3 border-t border-line flex items-center justify-end gap-2">

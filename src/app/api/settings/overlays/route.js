@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
-import { uploadToR2, deleteFromR2, deleteMultipleFromR2 } from "@/lib/storage";
+import { uploadToR2, deleteFromR2, deleteMultipleFromR2, getPresignedR2UploadUrl } from "@/lib/storage";
 
 const ALLOWED_VIDEO_EXTS = new Set(["mp4", "webm", "mov", "m4v", "mkv", "avi"]);
 
@@ -76,7 +76,7 @@ export async function GET(request) {
   }
 }
 
-// POST /api/settings/overlays - Upload new video overlay
+// POST /api/settings/overlays - Supports both presigned R2 direct uploads and multipart fallback
 export async function POST(request) {
   try {
     const sql = getDbSql();
@@ -86,6 +86,95 @@ export async function POST(request) {
 
     await initDbSchema();
 
+    const contentType = request.headers.get("content-type") || "";
+
+    // PATH 1: JSON payload (Presigned URL request OR recording uploaded overlay)
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+
+      // Sub-action A: Generate presigned upload URL for direct browser-to-R2 upload (avoids 413 limit)
+      if (body.action === "presign") {
+        const fileName = body.fileName || "overlay.mp4";
+        const fileExt = (fileName.split(".").pop() || "mp4").toLowerCase();
+
+        if (!ALLOWED_VIDEO_EXTS.has(fileExt)) {
+          return NextResponse.json(
+            { error: `Unsupported format .${fileExt}. Allowed formats: ${Array.from(ALLOWED_VIDEO_EXTS).join(", ")}` },
+            { status: 400 }
+          );
+        }
+
+        const mimeType = body.mimeType || getVideoMimeType(fileName);
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const key = `system/overlays/${timestamp}-${randomSuffix}.${fileExt}`;
+
+        const presigned = await getPresignedR2UploadUrl({
+          key,
+          mimeType,
+          expiresIn: 3600,
+        });
+
+        return NextResponse.json({
+          success: true,
+          uploadUrl: presigned.uploadUrl,
+          publicUrl: presigned.publicUrl,
+          key: presigned.key,
+          fileName,
+          mimeType,
+        });
+      }
+
+      // Sub-action B: Record newly uploaded overlay in Neon DB
+      if (body.action === "create" || (body.fileUrl && body.fileKey)) {
+        const customName = (body.name || "").toString().trim();
+        const originalName = body.fileName || "overlay.mp4";
+        const name = customName || originalName.replace(/\.[^/.]+$/, "");
+        const rawAspect = (body.aspectRatio || "all").toString().toLowerCase().trim();
+        const aspectRatio = rawAspect === "16:9" ? "16:9" : rawAspect === "9:16" ? "9:16" : "all";
+        const sizeBytes = body.sizeBytes ? parseInt(body.sizeBytes, 10) : 0;
+        const mimeType = body.mimeType || getVideoMimeType(originalName);
+
+        const inserted = await sql`
+          INSERT INTO video_overlays (
+            name,
+            file_url,
+            file_key,
+            file_name,
+            mime_type,
+            aspect_ratio,
+            size_bytes
+          ) VALUES (
+            ${name},
+            ${body.fileUrl},
+            ${body.fileKey},
+            ${originalName},
+            ${mimeType},
+            ${aspectRatio},
+            ${sizeBytes}
+          )
+          RETURNING 
+            id, 
+            name, 
+            file_url AS "fileUrl", 
+            file_key AS "fileKey", 
+            file_name AS "fileName", 
+            mime_type AS "mimeType", 
+            aspect_ratio AS "aspectRatio", 
+            size_bytes AS "sizeBytes", 
+            created_at AS "createdAt";
+        `;
+
+        return NextResponse.json({
+          success: true,
+          overlay: inserted[0],
+        });
+      }
+
+      return NextResponse.json({ error: "Invalid JSON action" }, { status: 400 });
+    }
+
+    // PATH 2: Fallback for smaller files uploaded via multipart/form-data
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -117,7 +206,6 @@ export async function POST(request) {
     const key = `system/overlays/${timestamp}-${randomSuffix}.${fileExt}`;
     const mimeType = file.type || getVideoMimeType(originalName);
 
-    // Upload to Cloudflare R2
     const uploadResult = await uploadToR2({
       key,
       buffer,
@@ -130,7 +218,6 @@ export async function POST(request) {
       },
     });
 
-    // Record in Neon DB
     const inserted = await sql`
       INSERT INTO video_overlays (
         name,
