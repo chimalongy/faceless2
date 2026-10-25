@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
-import { uploadToR2, deleteFromR2, deleteMultipleFromR2 } from "@/lib/storage";
+import {
+  uploadToR2,
+  deleteFromR2,
+  deleteMultipleFromR2,
+  getPresignedR2UploadUrl,
+  getR2Client,
+  getBucketName
+} from "@/lib/storage";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import JSZip from "jszip";
+
+export const maxDuration = 60;
 
 const ALLOWED_EXTS = new Set(["png", "jpg", "jpeg", "webp", "jfif", "gif"]);
 
@@ -126,6 +136,249 @@ export async function POST(request, { params }) {
     }
     const channelId = channelRows[0].id;
 
+    const contentType = request.headers.get("content-type") || "";
+
+    // PATH 1: JSON Actions (Presigning, Direct R2 ZIP extraction, or Direct image batch recording)
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+
+      // Action A: Presign R2 upload URL for single file, ZIP, or batch images
+      if (body.action === "presign") {
+        const rawPoolType = (body.poolType || "").toLowerCase().trim();
+        const poolType = rawPoolType === "shorts" ? "shorts" : rawPoolType === "longform" ? "longform" : "shorts";
+
+        // Multi-file batch presign (for uploading multiple individual images directly)
+        if (Array.isArray(body.files)) {
+          const presignedList = await Promise.all(
+            body.files.map(async (f) => {
+              const fileName = f.fileName || "image.png";
+              const fileExt = (fileName.split(".").pop() || "png").toLowerCase();
+              const safeExt = ALLOWED_EXTS.has(fileExt) ? fileExt : "png";
+              const timestamp = Date.now();
+              const randomSuffix = Math.random().toString(36).substring(2, 8);
+              const key = `channels/${channelSlug}/image-pool/${poolType}/${timestamp}-${randomSuffix}.${safeExt}`;
+              const mimeType = f.mimeType || getMimeType(fileName);
+
+              const presigned = await getPresignedR2UploadUrl({ key, mimeType, expiresIn: 3600 });
+              return {
+                uploadUrl: presigned.uploadUrl,
+                publicUrl: presigned.publicUrl,
+                key: presigned.key,
+                fileName,
+                mimeType,
+              };
+            })
+          );
+
+          return NextResponse.json({ success: true, presignedList });
+        }
+
+        // Single file presign (e.g. for ZIP archive or single image)
+        const isZip = Boolean(body.isZip || body.fileName?.toLowerCase().endsWith(".zip"));
+        const fileName = body.fileName || (isZip ? "pool.zip" : "image.png");
+        const fileExt = (fileName.split(".").pop() || (isZip ? "zip" : "png")).toLowerCase();
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const folder = isZip ? "temp-zip" : poolType;
+        const key = `channels/${channelSlug}/image-pool/${folder}/${timestamp}-${randomSuffix}.${fileExt}`;
+        const mimeType = body.mimeType || (isZip ? "application/zip" : getMimeType(fileName));
+
+        const presigned = await getPresignedR2UploadUrl({ key, mimeType, expiresIn: 3600 });
+        return NextResponse.json({
+          success: true,
+          uploadUrl: presigned.uploadUrl,
+          publicUrl: presigned.publicUrl,
+          key: presigned.key,
+          fileName,
+          mimeType,
+        });
+      }
+
+      // Action B: Process and unpack a ZIP file that was uploaded directly to R2
+      if (body.action === "process-zip") {
+        const rawPoolType = (body.poolType || "").toLowerCase().trim();
+        const poolType = rawPoolType === "shorts" ? "shorts" : rawPoolType === "longform" ? "longform" : null;
+        if (!poolType) {
+          return NextResponse.json(
+            { error: "Invalid or missing poolType. Must be 'shorts' or 'longform'." },
+            { status: 400 }
+          );
+        }
+
+        const zipFileKey = body.zipFileKey ? String(body.zipFileKey).trim().replace(/^\/+/, "") : null;
+        if (!zipFileKey) {
+          return NextResponse.json({ error: "Missing zipFileKey" }, { status: 400 });
+        }
+
+        const client = getR2Client();
+        if (!client) {
+          return NextResponse.json({ error: "Storage client not configured" }, { status: 503 });
+        }
+
+        console.log(`[ImagePool] Fetching ZIP from R2 key "${zipFileKey}" for channel "${channelSlug}" (${poolType})...`);
+
+        const getCommand = new GetObjectCommand({
+          Bucket: getBucketName(),
+          Key: zipFileKey,
+        });
+
+        const r2Resp = await client.send(getCommand);
+        const chunks = [];
+        for await (const chunk of r2Resp.Body) {
+          chunks.push(chunk);
+        }
+        const zipBuffer = Buffer.concat(chunks);
+
+        const zip = new JSZip();
+        const loadedZip = await zip.loadAsync(zipBuffer);
+
+        const entries = [];
+        for (const [relativePath, zipEntry] of Object.entries(loadedZip.files)) {
+          if (zipEntry.dir) continue;
+          if (relativePath.includes("__MACOSX") || relativePath.startsWith(".")) continue;
+
+          const baseName = relativePath.split("/").pop() || "";
+          const entryExt = (baseName.split(".").pop() || "").toLowerCase();
+          if (!ALLOWED_EXTS.has(entryExt)) continue;
+
+          entries.push({ zipEntry, baseName, entryExt });
+        }
+
+        if (entries.length === 0) {
+          await deleteFromR2(zipFileKey).catch(() => {});
+          return NextResponse.json(
+            { error: "No valid image files (PNG, JPG, WEBP, JFIF, GIF) found in ZIP archive." },
+            { status: 400 }
+          );
+        }
+
+        console.log(`[ImagePool] Extracting and uploading ${entries.length} images from ZIP to R2...`);
+
+        const uploadedAssets = [];
+        const concurrency = 5;
+        for (let i = 0; i < entries.length; i += concurrency) {
+          const chunk = entries.slice(i, i + concurrency);
+          await Promise.all(
+            chunk.map(async ({ zipEntry, baseName, entryExt }) => {
+              const entryBuffer = await zipEntry.async("nodebuffer");
+              const timestamp = Date.now();
+              const randomSuffix = Math.random().toString(36).substring(2, 8);
+              const key = `channels/${channelSlug}/image-pool/${poolType}/${timestamp}-${randomSuffix}.${entryExt}`;
+              const mimeType = getMimeType(baseName);
+
+              const r2Result = await uploadToR2({
+                key,
+                buffer: entryBuffer,
+                mimeType,
+                metadata: {
+                  channelSlug,
+                  poolType,
+                  originalName: baseName,
+                },
+              });
+
+              uploadedAssets.push({
+                poolType,
+                fileUrl: r2Result.publicUrl,
+                fileKey: r2Result.key,
+                fileName: baseName,
+                mimeType,
+                sizeBytes: entryBuffer.length,
+              });
+            })
+          );
+        }
+
+        // Clean up temporary ZIP from R2
+        await deleteFromR2(zipFileKey).catch(() => {});
+
+        // Insert newly extracted image records into PostgreSQL
+        const insertedRows = [];
+        for (const item of uploadedAssets) {
+          const rows = await sql`
+            INSERT INTO channel_image_pool (
+              channel_id,
+              pool_type,
+              file_url,
+              file_key,
+              file_name,
+              mime_type,
+              size_bytes
+            ) VALUES (
+              ${channelId},
+              ${item.poolType},
+              ${item.fileUrl},
+              ${item.fileKey},
+              ${item.fileName},
+              ${item.mimeType},
+              ${item.sizeBytes}
+            )
+            RETURNING id, pool_type AS "poolType", file_url AS "fileUrl", file_key AS "fileKey", file_name AS "fileName", created_at AS "createdAt";
+          `;
+          if (rows?.[0]) insertedRows.push(rows[0]);
+        }
+
+        return NextResponse.json({
+          success: true,
+          poolType,
+          uploadedCount: insertedRows.length,
+          items: insertedRows,
+        });
+      }
+
+      // Action C: Record images that were uploaded directly to R2
+      if (body.action === "record-images") {
+        const rawPoolType = (body.poolType || "").toLowerCase().trim();
+        const poolType = rawPoolType === "shorts" ? "shorts" : rawPoolType === "longform" ? "longform" : null;
+        if (!poolType) {
+          return NextResponse.json(
+            { error: "Invalid or missing poolType. Must be 'shorts' or 'longform'." },
+            { status: 400 }
+          );
+        }
+
+        const images = Array.isArray(body.images) ? body.images : [];
+        if (images.length === 0) {
+          return NextResponse.json({ error: "No images provided to record" }, { status: 400 });
+        }
+
+        const insertedRows = [];
+        for (const item of images) {
+          const rows = await sql`
+            INSERT INTO channel_image_pool (
+              channel_id,
+              pool_type,
+              file_url,
+              file_key,
+              file_name,
+              mime_type,
+              size_bytes
+            ) VALUES (
+              ${channelId},
+              ${poolType},
+              ${item.fileUrl},
+              ${item.fileKey},
+              ${item.fileName || "image.png"},
+              ${item.mimeType || "image/png"},
+              ${item.sizeBytes || 0}
+            )
+            RETURNING id, pool_type AS "poolType", file_url AS "fileUrl", file_key AS "fileKey", file_name AS "fileName", created_at AS "createdAt";
+          `;
+          if (rows?.[0]) insertedRows.push(rows[0]);
+        }
+
+        return NextResponse.json({
+          success: true,
+          poolType,
+          uploadedCount: insertedRows.length,
+          items: insertedRows,
+        });
+      }
+
+      return NextResponse.json({ error: "Unknown action provided" }, { status: 400 });
+    }
+
+    // PATH 2: Multipart form-data fallback (for small files)
     const formData = await request.formData();
     const rawPoolType = (formData.get("poolType") || "").toLowerCase().trim();
     const poolType = rawPoolType === "shorts" ? "shorts" : rawPoolType === "longform" ? "longform" : null;

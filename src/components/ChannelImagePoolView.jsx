@@ -34,6 +34,7 @@ export default function ChannelImagePoolView({ channelSlug, channelTitle, useIma
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
   const [mounted, setMounted] = useState(false);
@@ -54,7 +55,14 @@ export default function ChannelImagePoolView({ channelSlug, channelTitle, useIma
     setLoading(true);
     try {
       const res = await fetch(`/api/channels/${channelSlug}/image-pool?type=${type}`);
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text.slice(0, 150) || `Server error (${res.status})`);
+      }
+
       if (res.ok && data.success) {
         setPoolData({
           shortsCount: data.shortsCount || 0,
@@ -66,45 +74,216 @@ export default function ChannelImagePoolView({ channelSlug, channelTitle, useIma
       }
     } catch (err) {
       console.error("Error loading pool:", err);
-      toast.error("Error connecting to server");
+      toast.error(err.message || "Error connecting to server");
     } finally {
       setLoading(false);
     }
   }
 
-  // Handle uploading files (images or zip)
+  // Handle uploading files (images or zip) via direct R2 presigned URLs
   async function handleFileUpload(files, isZip = false) {
     if (!files || files.length === 0) return;
 
     setUploading(true);
-    setUploadProgress(isZip ? "Extracting and uploading ZIP archive..." : `Uploading ${files.length} image(s)...`);
+    setUploadPercent(0);
 
     try {
-      const formData = new FormData();
-      formData.append("poolType", activePool);
+      const isZipUpload = isZip || (files.length === 1 && files[0].name.toLowerCase().endsWith(".zip"));
 
-      for (let i = 0; i < files.length; i++) {
-        formData.append("files", files[i]);
-      }
+      if (isZipUpload) {
+        const zipFile = files[0];
+        setUploadProgress(`Authorizing upload for ${zipFile.name}...`);
 
-      const res = await fetch(`/api/channels/${channelSlug}/image-pool`, {
-        method: "POST",
-        body: formData,
-      });
+        // Step 1: Request presigned R2 upload URL
+        const presignRes = await fetch(`/api/channels/${channelSlug}/image-pool`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "presign",
+            poolType: activePool,
+            fileName: zipFile.name,
+            isZip: true,
+            mimeType: zipFile.type || "application/zip",
+          }),
+        });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast.success(`Successfully added ${data.uploadedCount} image(s) to the ${activePool === "shorts" ? "Shorts" : "Longform"} pool!`);
-        loadPoolImages(activePool);
+        const presignText = await presignRes.text();
+        let presignData = {};
+        try {
+          presignData = JSON.parse(presignText);
+        } catch {
+          throw new Error(presignText.slice(0, 150) || `Server error (${presignRes.status})`);
+        }
+
+        if (!presignRes.ok || !presignData.uploadUrl) {
+          throw new Error(presignData.error || "Failed to obtain storage authorization for ZIP");
+        }
+
+        // Step 2: Upload ZIP directly to Cloudflare R2 via XMLHttpRequest with progress tracking
+        setUploadProgress("Uploading ZIP to storage (0%)...");
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", presignData.uploadUrl, true);
+
+          xhr.upload.onprogress = (evt) => {
+            if (evt.lengthComputable) {
+              const percent = Math.min(99, Math.round((evt.loaded / evt.total) * 100));
+              const loadedMB = (evt.loaded / 1024 / 1024).toFixed(1);
+              const totalMB = (evt.total / 1024 / 1024).toFixed(1);
+              setUploadPercent(percent);
+              setUploadProgress(`Uploading ZIP: ${loadedMB}MB / ${totalMB}MB (${percent}%)`);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              setUploadPercent(100);
+              resolve();
+            } else {
+              reject(new Error(`Storage rejected ZIP upload (HTTP ${xhr.status}). Check R2 CORS settings.`));
+            }
+          };
+
+          xhr.onerror = () => {
+            reject(new Error("Storage upload network error. Ensure Cloudflare R2 CORS allows PUT requests."));
+          };
+
+          xhr.ontimeout = () => {
+            reject(new Error("Storage upload timed out."));
+          };
+
+          xhr.send(zipFile);
+        });
+
+        // Step 3: Server processes and extracts images from the uploaded ZIP
+        setUploadProgress("Unpacking ZIP archive & syncing images...");
+        const processRes = await fetch(`/api/channels/${channelSlug}/image-pool`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "process-zip",
+            poolType: activePool,
+            zipFileKey: presignData.key,
+          }),
+        });
+
+        const processText = await processRes.text();
+        let processData = {};
+        try {
+          processData = JSON.parse(processText);
+        } catch {
+          throw new Error(processText.slice(0, 150) || `Extraction error (${processRes.status})`);
+        }
+
+        if (processRes.ok && processData.success) {
+          toast.success(`Successfully added ${processData.uploadedCount} image(s) to the ${activePool === "shorts" ? "Shorts" : "Longform"} pool!`);
+          loadPoolImages(activePool);
+        } else {
+          throw new Error(processData.error || "Failed to process ZIP archive");
+        }
       } else {
-        toast.error(data.error || "Failed to upload pool images");
+        // Direct individual image files upload
+        const fileList = Array.from(files);
+        setUploadProgress(`Authorizing upload for ${fileList.length} image(s)...`);
+
+        // Step 1: Batch presign URLs
+        const presignRes = await fetch(`/api/channels/${channelSlug}/image-pool`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "presign",
+            poolType: activePool,
+            files: fileList.map((f) => ({ fileName: f.name, mimeType: f.type })),
+          }),
+        });
+
+        const presignText = await presignRes.text();
+        let presignData = {};
+        try {
+          presignData = JSON.parse(presignText);
+        } catch {
+          throw new Error(presignText.slice(0, 150) || `Server error (${presignRes.status})`);
+        }
+
+        if (!presignRes.ok || !Array.isArray(presignData.presignedList)) {
+          throw new Error(presignData.error || "Failed to obtain upload authorization for images");
+        }
+
+        // Step 2: Upload each image directly to R2 in parallel chunks
+        const uploadedRecords = [];
+        let completed = 0;
+        const total = fileList.length;
+        const concurrency = 3;
+
+        for (let i = 0; i < fileList.length; i += concurrency) {
+          const chunk = fileList.slice(i, i + concurrency);
+          await Promise.all(
+            chunk.map(async (file, idx) => {
+              const presigned = presignData.presignedList[i + idx];
+              if (!presigned?.uploadUrl) return;
+
+              await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open("PUT", presigned.uploadUrl, true);
+                xhr.onload = () => {
+                  if (xhr.status >= 200 && xhr.status < 300) {
+                    completed++;
+                    setUploadPercent(Math.round((completed / total) * 100));
+                    setUploadProgress(`Uploading images: ${completed} / ${total}`);
+                    uploadedRecords.push({
+                      fileUrl: presigned.publicUrl,
+                      fileKey: presigned.key,
+                      fileName: file.name,
+                      mimeType: file.type || "image/png",
+                      sizeBytes: file.size,
+                    });
+                    resolve();
+                  } else {
+                    reject(new Error(`Storage rejected "${file.name}" (HTTP ${xhr.status})`));
+                  }
+                };
+                xhr.onerror = () => reject(new Error(`Upload network error for "${file.name}"`));
+                xhr.ontimeout = () => reject(new Error(`Upload timed out for "${file.name}"`));
+                xhr.send(file);
+              });
+            })
+          );
+        }
+
+        // Step 3: Record metadata in DB
+        setUploadProgress("Registering images in pool...");
+        const recordRes = await fetch(`/api/channels/${channelSlug}/image-pool`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "record-images",
+            poolType: activePool,
+            images: uploadedRecords,
+          }),
+        });
+
+        const recordText = await recordRes.text();
+        let recordData = {};
+        try {
+          recordData = JSON.parse(recordText);
+        } catch {
+          throw new Error(recordText.slice(0, 150) || `Save error (${recordRes.status})`);
+        }
+
+        if (recordRes.ok && recordData.success) {
+          toast.success(`Successfully added ${recordData.uploadedCount} image(s) to the ${activePool === "shorts" ? "Shorts" : "Longform"} pool!`);
+          loadPoolImages(activePool);
+        } else {
+          throw new Error(recordData.error || "Failed to record uploaded images");
+        }
       }
     } catch (err) {
       console.error("Upload error:", err);
-      toast.error("Failed to upload: " + err.message);
+      toast.error(err.message || "Failed to upload pool images");
     } finally {
       setUploading(false);
       setUploadProgress("");
+      setUploadPercent(0);
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (zipInputRef.current) zipInputRef.current.value = "";
     }
@@ -141,7 +320,14 @@ export default function ChannelImagePoolView({ channelSlug, channelTitle, useIma
         body: JSON.stringify({ ids: idsToDelete }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text.slice(0, 150) || `Server error (${res.status})`);
+      }
+
       if (res.ok && data.success) {
         toast.success(`Deleted ${data.deletedCount} image(s) from pool.`);
         setSelectedIds(new Set());
@@ -151,7 +337,7 @@ export default function ChannelImagePoolView({ channelSlug, channelTitle, useIma
       }
     } catch (err) {
       console.error("Delete error:", err);
-      toast.error("Failed to delete images");
+      toast.error(err.message || "Failed to delete images");
     } finally {
       setDeleting(false);
     }
@@ -262,9 +448,17 @@ export default function ChannelImagePoolView({ channelSlug, channelTitle, useIma
         />
 
         {uploading ? (
-          <div className="py-6 space-y-3">
+          <div className="py-6 space-y-3 max-w-sm mx-auto">
             <Loader2 size={28} className="animate-spin text-signal mx-auto" />
             <p className="text-xs font-semibold text-ink">{uploadProgress || "Uploading files..."}</p>
+            {uploadPercent > 0 && (
+              <div className="w-full bg-line h-2 overflow-hidden rounded-xs">
+                <div
+                  className="bg-signal h-full transition-all duration-150"
+                  style={{ width: `${uploadPercent}%` }}
+                />
+              </div>
+            )}
             <p className="text-[11px] text-ink-muted">Please wait while images are optimized and synced to storage.</p>
           </div>
         ) : (
