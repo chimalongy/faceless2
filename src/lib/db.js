@@ -23,8 +23,14 @@ export function getDbSql() {
   return neon(databaseUrl);
 }
 
+let isDbInitialized = false;
+
 // Automatically create database schema if tables do not exist yet
-export async function initDbSchema() {
+export async function initDbSchema(force = false) {
+  if (isDbInitialized && !force) {
+    return true;
+  }
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.warn("DATABASE_URL is not configured. Database initialization skipped.");
@@ -85,6 +91,7 @@ export async function initDbSchema() {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_shorts BOOLEAN DEFAULT TRUE;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_longform BOOLEAN DEFAULT FALSE;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitle_style TEXT DEFAULT 'yellow_highlight';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS use_image_pool BOOLEAN DEFAULT FALSE;`;
     } catch {}
 
     // 2. Content Pillars Table
@@ -281,6 +288,26 @@ export async function initDbSchema() {
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS show_shorts_title_overlay BOOLEAN DEFAULT false;`;
     } catch {}
 
+    // 9. Channel Image Pool Table (reusable shorts & longform assets per channel)
+    await sql`
+      CREATE TABLE IF NOT EXISTS channel_image_pool (
+        id SERIAL PRIMARY KEY,
+        channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        pool_type TEXT NOT NULL CHECK (pool_type IN ('shorts', 'longform')),
+        file_url TEXT NOT NULL,
+        file_key TEXT NOT NULL,
+        file_name TEXT,
+        mime_type TEXT DEFAULT 'image/png',
+        size_bytes BIGINT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_channel_image_pool_lookup ON channel_image_pool(channel_id, pool_type);`;
+    } catch {}
+
+    isDbInitialized = true;
     return true;
   } catch (error) {
     console.error("Failed to initialize database schema:", error);

@@ -100,6 +100,7 @@ export default function EditChannelPage() {
   const [subtitlesShorts, setSubtitlesShorts] = useState(true);
   const [subtitlesLongform, setSubtitlesLongform] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
+  const [useImagePool, setUseImagePool] = useState(false);
   const [scriptStructureText, setScriptStructureText] = useState(
     JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2)
   );
@@ -157,6 +158,7 @@ export default function EditChannelPage() {
                 : false
             );
             setSubtitleStyle(c.subtitleStyle || "yellow_highlight");
+            setUseImagePool(Boolean(c.useImagePool ?? c.use_image_pool));
             if (c.scriptStructure) {
               setScriptStructureText(
                 typeof c.scriptStructure === "string"
@@ -323,6 +325,12 @@ export default function EditChannelPage() {
       count++;
     }
 
+    const poolVal = findValue("use_image_pool", "useImagePool");
+    if (poolVal !== undefined && poolVal !== null) {
+      setUseImagePool(poolVal === true || poolVal === "true" || poolVal === 1);
+      count++;
+    }
+
     const subStyleVal = findValue("subtitle_style", "subtitleStyle", "subtitles_style", "subtitlesStyle");
     if (subStyleVal !== undefined && subStyleVal !== null) {
       setSubtitleStyle(String(subStyleVal));
@@ -411,6 +419,7 @@ export default function EditChannelPage() {
         subtitles_shorts: subtitlesShorts,
         subtitles_longform: subtitlesLongform,
         subtitle_style: subtitleStyle,
+        use_image_pool: useImagePool,
       },
       integrations: {
         postershive_api: postershiveApi.trim(),
@@ -498,6 +507,8 @@ export default function EditChannelPage() {
       subtitlesLongform,
       subtitlesEnabled: subtitlesShorts || subtitlesLongform,
       subtitleStyle,
+      useImagePool,
+      use_image_pool: useImagePool,
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
       scriptStructure: parsedStructure,
@@ -1234,6 +1245,45 @@ export default function EditChannelPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* SECTION: CHANNEL IMAGE POOL CONFIGURATION */}
+        <section className="p-6 border border-line bg-paper-card space-y-6">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <ImageIcon size={16} />
+              </span>
+              <span>Channel Image Pool</span>
+            </div>
+            <Link
+              href={`/dashboard/channels/${channelSlug}/image-pool`}
+              className="text-xs font-semibold text-signal hover:text-signal-hover hover:underline flex items-center gap-1"
+            >
+              <span>Manage Image Pool Assets</span> &rarr;
+            </Link>
+          </div>
+
+          <div className="p-4 border border-line bg-white/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <Sparkles size={15} className="text-signal" />
+                <span className="text-xs font-bold text-ink">Use Image Pool for Scene Visuals</span>
+              </div>
+              <p className="text-[11px] text-ink-muted leading-relaxed">
+                When active, you can upload as many images as you like to this channel's Shorts (9:16) and Longform (16:9) pools. In any topic's studio, you can randomly populate all scene frames with one click.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+              <input
+                type="checkbox"
+                checked={useImagePool}
+                onChange={(e) => setUseImagePool(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-signal"></div>
+            </label>
           </div>
         </section>
 

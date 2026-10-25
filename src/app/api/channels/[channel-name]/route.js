@@ -46,6 +46,7 @@ export async function GET(request, { params }) {
         subtitles_shorts AS "subtitlesShorts",
         subtitles_longform AS "subtitlesLongform",
         subtitle_style AS "subtitleStyle",
+        use_image_pool AS "useImagePool",
         status,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -138,6 +139,7 @@ export async function PUT(request, { params }) {
         subtitles_shorts = ${body.subtitlesShorts !== undefined ? Boolean(body.subtitlesShorts) : (body.subtitles_shorts !== undefined ? Boolean(body.subtitles_shorts) : true)},
         subtitles_longform = ${body.subtitlesLongform !== undefined ? Boolean(body.subtitlesLongform) : (body.subtitles_longform !== undefined ? Boolean(body.subtitles_longform) : false)},
         subtitle_style = ${body.subtitleStyle || body.subtitle_style || 'yellow_highlight'},
+        use_image_pool = ${body.useImagePool !== undefined ? Boolean(body.useImagePool) : (body.use_image_pool !== undefined ? Boolean(body.use_image_pool) : false)},
         status = ${body.status || 'Active'},
         updated_at = NOW()
       WHERE slug = ${channelSlug}
@@ -172,7 +174,7 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // 1. Fetch all asset keys for this channel from topic_assets before deleting
+    // 1. Fetch all asset keys for this channel from topic_assets and channel_image_pool before deleting
     const assetRows = await sql`
       SELECT ta.file_key 
       FROM topic_assets ta
@@ -180,7 +182,17 @@ export async function DELETE(request, { params }) {
       WHERE c.slug = ${channelSlug};
     `;
 
-    const keysToDelete = (assetRows || []).map((r) => r.file_key).filter(Boolean);
+    const poolRows = await sql`
+      SELECT cip.file_key
+      FROM channel_image_pool cip
+      JOIN channels c ON c.id = cip.channel_id
+      WHERE c.slug = ${channelSlug};
+    `;
+
+    const keysToDelete = [
+      ...(assetRows || []).map((r) => r.file_key),
+      ...(poolRows || []).map((r) => r.file_key),
+    ].filter(Boolean);
 
     // 2. Delete all physical files from Cloudflare R2 bucket
     if (keysToDelete.length > 0) {

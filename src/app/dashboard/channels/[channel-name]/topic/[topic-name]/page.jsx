@@ -118,6 +118,7 @@ export default function TopicStudioPage() {
 
   // 5. Images State
   const [sceneImages, setSceneImages] = useState({});
+  const [isAssigningFromPool, setIsAssigningFromPool] = useState(false);
 
   // 6. SceneFrames (Video) State
   const [sceneVideos, setSceneVideos] = useState({});
@@ -1528,6 +1529,82 @@ export default function TopicStudioPage() {
     }
   }
 
+  // Image Pool Assignment Handler
+  async function handleAssignFromPool(targetSceneIndex = null, targetImageIndex = 1) {
+    setIsAssigningFromPool(true);
+    toast(
+      targetSceneIndex !== null
+        ? `Rolling image from pool for Scene ${targetSceneIndex}...`
+        : "Assigning random visuals from channel image pool...",
+      { icon: "🎲" }
+    );
+
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/assign-from-pool`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneIndex: targetSceneIndex,
+          imageIndex: targetImageIndex,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to assign images from pool");
+      }
+
+      if (targetSceneIndex !== null) {
+        // Update single scene frame
+        setSceneImages((prev) => {
+          const next = { ...prev };
+          const sNum = targetSceneIndex;
+          const current = next[sNum] || {
+            url: data.assignedUrl,
+            key: data.assignedKey,
+            name: `Scene ${sNum} Image`,
+            images: [],
+          };
+          let frameList = Array.isArray(current.images) ? [...current.images] : [];
+          const newImg = {
+            url: data.assignedUrl,
+            key: data.assignedKey,
+            name: `Scene ${sNum} Image ${targetImageIndex}`,
+            imageIndex: targetImageIndex,
+          };
+          const existingIdx = frameList.findIndex(
+            (item, idx) => getImageIndex(item, sNum) === targetImageIndex || item.imageIndex === targetImageIndex || (targetImageIndex === 1 && idx === 0 && frameList.length <= 1)
+          );
+          if (existingIdx >= 0) {
+            frameList[existingIdx] = newImg;
+          } else {
+            frameList.push(newImg);
+          }
+          frameList = sortSceneImages(frameList, sNum);
+          next[sNum] = {
+            ...current,
+            url: frameList[0]?.url || data.assignedUrl,
+            key: frameList[0]?.key || data.assignedKey,
+            images: frameList,
+          };
+          return next;
+        });
+        toast.success(`Scene ${targetSceneIndex} visual updated from pool!`);
+      } else {
+        // Bulk update all scenes
+        if (data.sceneImages) {
+          setSceneImages(data.sceneImages);
+        }
+        toast.success(`Assigned ${data.assignedCount} visual(s) from the ${data.poolType === "shorts" ? "Shorts (9:16)" : "Longform (16:9)"} pool!`);
+      }
+    } catch (err) {
+      console.error("Error assigning from pool:", err);
+      toast.error(err.message || "Failed to assign images from pool");
+    } finally {
+      setIsAssigningFromPool(false);
+    }
+  }
+
   // SceneFrames (Video) Handlers
   async function handleUploadSceneVideo(sceneNum, file) {
     if (!file) return;
@@ -2467,6 +2544,8 @@ export default function TopicStudioPage() {
               handleDeleteMultipleSceneImages={handleDeleteMultipleSceneImages}
               handleGenerateSceneImage={handleGenerateSceneImage}
               handleGenerateAllImages={handleGenerateAllImages}
+              handleAssignFromPool={handleAssignFromPool}
+              isAssigningFromPool={isAssigningFromPool}
               isShort={isShort}
             />
           )}

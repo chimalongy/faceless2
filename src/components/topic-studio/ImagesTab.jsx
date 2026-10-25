@@ -44,6 +44,8 @@ export default function ImagesTab({
   handleDeleteMultipleSceneImages,
   handleGenerateSceneImage,
   handleGenerateAllImages,
+  handleAssignFromPool,
+  isAssigningFromPool = false,
   isShort = false,
 }) {
   const [expandedPrompts, setExpandedPrompts] = useState({});
@@ -447,6 +449,29 @@ export default function ImagesTab({
               >
                 <Code size={13} className="text-signal" />
                 <span>Prompts (JSON)</span>
+              </button>
+            )}
+
+            {/* Assign from Image Pool Button */}
+            {handleAssignFromPool && (
+              <button
+                type="button"
+                disabled={isAssigningFromPool || parsedScenes.length === 0}
+                onClick={() => handleAssignFromPool()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-signal/40 bg-signal/10 hover:bg-signal/20 text-xs font-semibold text-signal transition-all cursor-pointer disabled:opacity-60 shrink-0"
+                title={`Randomly assign visuals from channel's ${isShort ? "Shorts (9:16)" : "Longform (16:9)"} pool to all scenes`}
+              >
+                {isAssigningFromPool ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin text-signal" />
+                    <span>Assigning from Pool...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} className="text-signal" />
+                    <span>Assign from Pool ({isShort ? "Shorts" : "Longform"})</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -1233,6 +1258,25 @@ export default function ImagesTab({
                                   </>
                                 )}
                               </button>
+
+                              {/* Roll single frame from pool */}
+                              {handleAssignFromPool && (
+                                <button
+                                  type="button"
+                                  disabled={isAssigningFromPool}
+                                  onClick={() =>
+                                    handleAssignFromPool(
+                                      sceneNum,
+                                      isMultiImage ? activeFrameIndex : 1
+                                    )
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-line bg-white hover:bg-ink/5 text-ink-muted hover:text-ink text-[10px] font-semibold transition-all cursor-pointer disabled:opacity-60"
+                                  title="Randomly pick an image from the channel pool for this scene"
+                                >
+                                  <Sparkles size={10} className="text-amber-500" />
+                                  <span>Roll Pool</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         );

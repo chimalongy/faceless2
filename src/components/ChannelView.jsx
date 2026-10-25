@@ -31,6 +31,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import ChannelShortsView from "./ChannelShortsView";
+import ChannelImagePoolView from "./ChannelImagePoolView";
 
 function toPillarSlug(name) {
   return name
@@ -768,6 +769,18 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
               {shortsTopics.length}
             </span>
           </Link>
+
+          <Link
+            href={`/dashboard/channels/${channelSlug}/image-pool`}
+            className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === "image-pool"
+                ? "border-signal text-signal font-bold bg-signal/5"
+                : "border-transparent text-ink-muted hover:text-ink hover:border-line"
+            }`}
+          >
+            <ImageIcon size={14} className="text-signal" />
+            <span>Image Pool</span>
+          </Link>
         </div>
       </div>
 
@@ -1165,6 +1178,15 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
               topics={topics}
               pillars={pillars}
               onRefresh={loadWorkspaceData}
+            />
+          )}
+
+          {/* TAB 6: IMAGE POOL */}
+          {activeTab === "image-pool" && (
+            <ChannelImagePoolView
+              channelSlug={channelSlug}
+              channelTitle={channelTitle}
+              useImagePool={Boolean(channelProfile?.useImagePool ?? channelProfile?.use_image_pool)}
             />
           )}
         </>

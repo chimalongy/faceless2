@@ -161,6 +161,20 @@ CREATE TABLE IF NOT EXISTS general_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 9. CHANNEL IMAGE POOL TABLE
+-- Dedicated pool of images for a channel, split into shorts (9:16) and longform (16:9) formats.
+CREATE TABLE IF NOT EXISTS channel_image_pool (
+    id SERIAL PRIMARY KEY,
+    channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    pool_type TEXT NOT NULL CHECK (pool_type IN ('shorts', 'longform')),
+    file_url TEXT NOT NULL,
+    file_key TEXT NOT NULL,
+    file_name TEXT,
+    mime_type TEXT DEFAULT 'image/png',
+    size_bytes BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- INDEXES FOR HIGH-SPEED QUERIES
 -- ==============================================================================
@@ -173,3 +187,5 @@ CREATE INDEX IF NOT EXISTS idx_topic_assets_channel_id ON topic_assets(channel_i
 CREATE INDEX IF NOT EXISTS idx_image_endpoints_email ON image_endpoints(account_email);
 CREATE INDEX IF NOT EXISTS idx_audio_endpoints_email ON audio_endpoints(account_email);
 CREATE INDEX IF NOT EXISTS idx_llm_accounts_email ON llm_accounts(account_email);
+CREATE INDEX IF NOT EXISTS idx_channel_image_pool_lookup ON channel_image_pool(channel_id, pool_type);
+
