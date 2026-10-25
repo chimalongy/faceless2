@@ -63,8 +63,16 @@ export const AUDIO_EFFECT_PRESETS = [
 export function buildAudioFilterString(config = {}) {
   if (!config) return "";
 
-  // If custom filter string is explicitly provided
-  if (config.customFilter && String(config.customFilter).trim()) {
+  if (config.preset === "none") return "";
+
+  // A custom string only overrides structured controls when Custom is selected.
+  // Presets and fine-tuned structured settings must not be masked by a stale
+  // filter string saved by an earlier version of the settings page.
+  if (
+    config.preset === "custom" &&
+    config.customFilter &&
+    String(config.customFilter).trim()
+  ) {
     return String(config.customFilter).trim();
   }
 

@@ -16,6 +16,28 @@ test("buildAudioFilterString compiles stoic_deep preset correctly", () => {
   assert.equal(filter, "rubberband=pitch=0.75,equalizer=f=125:t=q:w=1:g=2.5");
 });
 
+test("buildAudioFilterString ignores stale custom filters saved alongside a preset", () => {
+  const filter = buildAudioFilterString({
+    preset: "stoic_deep",
+    customFilter: "rubberband=pitch=1.0",
+  });
+  assert.equal(filter, "rubberband=pitch=0.75,equalizer=f=125:t=q:w=1:g=2.5");
+});
+
+test("buildAudioFilterString compiles adjusted controls when custom filter is empty", () => {
+  const filter = buildAudioFilterString({
+    preset: "custom",
+    pitch: 0.8,
+    equalizer: { enabled: true, frequency: 100, width: 1, gain: 3 },
+    customFilter: "",
+  });
+  assert.equal(filter, "rubberband=pitch=0.80,equalizer=f=100:t=q:w=1.0:g=3.0");
+});
+
+test("buildAudioFilterString keeps the none preset unprocessed", () => {
+  assert.equal(buildAudioFilterString({ preset: "none", pitch: 0.75 }), "");
+});
+
 test("buildAudioFilterString respects customFilter override", () => {
   const custom = "rubberband=pitch=0.65,volume=1.5";
   const filter = buildAudioFilterString({

@@ -86,6 +86,7 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
 
     if (presetId === "none") {
       setEnabled(false);
+      setCustomFilter("");
       return;
     }
 
@@ -131,7 +132,7 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
           width: eqWidth,
           gain: eqGain,
         },
-        customFilter: preset === "custom" ? customFilter : activeFilterString,
+        customFilter: preset === "custom" ? customFilter : "",
       };
 
       const res = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
@@ -182,7 +183,7 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
           width: eqWidth,
           gain: eqGain,
         },
-        customFilter: preset === "custom" ? customFilter : activeFilterString,
+        customFilter: preset === "custom" ? customFilter : "",
       };
 
       const res = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
@@ -344,7 +345,8 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
               value={pitch}
               onChange={(e) => {
                 setPitch(parseFloat(e.target.value));
-                if (preset !== "custom") setPreset("custom");
+                setPreset("custom");
+                setCustomFilter("");
               }}
               className="w-full accent-signal cursor-pointer"
             />
@@ -381,7 +383,8 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
                   value={eqFreq}
                   onChange={(e) => {
                     setEqFreq(parseInt(e.target.value, 10) || 125);
-                    if (preset !== "custom") setPreset("custom");
+                    setPreset("custom");
+                    setCustomFilter("");
                   }}
                   className="w-full p-2 border border-line bg-white text-xs font-mono text-ink outline-none focus:border-signal"
                 />
@@ -397,7 +400,8 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
                   value={eqWidth}
                   onChange={(e) => {
                     setEqWidth(parseFloat(e.target.value) || 1.0);
-                    if (preset !== "custom") setPreset("custom");
+                    setPreset("custom");
+                    setCustomFilter("");
                   }}
                   className="w-full p-2 border border-line bg-white text-xs font-mono text-ink outline-none focus:border-signal"
                 />
@@ -413,7 +417,8 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
                   value={eqGain}
                   onChange={(e) => {
                     setEqGain(parseFloat(e.target.value) || 0);
-                    if (preset !== "custom") setPreset("custom");
+                    setPreset("custom");
+                    setCustomFilter("");
                   }}
                   className="w-full p-2 border border-line bg-white text-xs font-mono text-ink outline-none focus:border-signal"
                 />

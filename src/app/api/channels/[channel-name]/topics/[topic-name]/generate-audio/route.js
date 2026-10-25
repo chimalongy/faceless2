@@ -68,6 +68,7 @@ export async function POST(req, context) {
         audioUrl: output.audioUrl || output.publicUrl,
         key: output.key,
         endpointUsed: output.endpointUsed,
+        audioFilter: output.audioFilter || "none",
         remainingUsage: output.remainingUsage,
         durationEstimate: output.durationEstimate,
         error: output.error,
@@ -100,15 +101,17 @@ export async function POST(req, context) {
 
       const output = run.output;
       return NextResponse.json({
-        success: true,
+        success: output.success !== false,
         totalScenes: output.totalScenes,
         completedCount: output.completedAudios,
+        failedCount: output.failedAudios,
         results: output.audios.map((a) => ({
           sceneIndex: a.sceneIndex,
           success: a.success,
           audioUrl: a.publicUrl,
           key: a.key,
           endpointUsed: a.endpointUsed,
+          audioFilter: a.audioFilter || "none",
           remainingUsage: a.remainingUsage,
           durationEstimate: a.durationEstimate,
           error: a.error,

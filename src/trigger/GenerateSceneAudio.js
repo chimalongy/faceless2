@@ -153,7 +153,24 @@ export const generateSceneAudioTask = task({
           format: "wav",
         });
 
-        // Clean up previous scene audio from Cloudflare R2 and Neon DB if regenerating
+        // Apply Channel FFmpeg Post-Processing Audio Effects (Pitch, EQ, etc.)
+        let finalAudioBuffer = audioResult.audioBuffer;
+        let appliedFilter = "";
+
+        if (resolvedAudioEffects && resolvedAudioEffects.enabled) {
+          logger.log(`[AudioEffects] Applying post-processing filter to Scene ${currentSceneIndex}...`);
+          const fxResult = await applyAudioEffects(finalAudioBuffer, resolvedAudioEffects);
+          if (!fxResult?.changed || !fxResult?.buffer) {
+            throw new Error(
+              `Audio effects are enabled for channel "${channelSlug}", but FFmpeg did not return processed audio.`
+            );
+          }
+          finalAudioBuffer = fxResult.buffer;
+          appliedFilter = fxResult.filterApplied;
+          logger.log(`[AudioEffects] Successfully applied filter "${appliedFilter}" to Scene ${currentSceneIndex}`);
+        }
+
+        // Replace existing audio only after synthesis and any requested effects succeed.
         try {
           const sql = getDbSql();
           if (sql && currentSceneIndex !== null) {
@@ -183,24 +200,6 @@ export const generateSceneAudioTask = task({
           }
         } catch (cleanErr) {
           logger.warn(`Could not clean up old audio before saving new one for scene ${currentSceneIndex}:`, cleanErr.message);
-        }
-
-        // Apply Channel FFmpeg Post-Processing Audio Effects (Pitch, EQ, etc.)
-        let finalAudioBuffer = audioResult.audioBuffer;
-        let appliedFilter = "";
-
-        if (resolvedAudioEffects && resolvedAudioEffects.enabled) {
-          try {
-            logger.log(`[AudioEffects] Applying post-processing filter to Scene ${currentSceneIndex}...`);
-            const fxResult = await applyAudioEffects(finalAudioBuffer, resolvedAudioEffects);
-            if (fxResult?.changed && fxResult?.buffer) {
-              finalAudioBuffer = fxResult.buffer;
-              appliedFilter = fxResult.filterApplied;
-              logger.log(`[AudioEffects] Successfully applied filter "${appliedFilter}" to Scene ${currentSceneIndex}`);
-            }
-          } catch (fxErr) {
-            logger.error(`[AudioEffects] Filter failed for Scene ${currentSceneIndex}, continuing with original audio:`, fxErr);
-          }
         }
 
         const timestamp = Date.now();
@@ -256,7 +255,7 @@ export const generateSceneAudioTask = task({
                   ${uploadResult.key},
                   ${`Scene ${currentSceneIndex} Audio.wav`},
                   'audio/wav',
-                  ${audioResult.byteLength},
+                  ${finalAudioBuffer.length},
                   NOW()
                 );
               `;
@@ -272,6 +271,7 @@ export const generateSceneAudioTask = task({
           publicUrl: uploadResult.publicUrl,
           key: uploadResult.key,
           endpointUsed: audioResult.endpointUsed,
+          audioFilter: appliedFilter || "none",
           durationEstimate: audioResult.durationEstimate,
           ttsModel: audioResult.ttsModel,
         };
@@ -305,6 +305,7 @@ export const generateSceneAudioTask = task({
         audioUrl: single.publicUrl,
         key: single.key,
         endpointUsed: single.endpointUsed,
+        audioFilter: single.audioFilter,
         durationEstimate: single.durationEstimate,
         ttsModel: single.ttsModel,
       };

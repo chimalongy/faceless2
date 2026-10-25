@@ -10,6 +10,40 @@ const execFileAsync = promisify(execFile);
 
 export { AUDIO_EFFECT_PRESETS, buildAudioFilterString };
 
+function getWavSampleRate(buffer) {
+  if (buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WAVE") {
+    return null;
+  }
+
+  let offset = 12;
+  while (offset + 8 <= buffer.length) {
+    const chunkName = buffer.toString("ascii", offset, offset + 4);
+    const chunkSize = buffer.readUInt32LE(offset + 4);
+    if (chunkName === "fmt " && offset + 16 <= buffer.length) {
+      return buffer.readUInt32LE(offset + 12);
+    }
+    offset += 8 + chunkSize + (chunkSize % 2);
+  }
+
+  return null;
+}
+
+function buildCompatiblePitchFilter(filterString, sampleRate) {
+  return filterString.replace(
+    /rubberband=pitch=([0-9]*\.?[0-9]+)/g,
+    (_match, pitchText) => {
+      const pitch = Number(pitchText);
+      if (!Number.isFinite(pitch) || pitch <= 0) {
+        throw new Error(`Invalid rubberband pitch factor: ${pitchText}`);
+      }
+
+      const shiftedRate = Math.round(sampleRate * pitch);
+      const tempo = (1 / pitch).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+      return `asetrate=${shiftedRate},aresample=${sampleRate},atempo=${tempo}`;
+    }
+  );
+}
+
 /**
  * Applies FFmpeg audio filters (pitch shift, equalizer, etc.) to an audio WAV Buffer.
  * 
@@ -52,7 +86,34 @@ export async function applyAudioEffects(audioBuffer, config = {}) {
       outputPath,
     ];
 
-    await execFileAsync(ffmpegPath, args, { timeout: 60000 });
+    let appliedFilter = filterString;
+    try {
+      await execFileAsync(ffmpegPath, args, { timeout: 60000 });
+    } catch (err) {
+      const ffmpegError = `${err.stderr || ""}\n${err.message || ""}`;
+      const missingRubberband =
+        /No such filter:\s*['"]?rubberband/i.test(ffmpegError) &&
+        /rubberband=pitch=/i.test(filterString);
+
+      if (!missingRubberband) throw err;
+
+      const sampleRate = getWavSampleRate(audioBuffer);
+      if (!sampleRate) {
+        throw new Error(
+          "This FFmpeg build does not include the rubberband filter, and the WAV sample rate could not be read for the pitch-shift fallback."
+        );
+      }
+
+      appliedFilter = buildCompatiblePitchFilter(filterString, sampleRate);
+      console.warn(
+        `[AudioEffects] FFmpeg has no rubberband filter; using duration-preserving pitch fallback: "${appliedFilter}"`
+      );
+      await execFileAsync(
+        ffmpegPath,
+        args.map((arg) => (arg === filterString ? appliedFilter : arg)),
+        { timeout: 60000 }
+      );
+    }
 
     if (!fs.existsSync(outputPath)) {
       throw new Error("FFmpeg completed but output audio file was not generated.");
@@ -67,7 +128,7 @@ export async function applyAudioEffects(audioBuffer, config = {}) {
 
     return {
       buffer: processedBuffer,
-      filterApplied: filterString,
+      filterApplied: appliedFilter,
       changed: true,
     };
   } catch (err) {
