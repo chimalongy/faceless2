@@ -233,18 +233,13 @@ export const mergeSceneFramesTask = task({
 
       const useVideoOverlay = Boolean(vSettings?.use_overlay ?? vSettings?.useOverlay ?? false);
       if (useVideoOverlay) {
-        const shortsUrl = vSettings?.shorts_overlay_url || vSettings?.shortsOverlayUrl;
-        const longsUrl = vSettings?.longs_overlay_url || vSettings?.longsOverlayUrl;
-        const overlayUrl = (isShortTopic ? shortsUrl : longsUrl) || (isShortTopic ? longsUrl : shortsUrl);
+        const overlayUrl = isShortTopic
+          ? (vSettings?.shorts_overlay_url || vSettings?.shortsOverlayUrl)
+          : (vSettings?.longs_overlay_url || vSettings?.longsOverlayUrl);
 
-        let rawOpacity = isShortTopic
+        const rawOpacity = isShortTopic
           ? (vSettings?.shorts_opacity ?? vSettings?.shortsOpacity)
           : (vSettings?.longs_opacity ?? vSettings?.longsOpacity);
-        if (rawOpacity === undefined || rawOpacity === null) {
-          rawOpacity = isShortTopic
-            ? (vSettings?.longs_opacity ?? vSettings?.longsOpacity)
-            : (vSettings?.shorts_opacity ?? vSettings?.shortsOpacity);
-        }
 
         videoOverlayOpacity = rawOpacity !== undefined && rawOpacity !== null
           ? Math.max(0.0, Math.min(1.0, Number(rawOpacity)))
