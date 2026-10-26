@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { generateAudio } from "@/lib/audio-generator";
 import { applyAudioEffects, buildAudioFilterString, AUDIO_EFFECT_PRESETS } from "@/lib/audio-effects";
-import { uploadToR2, deleteFromR2 } from "@/lib/storage";
+import { uploadToR2, deleteFromR2, getPresignedR2UploadUrl } from "@/lib/storage";
 
 export const maxDuration = 60;
 
@@ -143,6 +143,40 @@ export async function POST(request, { params }) {
     // JSON Payload Actions
     const body = await request.json();
     const action = body.action || "save";
+
+    // Action: Generate Presigned URL for Direct Cloudflare R2 Upload (bypasses Vercel 4.5MB payload limit)
+    if (action === "presign_music") {
+      const fileName = body.fileName || "background-music.mp3";
+      const mimeType = body.mimeType || "audio/mpeg";
+      const ext = fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : "mp3";
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const key = `channels/${channelSlug}/background-music/bgm-${timestamp}-${randomSuffix}.${ext}`;
+
+      // Clean up previous background music from R2 if one existed
+      const existingKey = channel.background_music?.fileKey;
+      if (existingKey) {
+        try {
+          await deleteFromR2(existingKey);
+        } catch (delErr) {
+          console.warn("[audio-effects] Failed to delete previous background music from R2:", delErr);
+        }
+      }
+
+      const presigned = await getPresignedR2UploadUrl({
+        key,
+        mimeType,
+        expiresIn: 3600,
+      });
+
+      return NextResponse.json({
+        success: true,
+        uploadUrl: presigned.uploadUrl,
+        publicUrl: presigned.publicUrl,
+        fileKey: presigned.key,
+        fileName,
+      });
+    }
 
     // Action: Delete background music file
     if (action === "delete_music") {

@@ -49,6 +49,7 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
   const [bgMusicFileName, setBgMusicFileName] = useState(null);
   const [bgMusicVolume, setBgMusicVolume] = useState(0.15);
   const [uploadingMusic, setUploadingMusic] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [deletingMusic, setDeletingMusic] = useState(false);
 
   useEffect(() => {
@@ -97,7 +98,7 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
     }
   }
 
-  // Upload Background Music
+  // Upload Background Music (Direct to Cloudflare R2 via Presigned URL)
   async function handleUploadMusic(file) {
     if (!file) return;
     if (!file.type.startsWith("audio/") && !/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name)) {
@@ -106,30 +107,107 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
     }
 
     setUploadingMusic(true);
+    setUploadProgress("Authorizing storage upload...");
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
+      // Step 1: Request presigned R2 upload URL (tiny JSON, bypasses Vercel 4.5MB limit)
+      const presignRes = await fetch(`/api/channels/${channelSlug}/audio-effects`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "presign_music",
+          fileName: file.name,
+          mimeType: file.type || "audio/mpeg",
+        }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to upload background music");
+      const presignText = await presignRes.text();
+      let presignData = {};
+      try {
+        presignData = JSON.parse(presignText);
+      } catch {
+        throw new Error(presignText.slice(0, 150) || `Server returned ${presignRes.status}`);
       }
 
-      setBgMusicFileUrl(data.fileUrl);
-      setBgMusicFileKey(data.fileKey);
-      setBgMusicFileName(data.fileName);
+      if (!presignRes.ok || !presignData.uploadUrl) {
+        throw new Error(presignData.error || "Failed to obtain storage authorization");
+      }
+
+      // Step 2: Upload audio file directly from browser to Cloudflare R2
+      setUploadProgress("Uploading 0%...");
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", presignData.uploadUrl, true);
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const percent = Math.min(99, Math.round((evt.loaded / evt.total) * 100));
+            const loadedMB = (evt.loaded / 1024 / 1024).toFixed(1);
+            const totalMB = (evt.total / 1024 / 1024).toFixed(1);
+            setUploadProgress(`${loadedMB}MB / ${totalMB}MB (${percent}%)`);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Storage rejected file (HTTP ${xhr.status}). Check R2 CORS settings.`));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Network error during direct storage upload."));
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error("Storage upload timed out."));
+        };
+
+        xhr.send(file);
+      });
+
+      // Step 3: Update local state & auto-save to ensure track is instantly persisted
+      setBgMusicFileUrl(presignData.publicUrl);
+      setBgMusicFileKey(presignData.fileKey);
+      setBgMusicFileName(file.name);
       setBgMusicEnabled(true);
-      toast.success(`Uploaded "${data.fileName}". Remember to click Save Audio Settings.`);
+
+      // Auto-save the new track so the user doesn't risk losing it
+      setUploadProgress("Saving track settings...");
+      await fetch(`/api/channels/${channelSlug}/audio-effects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save",
+          audioEffects: {
+            enabled,
+            preset,
+            pitch,
+            equalizer: {
+              enabled: true,
+              frequency: eqFreq,
+              width: eqWidth,
+              gain: eqGain,
+            },
+            customFilter: preset === "custom" ? customFilter : "",
+          },
+          backgroundMusic: {
+            enabled: true,
+            fileUrl: presignData.publicUrl,
+            fileKey: presignData.fileKey,
+            fileName: file.name,
+            volume: bgMusicVolume,
+          },
+        }),
+      });
+
+      toast.success(`Uploaded and saved "${file.name}"!`);
     } catch (err) {
       console.error("Music upload error:", err);
       toast.error(err.message || "Upload failed");
     } finally {
       setUploadingMusic(false);
+      setUploadProgress(null);
     }
   }
 
@@ -768,8 +846,10 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
                   {uploadingMusic ? (
                     <div className="space-y-2">
                       <Loader2 size={24} className="animate-spin text-signal mx-auto" />
-                      <p className="text-xs font-semibold text-ink">Uploading music track to Cloudflare R2...</p>
-                      <p className="text-[11px] text-ink-muted">Please wait while the audio file is stored.</p>
+                      <p className="text-xs font-semibold text-ink">
+                        {uploadProgress || "Uploading music track to Cloudflare R2..."}
+                      </p>
+                      <p className="text-[11px] text-ink-muted">Direct high-speed upload to storage (no size limit)</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
