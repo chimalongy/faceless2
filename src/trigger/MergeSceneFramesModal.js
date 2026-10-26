@@ -188,11 +188,13 @@ export const mergeSceneFramesModalTask = task({
         const sql = getDbSql();
         if (sql) {
           await initDbSchema();
+          let channelVideoSettings = null;
           const cRows = await sql`
-            SELECT background_music AS "backgroundMusic"
+            SELECT background_music AS "backgroundMusic", video_settings AS "videoSettings"
             FROM channels WHERE slug = ${channelSlug} LIMIT 1;
           `;
           channelBgMusic = cRows?.[0]?.backgroundMusic || null;
+          channelVideoSettings = cRows?.[0]?.videoSettings || null;
 
           if (!isShortTopic && topicSlug) {
             const tRows = await sql`
@@ -248,6 +250,7 @@ export const mergeSceneFramesModalTask = task({
       topicTitle: String(payload.topicTitle || topicSlug).trim(),
       shortsOverlayText: String(payload.shortsOverlayText || "").trim(),
       backgroundMusic: payload.backgroundMusic || channelBgMusic || null,
+      videoSettings: payload.videoSettings || channelVideoSettings || null,
     };
 
     // 3. Submit merge request to Modal

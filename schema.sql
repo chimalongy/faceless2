@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS channels (
     tts_model TEXT DEFAULT 'kokoro',
     audio_effects JSONB DEFAULT '{"enabled": false}'::jsonb,
     background_music JSONB DEFAULT '{"enabled": false, "volume": 0.15}'::jsonb,
+    video_settings JSONB DEFAULT '{"use_overlay": false, "longs_overlay_id": null, "shorts_overlay_id": null}'::jsonb,
     postershive_api TEXT,
     script_structure JSONB,
     channel_tags TEXT,

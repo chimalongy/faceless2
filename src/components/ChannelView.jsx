@@ -34,6 +34,7 @@ import { createPortal } from "react-dom";
 import ChannelShortsView from "./ChannelShortsView";
 import ChannelImagePoolView from "./ChannelImagePoolView";
 import ChannelAudioSettingsTab from "./ChannelAudioSettingsTab";
+import ChannelVideoSettingsTab from "./ChannelVideoSettingsTab";
 
 function toPillarSlug(name) {
   return name
@@ -795,6 +796,18 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
             <Volume2 size={14} className="text-signal" />
             <span>Audio Settings</span>
           </Link>
+
+          <Link
+            href={`/dashboard/channels/${channelSlug}/videos-settings`}
+            className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === "videos-settings" || activeTab === "video-settings"
+                ? "border-signal text-signal font-bold bg-signal/5"
+                : "border-transparent text-ink-muted hover:text-ink hover:border-line"
+            }`}
+          >
+            <Film size={14} className="text-signal" />
+            <span>Videos Settings</span>
+          </Link>
         </div>
       </div>
 
@@ -1207,6 +1220,14 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
           {/* TAB 7: AUDIO POST-PROCESSING SETTINGS */}
           {activeTab === "audio-settings" && (
             <ChannelAudioSettingsTab
+              channelSlug={channelSlug}
+              channelName={channelTitle}
+            />
+          )}
+
+          {/* TAB 8: VIDEOS POST-PROCESSING & OVERLAY SETTINGS */}
+          {(activeTab === "videos-settings" || activeTab === "video-settings") && (
+            <ChannelVideoSettingsTab
               channelSlug={channelSlug}
               channelName={channelTitle}
             />

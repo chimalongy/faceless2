@@ -12,6 +12,7 @@ sent in the HTTPS POST body for every merge request.
 """
 
 import math
+import re
 import shutil
 import subprocess
 import tempfile
@@ -517,6 +518,8 @@ def run_ffmpeg_merge(
     is_short: bool = False,
     bg_music_path: Path | None = None,
     bg_music_volume: float = 0.15,
+    video_overlay_path: Path | None = None,
+    video_overlay_opacity: float = 1.0,
 ):
     width, height = output_dimensions(resolution)
 
@@ -545,11 +548,18 @@ def run_ffmpeg_merge(
     ]
 
     has_title = bool(is_short and title_card_path and title_card_path.exists())
+    has_video_overlay = bool(video_overlay_path and video_overlay_path.exists())
     has_bg_music = bool(bg_music_path and bg_music_path.exists())
 
     next_idx = 1
+    overlay_idx = None
     title_idx = None
     bg_idx = None
+
+    if has_video_overlay:
+        command.extend(["-stream_loop", "-1", "-i", str(video_overlay_path)])
+        overlay_idx = next_idx
+        next_idx += 1
 
     if has_title:
         command.extend(["-i", str(title_card_path)])
@@ -563,45 +573,53 @@ def run_ffmpeg_merge(
 
     top_y = 200 if height >= 1920 else int(height * 0.10)
 
-    if has_title and has_bg_music:
-        filter_complex = (
-            f"[0:v]{scale_filter}[base];"
-            f"[base][{title_idx}:v]overlay=(W-w)/2:{top_y}:format=auto[v];"
+    # Build video filter graph chaining base scaling -> overlay blending (with opacity) -> title card
+    v_parts = []
+    current_v_label = "base_v"
+
+    v_parts.append(f"[0:v]{scale_filter}[{current_v_label}]")
+
+    if has_video_overlay:
+        opacity_val = f"{max(0.0, min(1.0, video_overlay_opacity)):.2f}"
+        ov_prep_label = "ov_prep"
+        next_v_label = "ov_blended"
+        v_parts.append(
+            f"[{overlay_idx}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=rgba,colorchannelmixer=aa={opacity_val}[{ov_prep_label}]"
+        )
+        v_parts.append(f"[{current_v_label}][{ov_prep_label}]overlay=0:0:format=auto[{next_v_label}]")
+        current_v_label = next_v_label
+
+    if has_title:
+        next_v_label = "titled_v"
+        v_parts.append(f"[{current_v_label}][{title_idx}:v]overlay=(W-w)/2:{top_y}:format=auto[{next_v_label}]")
+        current_v_label = next_v_label
+
+    video_filter_str = ";".join(v_parts)
+    video_filter_str = re.sub(rf"\[{current_v_label}\]$", "[v]", video_filter_str)
+
+    if has_bg_music:
+        audio_filter_str = (
             f"[{bg_idx}:a]volume={bg_music_volume:.2f}[bg];"
             f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[a]"
         )
         command.extend([
-            "-filter_complex", filter_complex,
+            "-filter_complex", f"{video_filter_str};{audio_filter_str}",
             "-map", "[v]",
             "-map", "[a]",
             "-shortest",
         ])
-    elif has_title and not has_bg_music:
-        filter_complex = (
-            f"[0:v]{scale_filter}[base];"
-            f"[base][{title_idx}:v]overlay=(W-w)/2:{top_y}:format=auto[v]"
-        )
+    elif has_video_overlay or has_title:
         command.extend([
-            "-filter_complex", filter_complex,
+            "-filter_complex", video_filter_str,
             "-map", "[v]",
-            "-map", "0:a:0",
+            "-map", "0:a:0?",
         ])
-    elif not has_title and has_bg_music:
-        filter_complex = (
-            f"[0:v]{scale_filter}[v];"
-            f"[{bg_idx}:a]volume={bg_music_volume:.2f}[bg];"
-            f"[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2[a]"
-        )
-        command.extend([
-            "-filter_complex", filter_complex,
-            "-map", "[v]",
-            "-map", "[a]",
-            "-shortest",
-        ])
+        if has_video_overlay:
+            command.append("-shortest")
     else:
         command.extend([
             "-map", "0:v:0",
-            "-map", "0:a:0",
+            "-map", "0:a:0?",
             "-vf", scale_filter,
         ])
 
@@ -1137,6 +1155,42 @@ def merge_all_job(
                 print(f"[modal-merge] Could not download background music ({bg_err}), proceeding without music.")
                 bg_music_path = None
 
+        # Download channel video overlay if enabled
+        video_settings = payload.get("videoSettings") or payload.get("video_settings") or {}
+        video_overlay_path = None
+        video_overlay_opacity = 1.0
+
+        use_video_overlay = bool(video_settings.get("useOverlay") or video_settings.get("use_overlay", False))
+        if use_video_overlay:
+            overlay_url = (
+                video_settings.get("shortsOverlayUrl") or video_settings.get("shorts_overlay_url")
+                if is_short
+                else video_settings.get("longsOverlayUrl") or video_settings.get("longs_overlay_url")
+            )
+            raw_opacity = (
+                video_settings.get("shortsOpacity") if video_settings.get("shortsOpacity") is not None
+                else video_settings.get("shorts_opacity")
+                if is_short
+                else video_settings.get("longsOpacity") if video_settings.get("longsOpacity") is not None
+                else video_settings.get("longs_opacity")
+            )
+            if raw_opacity is not None:
+                try:
+                    video_overlay_opacity = max(0.0, min(1.0, float(raw_opacity)))
+                except (ValueError, TypeError):
+                    video_overlay_opacity = 1.0
+
+            if overlay_url and video_overlay_opacity > 0:
+                try:
+                    overlay_file = job_dir / "video_overlay.mp4"
+                    download_http(overlay_url, overlay_file)
+                    if overlay_file.exists() and overlay_file.stat().st_size > 0:
+                        video_overlay_path = overlay_file
+                        print(f"[modal-merge] Video overlay successfully downloaded ({'Shorts' if is_short else 'Longs'}, opacity {video_overlay_opacity:.2f}).")
+                except Exception as ov_err:
+                    print(f"[modal-merge] Could not download video overlay ({ov_err}), proceeding without overlay.")
+                    video_overlay_path = None
+
         run_ffmpeg_merge(
             concat_path=concat_path,
             output_path=output_path,
@@ -1151,6 +1205,8 @@ def merge_all_job(
             is_short=is_short,
             bg_music_path=bg_music_path,
             bg_music_volume=bg_music_volume,
+            video_overlay_path=video_overlay_path,
+            video_overlay_opacity=video_overlay_opacity,
         )
 
         duration = get_video_duration(

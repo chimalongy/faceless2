@@ -47,13 +47,15 @@ export const mergeSceneFramesTask = task({
     let topicId = null;
 
     let channelBgMusic = null;
+    let channelVideoSettings = null;
     if (sql) {
       await initDbSchema();
-      const cRows = await sql`SELECT id, background_music AS "backgroundMusic" FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
+      const cRows = await sql`SELECT id, background_music AS "backgroundMusic", video_settings AS "videoSettings" FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
       const tRows = await sql`SELECT id, COALESCE(video_type, 'longform') AS "videoType" FROM topics WHERE slug = ${topicSlug} LIMIT 1;`;
       channelId = cRows?.[0]?.id || null;
       topicId = tRows?.[0]?.id || null;
       channelBgMusic = cRows?.[0]?.backgroundMusic || null;
+      channelVideoSettings = cRows?.[0]?.videoSettings || null;
       if (tRows?.[0]?.videoType) {
         payload.videoType = tRows[0].videoType;
       }
@@ -224,16 +226,63 @@ export const mergeSceneFramesTask = task({
         }
       }
 
+      // Download channel video overlay if enabled
+      const vSettings = payload.videoSettings || channelVideoSettings;
+      let videoOverlayPath = null;
+      let videoOverlayOpacity = 1.0;
+
+      const useVideoOverlay = Boolean(vSettings?.use_overlay ?? vSettings?.useOverlay ?? false);
+      if (useVideoOverlay) {
+        const overlayUrl = isShortTopic
+          ? (vSettings?.shorts_overlay_url || vSettings?.shortsOverlayUrl)
+          : (vSettings?.longs_overlay_url || vSettings?.longsOverlayUrl);
+
+        const rawOpacity = isShortTopic
+          ? (vSettings?.shorts_opacity ?? vSettings?.shortsOpacity)
+          : (vSettings?.longs_opacity ?? vSettings?.longsOpacity);
+
+        videoOverlayOpacity = rawOpacity !== undefined && rawOpacity !== null
+          ? Math.max(0.0, Math.min(1.0, Number(rawOpacity)))
+          : 1.0;
+
+        if (overlayUrl && videoOverlayOpacity > 0) {
+          try {
+            logger.log(`Downloading channel video overlay (${isShortTopic ? "Shorts" : "Longs"}, Opacity: ${Math.round(videoOverlayOpacity * 100)}%) from ${overlayUrl}...`);
+            const ovRes = await fetch(overlayUrl);
+            if (ovRes.ok) {
+              const ovFileName = "channel_video_overlay.mp4";
+              videoOverlayPath = path.join(tmpDir, ovFileName);
+              fs.writeFileSync(videoOverlayPath, Buffer.from(await ovRes.arrayBuffer()));
+              logger.log(`Video overlay downloaded successfully to ${videoOverlayPath}`);
+            } else {
+              logger.warn(`Failed to download video overlay: HTTP ${ovRes.status}. Continuing without overlay.`);
+              videoOverlayPath = null;
+            }
+          } catch (ovErr) {
+            logger.warn("Could not download video overlay:", ovErr?.message || ovErr);
+            videoOverlayPath = null;
+          }
+        }
+      }
+
       const inputArgs = [`-f concat`, `-safe 0`, `-i "${concatListPath}"`];
       let filterArgs = [];
       let extraFlags = [];
 
       let hasTitleCard = Boolean(titleCardPath && fs.existsSync(titleCardPath));
+      let hasVideoOverlay = Boolean(videoOverlayPath && fs.existsSync(videoOverlayPath));
       let hasBgMusic = Boolean(bgMusicPath && fs.existsSync(bgMusicPath));
 
       let nextInputIdx = 1;
+      let videoOverlayInputIdx = null;
       let titleCardInputIdx = null;
       let bgMusicInputIdx = null;
+
+      if (hasVideoOverlay) {
+        // -stream_loop -1 loops the overlay video continuously across all scenes
+        inputArgs.push(`-stream_loop -1`, `-i "${videoOverlayPath}"`);
+        videoOverlayInputIdx = nextInputIdx++;
+      }
 
       if (hasTitleCard) {
         inputArgs.push(`-i "${titleCardPath}"`);
@@ -244,32 +293,51 @@ export const mergeSceneFramesTask = task({
         // -stream_loop -1 loops background music infinitely through the duration of the video
         inputArgs.push(`-stream_loop -1`, `-i "${bgMusicPath}"`);
         bgMusicInputIdx = nextInputIdx++;
+      }
+
+      if (hasBgMusic || hasVideoOverlay) {
         extraFlags.push(`-shortest`);
       }
 
-      if (hasTitleCard && hasBgMusic) {
+      // Build video filter graph chaining base scaling -> overlay blending (with opacity) -> title card
+      let vParts = [];
+      let currentVLabel = "base_v";
+
+      vParts.push(`[0:v]${scaleFilter}[${currentVLabel}]`);
+
+      if (hasVideoOverlay) {
+        const opacityVal = videoOverlayOpacity.toFixed(2);
+        const ovPrepLabel = "ov_prep";
+        const nextVLabel = "ov_blended";
+        vParts.push(
+          `[${videoOverlayInputIdx}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,format=rgba,colorchannelmixer=aa=${opacityVal}[${ovPrepLabel}]`
+        );
+        vParts.push(`[${currentVLabel}][${ovPrepLabel}]overlay=0:0:format=auto[${nextVLabel}]`);
+        currentVLabel = nextVLabel;
+      }
+
+      if (hasTitleCard) {
+        const nextVLabel = "titled_v";
+        vParts.push(`[${currentVLabel}][${titleCardInputIdx}:v]overlay=(W-w)/2:${topY}:format=auto[${nextVLabel}]`);
+        currentVLabel = nextVLabel;
+      }
+
+      let videoFilterStr = vParts.join(";");
+      videoFilterStr = videoFilterStr.replace(new RegExp(`\\[${currentVLabel}\\]$`), "[v]");
+
+      if (hasBgMusic) {
+        const bgVol = bgMusicVolume.toFixed(2);
+        const audioFilterStr = `[${bgMusicInputIdx}:a]volume=${bgVol}[bg_vol];[0:a][bg_vol]amix=inputs=2:duration=first:dropout_transition=2[a]`;
         filterArgs = [
-          `-filter_complex "[0:v]${scaleFilter}[base];[base][${titleCardInputIdx}:v]overlay=(W-w)/2:${topY}:format=auto[v];[${bgMusicInputIdx}:a]volume=${bgMusicVolume.toFixed(2)}[bg_vol];[0:a][bg_vol]amix=inputs=2:duration=first:dropout_transition=2[a]"`,
-          `-map "[v]"`,
-          `-map "[a]"`,
-        ];
-      } else if (hasTitleCard && !hasBgMusic) {
-        filterArgs = [
-          `-filter_complex "[0:v]${scaleFilter}[base];[base][${titleCardInputIdx}:v]overlay=(W-w)/2:${topY}:format=auto[v]"`,
-          `-map "[v]"`,
-          `-map 0:a:0?`,
-        ];
-      } else if (!hasTitleCard && hasBgMusic) {
-        filterArgs = [
-          `-filter_complex "[0:v]${scaleFilter}[v];[${bgMusicInputIdx}:a]volume=${bgMusicVolume.toFixed(2)}[bg_vol];[0:a][bg_vol]amix=inputs=2:duration=first:dropout_transition=2[a]"`,
+          `-filter_complex "${videoFilterStr};${audioFilterStr}"`,
           `-map "[v]"`,
           `-map "[a]"`,
         ];
       } else {
         filterArgs = [
-          `-map 0:v:0`,
+          `-filter_complex "${videoFilterStr}"`,
+          `-map "[v]"`,
           `-map 0:a:0?`,
-          `-vf "${scaleFilter}"`,
         ];
       }
 
