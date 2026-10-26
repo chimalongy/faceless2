@@ -126,7 +126,7 @@ def resolve_database_ids(
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id
+                SELECT id, background_music, video_settings
                 FROM channels
                 WHERE slug = %s
                 LIMIT 1
@@ -156,7 +156,11 @@ def resolve_database_ids(
             f"Topic not found: {topic_slug}"
         )
 
-    return channel[0], topic[0]
+    channel_id = channel[0]
+    channel_bg_music = channel[1] if len(channel) > 1 and isinstance(channel[1], dict) else {}
+    channel_video_settings = channel[2] if len(channel) > 2 and isinstance(channel[2], dict) else {}
+
+    return channel_id, topic[0], channel_bg_music, channel_video_settings
 
 
 def resolve_scene_number(
@@ -1009,7 +1013,7 @@ def merge_all_job(
             "Unsupported audioBitrate"
         )
 
-    channel_id, topic_id = resolve_database_ids(
+    channel_id, topic_id, db_bg_music, db_video_settings = resolve_database_ids(
         credentials["DATABASE_URL"],
         channel_slug,
         topic_slug,
@@ -1139,7 +1143,7 @@ def merge_all_job(
                 ) from e
 
         # Download channel background music if enabled
-        bg_music = payload.get("backgroundMusic") or payload.get("background_music") or {}
+        bg_music = payload.get("backgroundMusic") or payload.get("background_music") or db_bg_music or {}
         bg_music_path = None
         bg_music_volume = 0.15
         if bg_music.get("enabled") and (bg_music.get("fileUrl") or bg_music.get("file_url")):
@@ -1156,29 +1160,48 @@ def merge_all_job(
                 bg_music_path = None
 
         # Download channel video overlay if enabled
-        video_settings = payload.get("videoSettings") or payload.get("video_settings") or {}
+        video_settings = payload.get("videoSettings") or payload.get("video_settings") or db_video_settings or {}
         video_overlay_path = None
         video_overlay_opacity = 1.0
 
         use_video_overlay = bool(video_settings.get("useOverlay") or video_settings.get("use_overlay", False))
         if use_video_overlay:
-            overlay_url = (
-                video_settings.get("shortsOverlayUrl") or video_settings.get("shorts_overlay_url")
-                if is_short
-                else video_settings.get("longsOverlayUrl") or video_settings.get("longs_overlay_url")
-            )
-            raw_opacity = (
-                video_settings.get("shortsOpacity") if video_settings.get("shortsOpacity") is not None
-                else video_settings.get("shorts_opacity")
-                if is_short
-                else video_settings.get("longsOpacity") if video_settings.get("longsOpacity") is not None
-                else video_settings.get("longs_opacity")
-            )
+            shorts_url = video_settings.get("shortsOverlayUrl") or video_settings.get("shorts_overlay_url")
+            longs_url = video_settings.get("longsOverlayUrl") or video_settings.get("longs_overlay_url")
+            overlay_url = (shorts_url if is_short else longs_url) or (longs_url if is_short else shorts_url)
+
+            raw_opacity = None
+            if is_short:
+                raw_opacity = (
+                    video_settings.get("shortsOpacity") if video_settings.get("shortsOpacity") is not None
+                    else video_settings.get("shorts_opacity")
+                )
+                if raw_opacity is None:
+                    raw_opacity = (
+                        video_settings.get("longsOpacity") if video_settings.get("longsOpacity") is not None
+                        else video_settings.get("longs_opacity")
+                    )
+            else:
+                raw_opacity = (
+                    video_settings.get("longsOpacity") if video_settings.get("longsOpacity") is not None
+                    else video_settings.get("longs_opacity")
+                )
+                if raw_opacity is None:
+                    raw_opacity = (
+                        video_settings.get("shortsOpacity") if video_settings.get("shortsOpacity") is not None
+                        else video_settings.get("shorts_opacity")
+                    )
+
             if raw_opacity is not None:
                 try:
                     video_overlay_opacity = max(0.0, min(1.0, float(raw_opacity)))
                 except (ValueError, TypeError):
                     video_overlay_opacity = 1.0
+
+            print(
+                f"[modal-merge] Video overlay check: use_overlay={use_video_overlay}, "
+                f"url={'set' if overlay_url else 'None'}, opacity={video_overlay_opacity:.2f}, is_short={is_short}"
+            )
 
             if overlay_url and video_overlay_opacity > 0:
                 try:
@@ -1413,6 +1436,7 @@ def api():
         topicTitle: str = ""
         shortsOverlayText: str = Field(default="", max_length=120)
         backgroundMusic: dict | None = None
+        videoSettings: dict | None = None
 
 
         fps: int = Field(
