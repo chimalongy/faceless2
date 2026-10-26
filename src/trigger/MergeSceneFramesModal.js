@@ -183,12 +183,12 @@ export const mergeSceneFramesModalTask = task({
       ["1080x1920", "shorts", "vertical", "9:16", "720x1280"].includes(String(resolution).toLowerCase());
 
     let channelBgMusic = null;
+    let channelVideoSettings = null;
     if (channelSlug) {
       try {
         const sql = getDbSql();
         if (sql) {
           await initDbSchema();
-          let channelVideoSettings = null;
           const cRows = await sql`
             SELECT background_music AS "backgroundMusic", video_settings AS "videoSettings"
             FROM channels WHERE slug = ${channelSlug} LIMIT 1;
