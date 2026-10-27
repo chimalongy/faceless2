@@ -250,8 +250,49 @@ export const mergeSceneFramesModalTask = task({
       topicTitle: String(payload.topicTitle || topicSlug).trim(),
       shortsOverlayText: String(payload.shortsOverlayText || "").trim(),
       backgroundMusic: payload.backgroundMusic || channelBgMusic || null,
-      videoSettings: payload.videoSettings || channelVideoSettings || null,
+      // Database channel settings are the authoritative baseline. An empty
+      // request object must not erase them; request values only override keys
+      // that are explicitly supplied.
+      videoSettings: {
+        ...(channelVideoSettings && typeof channelVideoSettings === "object"
+          ? channelVideoSettings
+          : {}),
+        ...(payload.videoSettings && typeof payload.videoSettings === "object"
+          ? payload.videoSettings
+          : {}),
+        ...(payload.video_settings && typeof payload.video_settings === "object"
+          ? payload.video_settings
+          : {}),
+      },
+      video_settings: {
+        ...(channelVideoSettings && typeof channelVideoSettings === "object"
+          ? channelVideoSettings
+          : {}),
+        ...(payload.videoSettings && typeof payload.videoSettings === "object"
+          ? payload.videoSettings
+          : {}),
+        ...(payload.video_settings && typeof payload.video_settings === "object"
+          ? payload.video_settings
+          : {}),
+      },
     };
+
+    logger.log("Resolved video settings for Modal merge", {
+      isShort: isShortTopic,
+      useOverlay: Boolean(
+        requestBody.videoSettings?.useOverlay ??
+        requestBody.videoSettings?.use_overlay ??
+        false
+      ),
+      overlayUrlPresent: Boolean(
+        isShortTopic
+          ? (requestBody.videoSettings?.shortsOverlayUrl || requestBody.videoSettings?.shorts_overlay_url)
+          : (requestBody.videoSettings?.longsOverlayUrl || requestBody.videoSettings?.longs_overlay_url)
+      ),
+      opacity: isShortTopic
+        ? (requestBody.videoSettings?.shortsOpacity ?? requestBody.videoSettings?.shorts_opacity ?? null)
+        : (requestBody.videoSettings?.longsOpacity ?? requestBody.videoSettings?.longs_opacity ?? null),
+    });
 
     // 3. Submit merge request to Modal
     const mergeUrl = `${endpoint}/merge`;
@@ -532,6 +573,8 @@ export const mergeSceneFramesModalTask = task({
       sizeBytes: finalSizeBytes,
       resolution: jobResult.resolution || normResolution,
       fps: jobResult.fps || fps,
+      overlayApplied: Boolean(jobResult.overlayApplied ?? jobResult.overlay_applied ?? false),
+      overlayOpacity: jobResult.overlayOpacity ?? jobResult.overlay_opacity ?? null,
     };
   },
 });

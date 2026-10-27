@@ -73,6 +73,8 @@ export async function POST(req, context) {
       duration: output.duration,
       sceneCount: output.sceneCount,
       sizeBytes: output.sizeBytes,
+      overlayApplied: output.overlayApplied ?? false,
+      overlayOpacity: output.overlayOpacity ?? null,
     });
   } catch (error) {
     console.error("[MergeSceneFramesRoute] Error dispatching merge task:", error);

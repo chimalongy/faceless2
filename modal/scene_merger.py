@@ -11,6 +11,7 @@ No database or Cloudflare credentials are stored as Modal secrets; they must be
 sent in the HTTPS POST body for every merge request.
 """
 
+import json
 import math
 import re
 import shutil
@@ -126,7 +127,7 @@ def resolve_database_ids(
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id
+                SELECT id, video_settings, background_music
                 FROM channels
                 WHERE slug = %s
                 LIMIT 1
@@ -156,7 +157,11 @@ def resolve_database_ids(
             f"Topic not found: {topic_slug}"
         )
 
-    return channel[0], topic[0]
+    channel_id = channel[0]
+    db_video_settings = channel[1] if len(channel) > 1 and isinstance(channel[1], dict) else {}
+    db_bg_music = channel[2] if len(channel) > 2 and isinstance(channel[2], dict) else {}
+
+    return channel_id, topic[0], db_video_settings, db_bg_music
 
 
 def resolve_scene_number(
@@ -583,10 +588,17 @@ def run_ffmpeg_merge(
         opacity_val = f"{max(0.0, min(1.0, video_overlay_opacity)):.2f}"
         ov_prep_label = "ov_prep"
         next_v_label = "ov_blended"
+        # Film/grain/scratch overlays are normally opaque H.264 videos with a
+        # black background, not videos with an alpha channel.  Alpha compositing
+        # therefore paints the black background over the master.  Screen blend
+        # makes black neutral and keeps the bright overlay details visible.
         v_parts.append(
-            f"[{overlay_idx}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=rgba,colorchannelmixer=aa={opacity_val}[{ov_prep_label}]"
+            f"[{overlay_idx}:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},fps={fps},setpts=PTS-STARTPTS,format=yuv420p[{ov_prep_label}]"
         )
-        v_parts.append(f"[{current_v_label}][{ov_prep_label}]overlay=0:0:format=auto[{next_v_label}]")
+        v_parts.append(
+            f"[{current_v_label}][{ov_prep_label}]blend=all_mode=screen:all_opacity={opacity_val}:shortest=1[{next_v_label}]"
+        )
         current_v_label = next_v_label
 
     if has_title:
@@ -1009,7 +1021,7 @@ def merge_all_job(
             "Unsupported audioBitrate"
         )
 
-    channel_id, topic_id = resolve_database_ids(
+    channel_id, topic_id, db_video_settings, db_bg_music = resolve_database_ids(
         credentials["DATABASE_URL"],
         channel_slug,
         topic_slug,
@@ -1139,7 +1151,11 @@ def merge_all_job(
                 ) from e
 
         # Download channel background music if enabled
-        bg_music = payload.get("backgroundMusic") or payload.get("background_music") or {}
+        payload_bg_music = payload.get("backgroundMusic") or payload.get("background_music") or {}
+        bg_music = {
+            **(db_bg_music if isinstance(db_bg_music, dict) else {}),
+            **(payload_bg_music if isinstance(payload_bg_music, dict) else {}),
+        }
         bg_music_path = None
         bg_music_volume = 0.15
         if bg_music.get("enabled") and (bg_music.get("fileUrl") or bg_music.get("file_url")):
@@ -1155,41 +1171,84 @@ def merge_all_job(
                 print(f"[modal-merge] Could not download background music ({bg_err}), proceeding without music.")
                 bg_music_path = None
 
-        # Download channel video overlay if enabled
-        video_settings = payload.get("videoSettings") or payload.get("video_settings") or {}
+        # Download channel video overlay if enabled.  An enabled overlay is a
+        # required render input: never silently publish a master without it.
+        payload_video_settings = payload.get("videoSettings") or payload.get("video_settings") or {}
+        video_settings = {
+            **(db_video_settings if isinstance(db_video_settings, dict) else {}),
+            **(payload_video_settings if isinstance(payload_video_settings, dict) else {}),
+        }
+        print(
+            "[modal-merge] RECEIVED video_settings: "
+            + json.dumps(video_settings, indent=2, default=str)
+        )
         video_overlay_path = None
         video_overlay_opacity = 1.0
+        overlay_applied = False
 
-        use_video_overlay = bool(video_settings.get("useOverlay") or video_settings.get("use_overlay", False))
+        use_video_overlay = bool(
+            video_settings.get("useOverlay", video_settings.get("use_overlay", False))
+        )
         if use_video_overlay:
-            overlay_url = (
-                video_settings.get("shortsOverlayUrl") or video_settings.get("shorts_overlay_url")
-                if is_short
-                else video_settings.get("longsOverlayUrl") or video_settings.get("longs_overlay_url")
-            )
-            raw_opacity = (
-                video_settings.get("shortsOpacity") if video_settings.get("shortsOpacity") is not None
-                else video_settings.get("shorts_opacity")
-                if is_short
-                else video_settings.get("longsOpacity") if video_settings.get("longsOpacity") is not None
-                else video_settings.get("longs_opacity")
-            )
+            if is_short:
+                overlay_url = (
+                    video_settings.get("shortsOverlayUrl")
+                    or video_settings.get("shorts_overlay_url")
+                    or video_settings.get("longsOverlayUrl")
+                    or video_settings.get("longs_overlay_url")
+                )
+                raw_opacity = video_settings.get("shortsOpacity")
+                if raw_opacity is None:
+                    raw_opacity = video_settings.get("shorts_opacity")
+                if raw_opacity is None:
+                    raw_opacity = video_settings.get("longsOpacity")
+                if raw_opacity is None:
+                    raw_opacity = video_settings.get("longs_opacity")
+            else:
+                overlay_url = (
+                    video_settings.get("longsOverlayUrl")
+                    or video_settings.get("longs_overlay_url")
+                    or video_settings.get("shortsOverlayUrl")
+                    or video_settings.get("shorts_overlay_url")
+                )
+                raw_opacity = video_settings.get("longsOpacity")
+                if raw_opacity is None:
+                    raw_opacity = video_settings.get("longs_opacity")
+                if raw_opacity is None:
+                    raw_opacity = video_settings.get("shortsOpacity")
+                if raw_opacity is None:
+                    raw_opacity = video_settings.get("shorts_opacity")
+
             if raw_opacity is not None:
                 try:
                     video_overlay_opacity = max(0.0, min(1.0, float(raw_opacity)))
                 except (ValueError, TypeError):
-                    video_overlay_opacity = 1.0
+                    raise RuntimeError(f"Invalid video overlay opacity: {raw_opacity!r}")
 
-            if overlay_url and video_overlay_opacity > 0:
-                try:
-                    overlay_file = job_dir / "video_overlay.mp4"
-                    download_http(overlay_url, overlay_file)
-                    if overlay_file.exists() and overlay_file.stat().st_size > 0:
-                        video_overlay_path = overlay_file
-                        print(f"[modal-merge] Video overlay successfully downloaded ({'Shorts' if is_short else 'Longs'}, opacity {video_overlay_opacity:.2f}).")
-                except Exception as ov_err:
-                    print(f"[modal-merge] Could not download video overlay ({ov_err}), proceeding without overlay.")
-                    video_overlay_path = None
+            print(
+                f"[modal-merge] Overlay requested: type={'Shorts' if is_short else 'Longs'}, "
+                f"url_present={bool(overlay_url)}, opacity={video_overlay_opacity:.2f}"
+            )
+
+            if not overlay_url:
+                raise RuntimeError(
+                    f"Video overlay is enabled but no {'Shorts' if is_short else 'Longs'} overlay URL is configured."
+                )
+            if video_overlay_opacity <= 0:
+                raise RuntimeError("Video overlay is enabled but opacity is 0; refusing to publish an unoverlaid master.")
+
+            try:
+                overlay_file = job_dir / "video_overlay.mp4"
+                download_http(overlay_url, overlay_file)
+                if not overlay_file.exists() or overlay_file.stat().st_size <= 0:
+                    raise RuntimeError("download produced an empty file")
+                video_overlay_path = overlay_file
+                print(
+                    f"[modal-merge] Overlay downloaded: {overlay_file.stat().st_size} bytes; "
+                    f"screen blend opacity={video_overlay_opacity:.2f}"
+                )
+            except Exception as ov_err:
+                raise RuntimeError(f"Video overlay was requested but could not be downloaded: {ov_err}") from ov_err
 
         run_ffmpeg_merge(
             concat_path=concat_path,
@@ -1208,6 +1267,8 @@ def merge_all_job(
             video_overlay_path=video_overlay_path,
             video_overlay_opacity=video_overlay_opacity,
         )
+        overlay_applied = bool(use_video_overlay and video_overlay_path)
+        print(f"[modal-merge] FFmpeg completed; overlay_applied={overlay_applied}")
 
         duration = get_video_duration(
             output_path
@@ -1249,6 +1310,8 @@ def merge_all_job(
             "sizeBytes": upload["size_bytes"],
             "resolution": resolution,
             "fps": fps,
+            "overlayApplied": overlay_applied,
+            "overlayOpacity": video_overlay_opacity if use_video_overlay else None,
         }
 
     finally:
@@ -1413,6 +1476,8 @@ def api():
         topicTitle: str = ""
         shortsOverlayText: str = Field(default="", max_length=120)
         backgroundMusic: dict | None = None
+        videoSettings: dict | None = None
+        video_settings: dict | None = None
 
 
         fps: int = Field(

@@ -255,12 +255,10 @@ export const mergeSceneFramesTask = task({
               fs.writeFileSync(videoOverlayPath, Buffer.from(await ovRes.arrayBuffer()));
               logger.log(`Video overlay downloaded successfully to ${videoOverlayPath}`);
             } else {
-              logger.warn(`Failed to download video overlay: HTTP ${ovRes.status}. Continuing without overlay.`);
-              videoOverlayPath = null;
+              throw new Error(`Video overlay download failed with HTTP ${ovRes.status}`);
             }
           } catch (ovErr) {
-            logger.warn("Could not download video overlay:", ovErr?.message || ovErr);
-            videoOverlayPath = null;
+            throw new Error(`Video overlay was requested but could not be downloaded: ${ovErr?.message || ovErr}`);
           }
         }
       }
@@ -309,10 +307,12 @@ export const mergeSceneFramesTask = task({
         const opacityVal = videoOverlayOpacity.toFixed(2);
         const ovPrepLabel = "ov_prep";
         const nextVLabel = "ov_blended";
+        // Most film/grain overlays are opaque H.264 with a black background.
+        // Screen blend makes black neutral and preserves the bright scratches/grain.
         vParts.push(
-          `[${videoOverlayInputIdx}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,format=rgba,colorchannelmixer=aa=${opacityVal}[${ovPrepLabel}]`
+          `[${videoOverlayInputIdx}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight},fps=${fps},setpts=PTS-STARTPTS,format=yuv420p[${ovPrepLabel}]`
         );
-        vParts.push(`[${currentVLabel}][${ovPrepLabel}]overlay=0:0:format=auto[${nextVLabel}]`);
+        vParts.push(`[${currentVLabel}][${ovPrepLabel}]blend=all_mode=screen:all_opacity=${opacityVal}:shortest=1[${nextVLabel}]`);
         currentVLabel = nextVLabel;
       }
 
