@@ -1,0 +1,32 @@
+[
+    {
+        "step": "RECEIVED",
+        "status": true,
+        "step_logs": [
+            "File received at 2026-09-09T10:47:00.1368144+01:00.",
+            "Template verification passed."
+        ],
+        "stop_time": "2026-09-09T10:47:00.1368144+01:00",
+        "start_time": "2026-09-09T10:47:00.1368144+01:00",
+        "error_message": "",
+        "success_message": "File uploaded and template verification completed successfully."
+    },
+    {
+        "step": "PROCESSING",
+        "status": false,
+        "step_logs": [],
+        "stop_time": null,
+        "start_time": null,
+        "error_message": "",
+        "success_message": ""
+    },
+    {
+        "step": "COMPLETED",
+        "status": false,
+        "step_logs": [],
+        "stop_time": null,
+        "start_time": null,
+        "error_message": "",
+        "success_message": ""
+    }
+]

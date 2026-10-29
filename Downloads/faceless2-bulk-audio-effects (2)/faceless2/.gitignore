@@ -1,0 +1,73 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Next.js build output
+/.next/
+/out/
+/build
+/dist
+
+# Trigger.dev
+/.trigger/
+
+# Environment files & secrets
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary render files and scratch directories
+/temp_render/
+/temp/
+/tmp/
+/scratch/
+*.tmp
+*.temp
+
+# Media files produced during local testing / rendering
+*.mp4
+*.webm
+*.avi
+*.mov
+*.wav
+*.mp3
+*.aac
+*.zip
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Next.js telemetry & cache
+.next/cache
+*.tsbuildinfo
+next-env.d.ts
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# IDE and Editor files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-workspace
+*.sublime-project
+.swp
+.swo
+*~
