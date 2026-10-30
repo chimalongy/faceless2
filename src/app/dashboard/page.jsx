@@ -157,21 +157,7 @@ export default function OverviewPage() {
 
   function handleApplyPreset(presetId) {
     setSelectedPreset(presetId);
-    const found = SCRIPT_STRUCTURE_PRESETS.find((p) => p.id === presetId);
-    if (found) {
-      setScriptStructureText(JSON.stringify(found.structure, null, 2));
-      setStructureError("");
-    }
-  }
-
-  function handlePrettifyJson() {
-    try {
-      const parsed = JSON.parse(scriptStructureText);
-      setScriptStructureText(JSON.stringify(parsed, null, 2));
-      setStructureError("");
-    } catch (err) {
-      setStructureError(`JSON syntax error: ${err.message}`);
-    }
+    setScriptStructureText(getPresetText(presetId));
   }
 
   async function submitChannel(event) {
@@ -179,16 +165,7 @@ export default function OverviewPage() {
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    let parsedStructure = null;
-    if (scriptStructureText.trim()) {
-      try {
-        parsedStructure = JSON.parse(scriptStructureText.trim());
-        setStructureError("");
-      } catch (err) {
-        setStructureError(`Invalid JSON in Script Structure: ${err.message}`);
-        return;
-      }
-    }
+    const finalStructure = scriptStructureText.trim() || DEFAULT_SCRIPT_STRUCTURE_TEXT;
 
     setCreating(true);
     const cleanSlug = trimmed
@@ -218,7 +195,7 @@ export default function OverviewPage() {
       imageTheme: "",
       thumbnailTheme: "",
       audioTheme: "",
-      scriptStructure: parsedStructure,
+      scriptStructure: finalStructure,
       status: "Active",
     };
 
@@ -243,7 +220,7 @@ export default function OverviewPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } finally {
       setName("");
-      setScriptStructureText(JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2));
+      setScriptStructureText(DEFAULT_SCRIPT_STRUCTURE_TEXT);
       setStructureError("");
       setCreating(false);
       setOpenComposer(false);

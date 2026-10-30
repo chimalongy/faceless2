@@ -265,25 +265,47 @@ function renderCustomFields(structure) {
  * @returns {string}
  */
 export function formatScriptStructureForPrompt(structureInput, { includeTone = false } = {}) {
-  let structure = structureInput ?? DEFAULT_SCRIPT_STRUCTURE;
+  let structure = structureInput ?? DEFAULT_SCRIPT_STRUCTURE_TEXT;
 
   if (typeof structure === "string") {
     const trimmed = structure.trim();
     if (!trimmed) {
-      structure = DEFAULT_SCRIPT_STRUCTURE;
-    } else {
+      return DEFAULT_SCRIPT_STRUCTURE_TEXT;
+    }
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       try {
-        structure = JSON.parse(trimmed);
-      } catch (err) {
-        // Not valid JSON — treat the raw string itself as a freeform directive
-        // block rather than silently discarding the caller's input.
-        return `### SCRIPT CONTENT & DELIVERY DIRECTIVES:\n${trimmed}`;
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object") {
+          if (typeof parsed.text === "string" && parsed.text.trim()) {
+            return parsed.text.trim();
+          }
+          if (typeof parsed.raw === "string" && parsed.raw.trim()) {
+            return parsed.raw.trim();
+          }
+          structure = parsed;
+        } else {
+          return trimmed;
+        }
+      } catch {
+        return trimmed;
       }
+    } else {
+      // It's a plain text narrative directive
+      return trimmed;
+    }
+  }
+
+  if (structure && typeof structure === "object") {
+    if (typeof structure.text === "string" && structure.text.trim()) {
+      return structure.text.trim();
+    }
+    if (typeof structure.raw === "string" && structure.raw.trim()) {
+      return structure.raw.trim();
     }
   }
 
   if (!structure || typeof structure !== "object" || Array.isArray(structure)) {
-    return "";
+    return DEFAULT_SCRIPT_STRUCTURE_TEXT;
   }
 
   const sections = [];
@@ -309,4 +331,76 @@ export function formatScriptStructureForPrompt(structureInput, { includeTone = f
   }
 
   return sections.join("\n\n");
+}
+
+export const DEFAULT_SCRIPT_STRUCTURE_TEXT = `### 1. TONE & VOICE
+Engaging, confident, excitedly, and authoritatively. Spoken directly to the listener with clarity and strong forward momentum.
+
+### 2. HOOK INSTRUCTIONS (FIRST 15 SECONDS)
+Start immediately with a bold, high-stakes statement, shocking paradox, question or counterintuitive reality. Zero generic greetings, zero 'welcome back', zero throat-clearing.
+
+### 3. CONTENT FLOW & IDEAS PROGRESSION
+Deliver the narration following this progression of ideas:
+- 1. Hook: Grab immediate attention by challenging an assumption or revealing an alarming truth or and interesting question relating to the topic to be discussed.
+- 2. Core Concept: Clearly introduce the central question or mechanism without stalling.
+- 3. In-Depth Breakdown: Deliver the meat of the story or analysis with compelling, concrete examples and vivid explanations.
+- 4. The Critical Twist: Introduce the counterintuitive consequence, hidden angle, or major turning point.
+- 5. Lasting Takeaway: Close with a strong, thought-provoking realization that reframes the topic for the viewer.
+
+### 4. RETENTION & ENGAGEMENT RULES
+- Every section must introduce a fresh insight or revelation to pull the listener forward.
+- Explain complex mechanisms with simple, tangible real-world analogies.
+- Keep momentum high—never repeat points or summarize what was already stated.
+
+### 5. BANNED CLICHÉS & PHRASES (STRICTLY FORBIDDEN)
+DO NOT USE ANY OF THE FOLLOWING WORDS OR FORMULAS UNDER ANY CIRCUMSTANCES:
+"In today's fast-paced world", "Let's dive in", "Without further ado", "It is important to remember", "Throughout human history", "Imagine standing on a hill", "As we all know"`;
+
+/**
+ * Converts any scriptStructure input (plain text string, legacy JSON object, or { text / raw })
+ * into clean plain text for editing and prompt formatting.
+ */
+export function scriptStructureToText(input) {
+  if (input === null || input === undefined) {
+    return DEFAULT_SCRIPT_STRUCTURE_TEXT;
+  }
+
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed) return DEFAULT_SCRIPT_STRUCTURE_TEXT;
+
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object") {
+          if (typeof parsed.text === "string" && parsed.text.trim()) {
+            return parsed.text.trim();
+          }
+          if (typeof parsed.raw === "string" && parsed.raw.trim()) {
+            return parsed.raw.trim();
+          }
+          return formatScriptStructureForPrompt(parsed, { includeTone: true });
+        }
+      } catch {}
+    }
+    return trimmed;
+  }
+
+  if (typeof input === "object") {
+    if (typeof input.text === "string" && input.text.trim()) {
+      return input.text.trim();
+    }
+    if (typeof input.raw === "string" && input.raw.trim()) {
+      return input.raw.trim();
+    }
+    return formatScriptStructureForPrompt(input, { includeTone: true });
+  }
+
+  return String(input).trim();
+}
+
+export function getPresetText(presetId) {
+  const found = SCRIPT_STRUCTURE_PRESETS.find((p) => p.id === presetId);
+  if (!found) return DEFAULT_SCRIPT_STRUCTURE_TEXT;
+  return formatScriptStructureForPrompt(found.structure, { includeTone: true });
 }

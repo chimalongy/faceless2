@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { scriptStructureToText } from "@/lib/defaultScriptStructure";
 
 // GET /api/channels/[channel-name] - Fetch single channel by slug
 export async function GET(request, { params }) {
@@ -63,7 +64,13 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Channel not found", channel: null }, { status: 404 });
     }
 
-    return NextResponse.json({ channel: channels[0] });
+    const ch = channels[0];
+    const channelData = {
+      ...ch,
+      scriptStructure: scriptStructureToText(ch.scriptStructure),
+    };
+
+    return NextResponse.json({ channel: channelData });
   } catch (error) {
     console.error("Error fetching channel:", error);
     return NextResponse.json(
@@ -102,11 +109,7 @@ export async function PUT(request, { params }) {
     const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
     if (rawStructure !== undefined && rawStructure !== null) {
       if (typeof rawStructure === "string") {
-        try {
-          scriptStructure = JSON.stringify(JSON.parse(rawStructure.trim()));
-        } catch {
-          scriptStructure = JSON.stringify({ raw: rawStructure.trim() });
-        }
+        scriptStructure = JSON.stringify({ text: rawStructure.trim() });
       } else if (typeof rawStructure === "object") {
         scriptStructure = JSON.stringify(rawStructure);
       }

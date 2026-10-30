@@ -154,3 +154,21 @@ test("getThumbnailPromptGeneration uses custom promptTemplate when provided", ()
   );
 });
 
+test("scriptStructureToText and formatScriptStructureForPrompt support plain text narrative blueprints", async () => {
+  const { scriptStructureToText, formatScriptStructureForPrompt, DEFAULT_SCRIPT_STRUCTURE_TEXT } = await import("../src/lib/defaultScriptStructure.js");
+
+  // Plain text directive passed directly
+  const plainTextDirective = "1. HOOK: Hit them with a paradox.\n2. ACT 1: Unpack the problem.\n3. ACT 2: Reveal the solution.";
+  assert.equal(scriptStructureToText(plainTextDirective), plainTextDirective);
+  assert.equal(formatScriptStructureForPrompt(plainTextDirective), plainTextDirective);
+
+  // Object wrapper with text key { text: "..." }
+  assert.equal(scriptStructureToText({ text: plainTextDirective }), plainTextDirective);
+  assert.equal(formatScriptStructureForPrompt({ text: plainTextDirective }), plainTextDirective);
+
+  // Null or empty falls back to DEFAULT_SCRIPT_STRUCTURE_TEXT
+  assert.equal(scriptStructureToText(null), DEFAULT_SCRIPT_STRUCTURE_TEXT);
+  assert.equal(scriptStructureToText("   "), DEFAULT_SCRIPT_STRUCTURE_TEXT);
+});
+
+

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { scriptStructureToText } from "@/lib/defaultScriptStructure";
 
 // GET /api/channels - Fetch all channels from Neon Postgres
 export async function GET() {
@@ -47,7 +48,11 @@ export async function GET() {
       ORDER BY created_at DESC;
     `;
 
-    return NextResponse.json({ channels: channels || [] });
+    const formatted = (channels || []).map((ch) => ({
+      ...ch,
+      scriptStructure: scriptStructureToText(ch.scriptStructure),
+    }));
+    return NextResponse.json({ channels: formatted });
   } catch (error) {
     console.error("Error fetching channels:", error);
     return NextResponse.json(
@@ -108,13 +113,9 @@ export async function POST(request) {
 
     let scriptStructure = null;
     const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
-    if (rawStructure) {
+    if (rawStructure !== undefined && rawStructure !== null) {
       if (typeof rawStructure === "string") {
-        try {
-          scriptStructure = JSON.stringify(JSON.parse(rawStructure.trim()));
-        } catch {
-          scriptStructure = JSON.stringify({ raw: rawStructure.trim() });
-        }
+        scriptStructure = JSON.stringify({ text: rawStructure.trim() });
       } else if (typeof rawStructure === "object") {
         scriptStructure = JSON.stringify(rawStructure);
       }

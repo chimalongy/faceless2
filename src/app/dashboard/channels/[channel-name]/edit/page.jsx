@@ -173,13 +173,9 @@ export default function EditChannelPage() {
             setSubtitleStyle(c.subtitleStyle || "yellow_highlight");
             setUseImagePool(Boolean(c.useImagePool ?? c.use_image_pool));
             if (c.scriptStructure) {
-              setScriptStructureText(
-                typeof c.scriptStructure === "string"
-                  ? c.scriptStructure
-                  : JSON.stringify(c.scriptStructure, null, 2)
-              );
+              setScriptStructureText(scriptStructureToText(c.scriptStructure));
             } else {
-              setScriptStructureText(JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2));
+              setScriptStructureText(DEFAULT_SCRIPT_STRUCTURE_TEXT);
             }
             setBannerUrl(c.bannerUrl || "");
             setAvatarUrl(c.avatarUrl || "");
@@ -232,13 +228,9 @@ export default function EditChannelPage() {
             );
             setSubtitleStyle(found.subtitleStyle || "yellow_highlight");
             if (found.scriptStructure) {
-              setScriptStructureText(
-                typeof found.scriptStructure === "string"
-                  ? found.scriptStructure
-                  : JSON.stringify(found.scriptStructure, null, 2)
-              );
+              setScriptStructureText(scriptStructureToText(found.scriptStructure));
             } else {
-              setScriptStructureText(JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2));
+              setScriptStructureText(DEFAULT_SCRIPT_STRUCTURE_TEXT);
             }
             setBannerUrl(found.bannerUrl || "");
             setAvatarUrl(found.avatarUrl || "");
@@ -457,21 +449,8 @@ export default function EditChannelPage() {
 
   function handleApplyPreset(presetId) {
     setSelectedPreset(presetId);
-    const found = SCRIPT_STRUCTURE_PRESETS.find((p) => p.id === presetId);
-    if (found) {
-      setScriptStructureText(JSON.stringify(found.structure, null, 2));
-      setStructureError("");
-    }
-  }
-
-  function handlePrettifyJson() {
-    try {
-      const parsed = JSON.parse(scriptStructureText);
-      setScriptStructureText(JSON.stringify(parsed, null, 2));
-      setStructureError("");
-    } catch (err) {
-      setStructureError(`JSON syntax error: ${err.message}`);
-    }
+    setScriptStructureText(getPresetText(presetId));
+    toast.success("Loaded preset directives");
   }
 
   async function handleSave(e) {
@@ -479,16 +458,7 @@ export default function EditChannelPage() {
     const trimmedName = name.trim();
     if (!trimmedName) return;
 
-    let parsedStructure = null;
-    if (scriptStructureText.trim()) {
-      try {
-        parsedStructure = JSON.parse(scriptStructureText.trim());
-        setStructureError("");
-      } catch (err) {
-        setStructureError(`Invalid JSON in Script Structure: ${err.message}`);
-        return;
-      }
-    }
+    const finalStructure = scriptStructureText.trim() || DEFAULT_SCRIPT_STRUCTURE_TEXT;
 
     setSaving(true);
     const updatedChannel = {
@@ -524,7 +494,7 @@ export default function EditChannelPage() {
       use_image_pool: useImagePool,
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
-      scriptStructure: parsedStructure,
+      scriptStructure: finalStructure,
       status,
     };
 
@@ -2031,12 +2001,12 @@ export default function EditChannelPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-3">
             <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
               <span className="p-1.5 bg-signal/10 text-signal">
-                <Code2 size={16} />
+                <FileText size={16} />
               </span>
               <div>
-                <span>Script Structure & LLM Narrative Blueprint (JSON)</span>
+                <span>Script Structure & LLM Narrative Blueprint (Text)</span>
                 <p className="text-xs text-ink-muted font-normal mt-0.5">
-                  Guides any LLM on how to pace, structure acts, hook viewers, and avoid boring clichés.
+                  Guides any LLM on how to pace, structure acts, hook viewers, and avoid boring clichés in plain text.
                 </p>
               </div>
             </div>
@@ -2057,19 +2027,12 @@ export default function EditChannelPage() {
 
               <button
                 type="button"
-                onClick={handlePrettifyJson}
-                className="px-2.5 py-1.5 text-xs font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer"
-                title="Prettify and validate JSON formatting"
-              >
-                Prettify JSON
-              </button>
-              <button
-                type="button"
                 onClick={() => handleApplyPreset(selectedPreset)}
-                className="p-2 border border-line bg-white hover:bg-ink/5 text-ink-muted hover:text-ink transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 text-xs font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer inline-flex items-center gap-1.5"
                 title="Reset to preset template"
               >
                 <RotateCcw size={13} />
+                <span>Reset to Preset</span>
               </button>
             </div>
           </div>
@@ -2080,44 +2043,15 @@ export default function EditChannelPage() {
                 id="field-script-structure"
                 rows={16}
                 value={scriptStructureText}
-                onChange={(e) => {
-                  setScriptStructureText(e.target.value);
-                  if (structureError) {
-                    try {
-                      JSON.parse(e.target.value.trim());
-                      setStructureError("");
-                    } catch {}
-                  }
-                }}
-                placeholder="Enter channel script structure JSON..."
+                onChange={(e) => setScriptStructureText(e.target.value)}
+                placeholder="Enter channel script structure directives, hook formulas, content flow, pacing rules, and banned words in plain text..."
                 spellCheck={false}
-                className={`w-full font-mono text-xs p-3.5 border bg-slate-950 text-emerald-400 leading-relaxed outline-none transition-colors ${
-                  structureError
-                    ? "border-rose-500 focus:border-rose-600"
-                    : "border-line-dark focus:border-signal"
-                }`}
+                className="w-full font-mono text-xs p-3.5 border border-line-dark bg-slate-950 text-emerald-400 leading-relaxed outline-none focus:border-signal transition-colors shadow-inner selection:bg-signal/30"
               />
-              <div className="absolute bottom-3 right-4 pointer-events-none">
-                {structureError ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-rose-400 bg-rose-950/90 px-2.5 py-1 border border-rose-800">
-                    <AlertCircle size={12} /> Invalid JSON
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/90 px-2.5 py-1 border border-emerald-800">
-                    <CheckCircle2 size={12} /> Valid JSON
-                  </span>
-                )}
-              </div>
             </div>
 
-            {structureError && (
-              <p className="text-xs text-rose-600 flex items-center gap-1.5 font-mono">
-                <AlertCircle size={13} /> {structureError}
-              </p>
-            )}
-
             <p className="text-[11px] text-ink-muted leading-relaxed">
-              This blueprint is automatically injected into the script generation prompt whenever a topic script is generated.
+              This text blueprint is automatically injected into the script generation prompt whenever a topic script is generated.
             </p>
           </div>
         </section>
