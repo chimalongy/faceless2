@@ -210,31 +210,27 @@ export default function ThumbnailTab({
               className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-50"
               title="Generate thumbnail with AI"
             >
-              <Sparkles size={13} />
+              {isGeneratingThumbnail ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} />
+              )}
               <span>{isGeneratingThumbnail ? "Generating..." : "Generate with AI"}</span>
             </button>
           </div>
         </div>
 
         {/* Image Preview Canvas */}
-        <div className="relative aspect-video w-full border border-line bg-ink text-white overflow-hidden flex items-center justify-center">
-          {thumbnailImage === "generated" ? (
-            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-              <div className="absolute inset-0 bg-linear-to-tr from-emerald-950 via-slate-900 to-indigo-950 opacity-95" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(16,185,129,0.35),transparent_60%)]" />
-              <div className="relative z-10 text-center space-y-2 p-6">
-                <span className="px-3 py-1 bg-signal text-white font-mono text-xs font-bold uppercase tracking-widest shadow-md inline-block">
-                  16:9 MASTER THUMBNAIL
-                </span>
-                <p className="text-sm font-display text-white/90 font-bold max-w-md mx-auto">
-                  {topicTitle}
-                </p>
-                <p className="text-[11px] font-mono text-emerald-300/80">
-                  Generated from prompt • 1920 × 1080
-                </p>
-              </div>
+        <div className={`relative w-full border border-line bg-ink text-white overflow-hidden flex items-center justify-center ${
+          isShort ? "aspect-[9/16] max-w-xs mx-auto" : "aspect-video"
+        }`}>
+          {isGeneratingThumbnail ? (
+            <div className="flex flex-col items-center justify-center space-y-3 p-8 text-center">
+              <Loader2 size={32} className="animate-spin text-signal" />
+              <p className="text-xs font-mono text-white/90 font-medium">Generating thumbnail with AI...</p>
+              <p className="text-[11px] text-white/50">Processing image model inference & uploading to R2</p>
             </div>
-          ) : thumbnailImage ? (
+          ) : thumbnailImage && thumbnailImage !== "generated" ? (
             <img
               src={thumbnailImage}
               alt="Thumbnail"

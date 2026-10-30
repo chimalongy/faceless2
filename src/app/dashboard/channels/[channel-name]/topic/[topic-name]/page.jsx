@@ -467,12 +467,47 @@ export default function TopicStudioPage() {
     });
   }
 
-  function handleGenerateThumbnail() {
+  async function handleGenerateThumbnail() {
+    const promptToUse = (thumbnailPrompt || "").trim();
+    if (!promptToUse) {
+      toast.error("Please generate or enter a thumbnail prompt before generating the thumbnail image.");
+      triggerThumbPromptNotice("Please provide a prompt first.");
+      return;
+    }
+
     setIsGeneratingThumbnail(true);
-    setTimeout(() => {
-      setThumbnailImage("generated");
+    triggerThumbPromptNotice("Generating thumbnail with AI...");
+
+    try {
+      const res = await fetch(
+        `/api/channels/${channelSlug}/topics/${topicSlug}/generate-thumbnail`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customPrompt: promptToUse,
+            isShort: Boolean(isShort),
+          }),
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.thumbnailUrl) {
+        setThumbnailImage(data.thumbnailUrl);
+        toast.success("Thumbnail generated successfully!");
+        triggerThumbPromptNotice("Thumbnail image generated.");
+      } else {
+        toast.error(data.error || "Failed to generate thumbnail image.");
+        triggerThumbPromptNotice("Generation failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      console.error("Error generating thumbnail:", err);
+      toast.error("Error generating thumbnail: " + err.message);
+      triggerThumbPromptNotice("Error: " + err.message);
+    } finally {
       setIsGeneratingThumbnail(false);
-    }, 600);
+    }
   }
 
   // Script Handlers
