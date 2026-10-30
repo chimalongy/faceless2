@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Faceless Studio — Vibes AI</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-group">
+        <div class="logo-badge">F</div>
+        <div>
+          <h1 class="logo-title">Faceless Studio</h1>
+          <p class="logo-sub">Vibes.ai Batch Generator</p>
+        </div>
+      </div>
+      <div id="connectionStatus" class="status-indicator" title="Vibes.ai Tab Status">
+        <span class="status-dot"></span>
+        <span id="statusLabel">Checking tab...</span>
+      </div>
+    </header>
+
+    <!-- Generation Mode Toggle (Image vs Video) -->
+    <div class="mode-toggle-group">
+      <button type="button" id="modeImageBtn" class="mode-toggle-btn active" data-mode="image">
+        <span class="mode-icon">🖼️</span>
+        <span class="mode-text">Image Batch</span>
+      </button>
+      <button type="button" id="modeVideoBtn" class="mode-toggle-btn" data-mode="video">
+        <span class="mode-icon">🎬</span>
+        <span class="mode-text">Video Batch</span>
+      </button>
+    </div>
+
+    <!-- Source Tabs (Local Folder vs Faceless API) -->
+    <div class="source-nav">
+      <button type="button" id="tabLocalBtn" class="tab-btn active">Local script.json</button>
+      <button type="button" id="tabApiBtn" class="tab-btn">Faceless Studio API</button>
+    </div>
+
+    <!-- Section A: Local Project Folder -->
+    <section id="localFolderSection" class="card">
+      <div class="card-header">
+        <h3>Project Folder</h3>
+        <span class="badge" id="folderBadge">No folder</span>
+      </div>
+      <p class="description">Select a folder containing <code>script.json</code> to load your scene prompts.</p>
+      
+      <button type="button" id="selectFolderBtn" class="btn-primary">
+        📁 Select Project Folder
+      </button>
+
+      <div id="projectInfo" class="project-info hidden">
+        <div class="info-row">
+          <span class="info-label">Folder:</span>
+          <span id="folderNameText" class="info-value">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Scenes Found:</span>
+          <span id="scenesFoundCount" class="info-value">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section B: Faceless Studio API Login -->
+    <section id="apiSection" class="card hidden">
+      <div class="card-header">
+        <h3>Connect to Faceless Studio</h3>
+      </div>
+      <div class="form-group">
+        <label for="apiUrlInput">Studio Server URL</label>
+        <input type="text" id="apiUrlInput" value="http://localhost:3000" placeholder="http://localhost:3000" />
+      </div>
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label for="apiEmailInput">Email</label>
+          <input type="email" id="apiEmailInput" placeholder="admin@facelessstudio.com" />
+        </div>
+        <div class="form-group flex-1">
+          <label for="apiPasswordInput">Password</label>
+          <input type="password" id="apiPasswordInput" placeholder="••••••••" />
+        </div>
+      </div>
+      <button type="button" id="apiConnectBtn" class="btn-secondary">Connect & Fetch Topics</button>
+
+      <!-- Topic Dropdowns -->
+      <div id="topicDropdowns" class="topic-dropdowns hidden">
+        <div class="form-group">
+          <label for="channelSelect">Channel</label>
+          <select id="channelSelect"><option value="">— Select Channel —</option></select>
+        </div>
+        <div class="form-group">
+          <label for="pillarSelect">Content Pillar</label>
+          <select id="pillarSelect" disabled><option value="">— Select Pillar —</option></select>
+        </div>
+        <div class="form-group">
+          <label for="topicSelect">Topic</label>
+          <select id="topicSelect" disabled><option value="">— Select Topic —</option></select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings Card -->
+    <section class="card settings-card">
+      <div class="card-header">
+        <h3>Queue Settings</h3>
+      </div>
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label for="startSceneInput">Start Scene</label>
+          <input type="number" id="startSceneInput" min="1" value="1" />
+        </div>
+        <div class="setting-item">
+          <label for="delaySecondsInput">Cooldown (sec)</label>
+          <input type="number" id="delaySecondsInput" min="2" max="60" value="5" />
+        </div>
+      </div>
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="removeWatermarkCheckbox" checked />
+          <span>Remove Meta AI watermark (blur bottom-right corner)</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoDownloadCheckbox" checked />
+          <span>Auto-save generated media to local folder</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Queue & Progress Card -->
+    <section id="queueCard" class="card">
+      <div class="card-header">
+        <h3>Scene Queue</h3>
+        <span id="queueProgressBadge" class="badge">0 / 0 Done</span>
+      </div>
+
+      <div class="progress-bar-container">
+        <div id="queueProgressBar" class="progress-bar" style="width: 0%"></div>
+      </div>
+
+      <div id="sceneList" class="scene-list">
+        <div class="empty-state">No scenes loaded yet. Select a project folder or topic above.</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons-group">
+        <button type="button" id="startBatchBtn" class="btn-success" disabled>
+          ▶ Start Batch Generation
+        </button>
+        <button type="button" id="stopBatchBtn" class="btn-danger hidden">
+          ⏹ Stop Generation
+        </button>
+      </div>
+    </section>
+
+    <!-- Live Execution Logs -->
+    <section class="card logs-card">
+      <div class="card-header">
+        <h3>Execution Logs</h3>
+        <button type="button" id="clearLogsBtn" class="link-btn">Clear</button>
+      </div>
+      <div id="logConsole" class="log-console">
+        <div class="log-entry info">[System] Ready. Open vibes.ai in a browser tab to begin.</div>
+      </div>
+    </section>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

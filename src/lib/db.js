@@ -1,0 +1,395 @@
+import { Pool, neon } from "@neondatabase/serverless";
+
+// Singleton connection pool instance for serverless environments
+let poolInstance = null;
+
+export function getDbPool() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    return null;
+  }
+
+  if (!poolInstance) {
+    poolInstance = new Pool({ connectionString: databaseUrl });
+  }
+  return poolInstance;
+}
+
+export function getDbSql() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    return null;
+  }
+  return neon(databaseUrl);
+}
+
+let isDbInitialized = false;
+
+// Automatically create database schema if tables do not exist yet
+export async function initDbSchema(force = false) {
+  if (isDbInitialized && !force) {
+    return true;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.warn("DATABASE_URL is not configured. Database initialization skipped.");
+    return false;
+  }
+
+  const sql = neon(databaseUrl);
+
+  try {
+    // 1. Channels Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS channels (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        slug TEXT UNIQUE NOT NULL,
+        handle TEXT,
+        channel_url TEXT,
+        description TEXT,
+        tagline TEXT,
+        niche TEXT,
+        sub_niche TEXT,
+        content_category TEXT,
+        target_audience TEXT,
+        mission TEXT,
+        value_proposition TEXT,
+        personality TEXT,
+        brand_positioning TEXT,
+        brand_promise TEXT,
+        image_theme TEXT,
+        thumbnail_theme TEXT,
+        audio_theme TEXT,
+        banner_url TEXT,
+        avatar_url TEXT,
+        default_voice TEXT DEFAULT 'af_heart',
+        tts_model TEXT DEFAULT 'kokoro',
+        postershive_api TEXT,
+        script_structure JSONB,
+        channel_tags TEXT,
+        subtitles_enabled BOOLEAN DEFAULT TRUE,
+        subtitles_shorts BOOLEAN DEFAULT TRUE,
+        subtitles_longform BOOLEAN DEFAULT FALSE,
+        subtitle_style TEXT DEFAULT 'yellow_highlight',
+        status TEXT DEFAULT 'Active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS banner_url TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS default_voice TEXT DEFAULT 'af_heart';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS tts_model TEXT DEFAULT 'kokoro';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS postershive_api TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS channel_tags TEXT;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_enabled BOOLEAN DEFAULT TRUE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_shorts BOOLEAN DEFAULT TRUE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitles_longform BOOLEAN DEFAULT FALSE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS subtitle_style TEXT DEFAULT 'yellow_highlight';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS use_image_pool BOOLEAN DEFAULT FALSE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS audio_effects JSONB DEFAULT '{"enabled": false}'::jsonb;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS background_music JSONB DEFAULT '{"enabled": false, "volume": 0.15}'::jsonb;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS video_settings JSONB DEFAULT '{"use_overlay": false, "longs_overlay_id": null, "shorts_overlay_id": null}'::jsonb;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS prompt_settings JSONB DEFAULT '{}'::jsonb;`;
+    } catch {}
+
+    // 2. Content Pillars Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS content_pillars (
+        id SERIAL PRIMARY KEY,
+        channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        tag TEXT,
+        description TEXT,
+        tone TEXT,
+        content_length TEXT,
+        content_words_count TEXT,
+        use_main_character BOOLEAN DEFAULT FALSE,
+        main_character_description TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(channel_id, slug)
+      );
+    `;
+
+    try {
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS tone TEXT;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS content_length TEXT;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS content_words_count TEXT;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS use_main_character BOOLEAN DEFAULT FALSE;`;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS main_character_description TEXT;`;
+    } catch {}
+
+    // 3. Topics Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS topics (
+        id SERIAL PRIMARY KEY,
+        channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        pillar_id INT REFERENCES content_pillars(id) ON DELETE SET NULL,
+        title TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        script_content TEXT,
+        scenes_json JSONB,
+        thumbnail_url TEXT,
+        thumbnail_prompt TEXT,
+        story_description TEXT,
+        master_video_url TEXT,
+        youtube_video_id TEXT,
+        youtube_url TEXT,
+        youtube_published_at TIMESTAMPTZ,
+        tiktok_publish_id TEXT,
+        tiktok_published_at TIMESTAMPTZ,
+        published_platforms JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(channel_id, slug)
+      );
+    `;
+
+    try {
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS story_description TEXT;`;
+      // Safely migrate any legacy data from misspelled story_discription column, then drop it
+      try {
+        await sql`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'topics' AND column_name = 'story_discription'
+            ) THEN
+              UPDATE topics 
+              SET story_description = story_discription 
+              WHERE story_description IS NULL AND story_discription IS NOT NULL;
+              
+              ALTER TABLE topics DROP COLUMN story_discription;
+            END IF;
+          END $$;
+        `;
+      } catch {}
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS video_type TEXT DEFAULT 'longform';`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS aspect_ratio TEXT DEFAULT '16:9';`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS parent_topic_id INT REFERENCES topics(id) ON DELETE SET NULL;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_video_id TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_url TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS youtube_published_at TIMESTAMPTZ;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS tiktok_publish_id TEXT;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS tiktok_published_at TIMESTAMPTZ;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS published_platforms JSONB;`;
+    } catch {}
+
+    // 4. Topic Assets Table (Cloudflare R2 media links)
+    await sql`
+      CREATE TABLE IF NOT EXISTS topic_assets (
+        id SERIAL PRIMARY KEY,
+        topic_id INT REFERENCES topics(id) ON DELETE CASCADE,
+        channel_id INT REFERENCES channels(id) ON DELETE CASCADE,
+        asset_type TEXT NOT NULL, -- 'thumbnail', 'audio', 'image', 'video', 'completedvideo'
+        scene_index INT,
+        file_url TEXT NOT NULL,
+        file_key TEXT NOT NULL,
+        file_name TEXT,
+        mime_type TEXT,
+        size_bytes BIGINT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    // 4a. Detached Modal bulk audio job progress and per-scene results
+    await sql`
+      CREATE TABLE IF NOT EXISTS audio_generation_jobs (
+        generation_id TEXT PRIMARY KEY,
+        channel_id INT REFERENCES channels(id) ON DELETE CASCADE,
+        topic_id INT REFERENCES topics(id) ON DELETE CASCADE,
+        total_scenes INT NOT NULL DEFAULT 0,
+        processed_scenes INT NOT NULL DEFAULT 0,
+        succeeded_scenes INT NOT NULL DEFAULT 0,
+        failed_scenes INT NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'queued',
+        results JSONB NOT NULL DEFAULT '[]'::jsonb,
+        error TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    // 5. Image Endpoints Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS image_endpoints (
+        id SERIAL PRIMARY KEY,
+        account_email TEXT NOT NULL,
+        gen_url TEXT NOT NULL,
+        usage INT DEFAULT 0,
+        last_reset_month TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    // 6. Audio Endpoints Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS audio_endpoints (
+        id SERIAL PRIMARY KEY,
+        account_email TEXT NOT NULL,
+        gen_url TEXT NOT NULL,
+        usage INT DEFAULT 0,
+        last_reset_month TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    // 7. LLM Accounts Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS llm_accounts (
+        id SERIAL PRIMARY KEY,
+        account_email TEXT NOT NULL,
+        source TEXT DEFAULT 'gemini',
+        account_id TEXT,
+        api_token TEXT NOT NULL,
+        created TIMESTAMPTZ DEFAULT NOW(),
+        updated TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    // 8. General Settings Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS general_settings (
+        id SERIAL PRIMARY KEY,
+        default_llm_source TEXT DEFAULT 'gemini',
+        default_llm_model TEXT DEFAULT 'gemini-2.5-flash',
+        script_gen_source TEXT DEFAULT 'gemini',
+        script_gen_strict_source BOOLEAN DEFAULT false,
+        script_gen_model TEXT DEFAULT 'gemini-2.5-flash',
+        script_gen_strict_model BOOLEAN DEFAULT false,
+        scene_gen_source TEXT DEFAULT 'gemini',
+        scene_gen_strict_source BOOLEAN DEFAULT false,
+        scene_gen_model TEXT DEFAULT 'gemini-2.5-flash',
+        scene_gen_strict_model BOOLEAN DEFAULT false,
+        gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1',
+        nvidia_base_url TEXT DEFAULT 'https://integrate.api.nvidia.com/v1',
+        modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run',
+        modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run',
+        modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run',
+        modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run',
+        modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run',
+        modal_fish_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run',
+        show_shorts_title_overlay BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`ALTER TABLE image_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
+      await sql`ALTER TABLE audio_endpoints ADD COLUMN IF NOT EXISTS last_reset_month TEXT;`;
+      await sql`ALTER TABLE llm_accounts ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_llm_source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS default_llm_model TEXT DEFAULT 'gemini-2.5-flash';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_strict_source BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_model TEXT DEFAULT 'gemini-2.5-flash';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS script_gen_strict_model BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_source TEXT DEFAULT 'gemini';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_strict_source BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_model TEXT DEFAULT 'gemini-2.5-flash';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS scene_gen_strict_model BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS gemma_base_url TEXT DEFAULT 'https://generativelanguage.googleapis.com/v1beta/openai/';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS open_router_base_url TEXT DEFAULT 'https://openrouter.ai/api/v1';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS nvidia_base_url TEXT DEFAULT 'https://integrate.api.nvidia.com/v1';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_video_render_url TEXT DEFAULT 'https://me-chimaobi--faceless-video-renderer-api.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_scene_merger_url TEXT DEFAULT 'https://chima-geniusdomains--faceless-scene-merger-api.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_audio_transcription_url TEXT DEFAULT 'https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_fish_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS show_shorts_title_overlay BOOLEAN DEFAULT false;`;
+      // Self-heal: Clean any legacy .us-east. in general_settings
+      await sql`
+        UPDATE general_settings
+        SET modal_qwen_voice_clone_url = REPLACE(modal_qwen_voice_clone_url, '.us-east.modal.run', '.modal.run')
+        WHERE modal_qwen_voice_clone_url LIKE '%.us-east.modal.run%';
+      `;
+    } catch {}
+
+    // 9. Channel Image Pool Table (reusable shorts & longform assets per channel)
+    await sql`
+      CREATE TABLE IF NOT EXISTS channel_image_pool (
+        id SERIAL PRIMARY KEY,
+        channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        pool_type TEXT NOT NULL CHECK (pool_type IN ('shorts', 'longform')),
+        file_url TEXT NOT NULL,
+        file_key TEXT NOT NULL,
+        file_name TEXT,
+        mime_type TEXT DEFAULT 'image/png',
+        size_bytes BIGINT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_channel_image_pool_lookup ON channel_image_pool(channel_id, pool_type);`;
+    } catch {}
+
+    // 10. Video Overlays Table (reusable video overlays for scene frames)
+    await sql`
+      CREATE TABLE IF NOT EXISTS video_overlays (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        file_key TEXT NOT NULL,
+        file_name TEXT,
+        mime_type TEXT DEFAULT 'video/mp4',
+        aspect_ratio TEXT DEFAULT 'all',
+        size_bytes BIGINT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_video_overlays_aspect ON video_overlays(aspect_ratio);`;
+    } catch {}
+
+    // 11. Voice Clones Table (records cloned voice profiles, associated engine model, and transcripts)
+    await sql`
+      CREATE TABLE IF NOT EXISTS voice_clones (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        model TEXT NOT NULL DEFAULT 'fish',
+        ref_text TEXT,
+        reference_audio_url TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_voice_clones_name ON voice_clones(name);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_voice_clones_model ON voice_clones(model);`;
+      await sql`ALTER TABLE voice_clones ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'fish';`;
+      await sql`ALTER TABLE voice_clones ADD COLUMN IF NOT EXISTS reference_audio_url TEXT;`;
+
+      // Auto-register known existing clones from Modal volumes so they appear immediately
+      await sql`
+        INSERT INTO voice_clones (name, model, ref_text, created_at, updated_at)
+        VALUES 
+          ('Andrew Tate', 'qwen', 'You are not behind, you are hiding. And somewhere, quietly, you already know it...', NOW(), NOW()),
+          ('Stoic Sample', 'fish', 'There is a version of you that almost no one has ever met...', NOW(), NOW())
+        ON CONFLICT (name) DO NOTHING;
+      `;
+    } catch {}
+
+    isDbInitialized = true;
+    return true;
+  } catch (error) {
+    console.error("Failed to initialize database schema:", error);
+    return false;
+  }
+}

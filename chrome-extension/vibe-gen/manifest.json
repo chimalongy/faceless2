@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Faceless Studio — Vibes AI Generator",
+  "version": "1.0.0",
+  "description": "Automate batch image and video generation on Vibes.ai (Meta AI) from script.json or Faceless Studio.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "downloads",
+    "scripting",
+    "tabs",
+    "debugger",
+    "unlimitedStorage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.vibes.ai/*",
+    "https://vibes.ai/*",
+    "https://*.fbcdn.net/*",
+    "http://localhost:3000/*",
+    "http://localhost/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open Vibes AI Generator"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.vibes.ai/*",
+        "*://vibes.ai/*"
+      ],
+      "js": ["vibes-adapter.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
