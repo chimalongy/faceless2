@@ -39,8 +39,10 @@ import {
   Code2,
   RotateCcw,
   Captions,
-  Smartphone
+  Smartphone,
+  FileText
 } from "lucide-react";
+import toast from "react-hot-toast";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -48,8 +50,10 @@ import { createPortal } from "react-dom";
 import { KOKORO_VOICES, QWEN_VOICES } from "@/lib/audio-generator";
 import { SUBTITLE_STYLES } from "@/lib/subtitle-generator";
 import {
-  DEFAULT_SCRIPT_STRUCTURE,
-  SCRIPT_STRUCTURE_PRESETS
+  DEFAULT_SCRIPT_STRUCTURE_TEXT,
+  SCRIPT_STRUCTURE_PRESETS,
+  getPresetText,
+  scriptStructureToText
 } from "@/lib/defaultScriptStructure";
 
 const STORAGE_KEY = "faceless_channels";
@@ -102,10 +106,7 @@ export default function EditChannelPage() {
   const [subtitlesLongform, setSubtitlesLongform] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
   const [useImagePool, setUseImagePool] = useState(false);
-  const [scriptStructureText, setScriptStructureText] = useState(
-    JSON.stringify(DEFAULT_SCRIPT_STRUCTURE, null, 2)
-  );
-  const [structureError, setStructureError] = useState("");
+  const [scriptStructureText, setScriptStructureText] = useState(DEFAULT_SCRIPT_STRUCTURE_TEXT);
   const [selectedPreset, setSelectedPreset] = useState("engaging_storytelling");
   const [status, setStatus] = useState("Active");
 
