@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { NextResponse } from "next/server";
 import { getDbSql, initDbSchema } from "@/lib/db";
 
@@ -136,6 +138,10 @@ export async function GET() {
       imageEndpoints: imageRows || [],
       audioEndpoints: audioRows || [],
       llmAccounts: llmRows || [],
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
     });
   } catch (error) {
     console.error("Failed to fetch endpoints from DB:", error);
@@ -284,6 +290,7 @@ export async function POST(request) {
           ${fishVoiceCloneUrl},
           ${Boolean(showShortsTitleOverlay)},
           NOW(),
+          NOW()
         );
       `;
     }
@@ -411,7 +418,8 @@ export async function POST(request) {
       modalSceneMergerUrl: refreshedGen.modalSceneMergerUrl || modalMergerUrl,
       modalAudioTranscriptionUrl: refreshedGen.modalAudioTranscriptionUrl || modalTranscribeUrl,
       modalQwenTtsUrl: refreshedGen.modalQwenTtsUrl || modalQwenUrl,
-      modalQwenVoiceCloneUrl: refreshedGen.modalQwenVoiceCloneUrl || modalVoiceCloneUrl,
+      modalQwenVoiceCloneUrl: refreshedGen.modalQwenVoiceCloneUrl || qwenVoiceCloneUrl,
+      modalFishVoiceCloneUrl: refreshedGen.modalFishVoiceCloneUrl || fishVoiceCloneUrl,
       showShortsTitleOverlay: Boolean(refreshedGen.showShortsTitleOverlay),
       generalSettings: refreshedGen,
       imageEndpoints: refreshedImageRows || [],

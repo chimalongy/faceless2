@@ -316,6 +316,13 @@ export async function initDbSchema(force = false) {
         SET modal_qwen_voice_clone_url = REPLACE(modal_qwen_voice_clone_url, '.us-east.modal.run', '.modal.run')
         WHERE modal_qwen_voice_clone_url LIKE '%.us-east.modal.run%';
       `;
+
+      // Seed initial default general_settings row if table is completely empty
+      await sql`
+        INSERT INTO general_settings (id, default_llm_source, default_llm_model)
+        SELECT 1, 'gemini', 'gemini-2.5-flash'
+        WHERE NOT EXISTS (SELECT 1 FROM general_settings LIMIT 1);
+      `;
     } catch {}
 
     // 9. Channel Image Pool Table (reusable shorts & longform assets per channel)

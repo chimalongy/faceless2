@@ -36,6 +36,7 @@ const SETTINGS_STORAGE_KEY = "faceless_studio_settings";
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
   const [saved, setSaved] = useState(false);
+  const [dbConnected, setDbConnected] = useState(true);
   const [loadingDb, setLoadingDb] = useState(true);
   const [isSavingDb, setIsSavingDb] = useState(false);
 
@@ -83,9 +84,19 @@ export default function SettingsPage() {
     async function loadEndpointsFromDb() {
       setLoadingDb(true);
       try {
-        const res = await fetch("/api/settings/endpoints");
-        if (res.ok) {
-          const data = await res.json();
+        const res = await fetch("/api/settings/endpoints", { cache: "no-store" });
+        if (!res.ok) {
+          toast.error("Failed to load settings from database.");
+          setDbConnected(false);
+          return;
+        }
+        const data = await res.json();
+        if (data.dbConnected === false) {
+          setDbConnected(false);
+          toast.error("Database is not connected. Please configure DATABASE_URL.");
+        } else {
+          setDbConnected(true);
+        }
           if (data.defaultLlmSource !== undefined) setDefaultLlmSource(data.defaultLlmSource);
           if (data.defaultLlmModel) setDefaultLlmModel(data.defaultLlmModel);
 
@@ -143,7 +154,6 @@ export default function SettingsPage() {
               }))
             );
           }
-        }
       } catch (err) {
         console.warn("Could not fetch endpoints from DB:", err);
       } finally {
@@ -530,6 +540,18 @@ export default function SettingsPage() {
           );
         })}
       </div>
+
+      {!dbConnected && (
+        <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center justify-between animate-fade-in rounded-sm">
+          <span className="inline-flex items-center gap-2 font-medium">
+            <AlertCircle size={16} className="text-rose-600 shrink-0" />
+            <span>
+              <strong>Database Not Connected:</strong> DATABASE_URL is missing or unavailable. Accounts and endpoints cannot be loaded or saved. Please verify your DATABASE_URL in Vercel.
+            </span>
+          </span>
+          <span className="font-mono text-[10px] uppercase font-bold text-rose-700">Offline</span>
+        </div>
+      )}
 
       {saved && (
         <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs flex items-center justify-between animate-fade-in rounded-sm">
