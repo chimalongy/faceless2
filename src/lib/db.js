@@ -3,8 +3,19 @@ import { Pool, neon } from "@neondatabase/serverless";
 // Singleton connection pool instance for serverless environments
 let poolInstance = null;
 
+export function getDbUrl() {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.NEON_DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    ""
+  ).trim();
+}
+
 export function getDbPool() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = getDbUrl();
   if (!databaseUrl) {
     return null;
   }
@@ -16,7 +27,7 @@ export function getDbPool() {
 }
 
 export function getDbSql() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = getDbUrl();
   if (!databaseUrl) {
     return null;
   }
@@ -31,7 +42,7 @@ export async function initDbSchema(force = false) {
     return true;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = getDbUrl();
   if (!databaseUrl) {
     console.warn("DATABASE_URL is not configured. Database initialization skipped.");
     return false;

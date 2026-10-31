@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 /**
  * Helper function replicating thumbnail dimension resolution logic
  */
-function resolveThumbnailDimensions({ isShort, width = null, height = null }) {
-  const isShortVideo = Boolean(isShort);
+function resolveThumbnailDimensions({ isShort, topic = {}, width = null, height = null }) {
+  const isTopicShort = topic.videoType === "short" || topic.videoType === "shorts" || topic.aspectRatio === "9:16";
+  const isShortVideo = isShort !== null && isShort !== undefined ? Boolean(isShort) : isTopicShort;
   const finalWidth = width ? Number(width) : isShortVideo ? 768 : 1376;
   const finalHeight = height ? Number(height) : isShortVideo ? 1376 : 768;
   return { width: finalWidth, height: finalHeight, isShort: isShortVideo };
@@ -41,6 +42,18 @@ test("resolveThumbnailDimensions selects 9:16 (768x1376) for short-form content"
   assert.equal(dims.width, 768);
   assert.equal(dims.height, 1376);
   assert.equal(dims.isShort, true);
+});
+
+test("resolveThumbnailDimensions derives short format from topic videoType or aspectRatio when isShort is omitted", () => {
+  const dimsShort = resolveThumbnailDimensions({ isShort: null, topic: { videoType: "shorts", aspectRatio: "9:16" } });
+  assert.equal(dimsShort.width, 768);
+  assert.equal(dimsShort.height, 1376);
+  assert.equal(dimsShort.isShort, true);
+
+  const dimsLong = resolveThumbnailDimensions({ isShort: null, topic: { videoType: "longform", aspectRatio: "16:9" } });
+  assert.equal(dimsLong.width, 1376);
+  assert.equal(dimsLong.height, 768);
+  assert.equal(dimsLong.isShort, false);
 });
 
 test("resolveThumbnailDimensions allows explicit width and height overrides", () => {

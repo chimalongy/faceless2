@@ -48,7 +48,15 @@ export const generateThumbnailImageTask = task({
     const channel = channelRows[0];
 
     const topicRows = await sql`
-      SELECT id, channel_id, title, slug, thumbnail_prompt, thumbnail_url, is_short
+      SELECT 
+        id, 
+        channel_id, 
+        title, 
+        slug, 
+        thumbnail_prompt, 
+        thumbnail_url, 
+        COALESCE(video_type, 'longform') AS "videoType",
+        COALESCE(aspect_ratio, '16:9') AS "aspectRatio"
       FROM topics
       WHERE slug = ${topicSlug} AND channel_id = ${channel.id}
       LIMIT 1;
@@ -68,7 +76,8 @@ export const generateThumbnailImageTask = task({
     }
 
     // 3. Resolve aspect ratio and dimensions
-    const isShortVideo = isShort !== undefined ? Boolean(isShort) : Boolean(topic.is_short);
+    const isTopicShort = topic.videoType === "short" || topic.videoType === "shorts" || topic.aspectRatio === "9:16";
+    const isShortVideo = isShort !== null && isShort !== undefined ? Boolean(isShort) : isTopicShort;
     const finalWidth = width ? Number(width) : isShortVideo ? 768 : 1376;
     const finalHeight = height ? Number(height) : isShortVideo ? 1376 : 768;
 
