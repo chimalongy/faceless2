@@ -60,6 +60,10 @@ import threading
 
 import time
 
+import uuid
+
+import wave
+
 from datetime import datetime, timezone
 
 import modal
@@ -81,6 +85,68 @@ VOICE_DIR = Path("/voices")
 BACKEND_PORT = 3031
 
 MAX_REFERENCE_AUDIO_BYTES = 25 * 1024 * 1024  # 25 MB max
+
+
+
+def apply_audio_effects_to_wav(wav_bytes: bytes, config: dict | None) -> tuple[bytes, str]:
+    """Apply the channel's precompiled FFmpeg filter before a bulk WAV upload."""
+    if not isinstance(config, dict) or not config.get("enabled"):
+        return wav_bytes, "none"
+
+    filter_string = str(config.get("filter") or "").strip()
+    if not filter_string:
+        return wav_bytes, "none"
+
+    def run_filter(audio_filter: str) -> bytes:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+                "-i", "pipe:0", "-af", audio_filter, "-c:a", "pcm_s16le",
+                "-f", "wav", "pipe:1",
+            ],
+            input=wav_bytes,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode("utf-8", errors="replace")[-4000:])
+        if not result.stdout:
+            raise RuntimeError("FFmpeg returned an empty WAV.")
+        return result.stdout
+
+    try:
+        return run_filter(filter_string), filter_string
+    except RuntimeError as exc:
+        error_text = str(exc)
+        missing_rubberband = (
+            "no such filter" in error_text.lower()
+            and re.search(r"rubberband\s*=\s*pitch\s*=", filter_string, re.IGNORECASE)
+        )
+        if not missing_rubberband:
+            raise
+
+        with wave.open(io.BytesIO(wav_bytes), "rb") as audio_file:
+            sample_rate = audio_file.getframerate()
+        if not sample_rate:
+            raise RuntimeError("FFmpeg lacks rubberband and the WAV sample rate could not be read.") from exc
+
+        def replace_pitch(match):
+            pitch = float(match.group(1))
+            if pitch <= 0:
+                raise RuntimeError(f"Invalid rubberband pitch factor: {pitch}")
+            shifted_rate = round(sample_rate * pitch)
+            tempo = f"{1 / pitch:.6f}".rstrip("0").rstrip(".")
+            return f"asetrate={shifted_rate},aresample={sample_rate},atempo={tempo}"
+
+        fallback_filter = re.sub(
+            r"rubberband=pitch=([0-9]*\.?[0-9]+)",
+            replace_pitch,
+            filter_string,
+            flags=re.IGNORECASE,
+        )
+        return run_filter(fallback_filter), fallback_filter
 
 app = modal.App(APP_NAME)
 
@@ -138,6 +204,10 @@ image = (
 
         "numpy",
 
+        "boto3",
+
+        "psycopg[binary]>=3.2,<4",
+
     )
 
     .run_commands(
@@ -165,6 +235,333 @@ image = (
     )
 
 )
+
+def _process_bulk_audio_job_impl(data: dict):
+    """Detached sequential worker: synthesize directly with s2.cpp CLI, then upload."""
+    import boto3
+    import psycopg
+    import soundfile as sf
+    from botocore.config import Config
+    from huggingface_hub import hf_hub_download
+
+    for volume in (model_volume, voice_volume):
+        try:
+            volume.reload()
+        except Exception:
+            pass
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    if not MODEL_PATH.exists():
+        hf_hub_download(repo_id=MODEL_REPO, filename=MODEL_NAME, local_dir=str(MODEL_DIR))
+    if not TOKENIZER_PATH.exists():
+        hf_hub_download(repo_id=MODEL_REPO, filename="tokenizer.json", local_dir=str(MODEL_DIR))
+    model_volume.commit()
+
+    voice_name = str(data.get("voice_name") or data.get("voice") or "").strip()
+    scenes = data.get("scenes") or []
+    generation_id = str(data.get("generation_id") or "").strip()
+    database_url = str(data.get("database_url") or "").strip()
+    if not generation_id:
+        raise ValueError("generation_id is required for bulk generation.")
+    if not database_url:
+        raise ValueError("database_url is required for Fish bulk generation.")
+    if not voice_name:
+        raise ValueError("voice_name is required for bulk generation.")
+    if not isinstance(scenes, list) or not scenes:
+        raise ValueError("scenes list is required for bulk generation.")
+
+    clean_voice = re.sub(r"[^A-Za-z0-9_-]", "_", voice_name)[:64] or "voice"
+    voice_folder = VOICE_DIR / clean_voice
+    if not voice_folder.is_dir():
+        for candidate in VOICE_DIR.iterdir() if VOICE_DIR.exists() else []:
+            if not candidate.is_dir():
+                continue
+            metadata_path = candidate / "metadata.json"
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+            except Exception:
+                metadata = {}
+            if candidate.name.casefold() == voice_name.casefold() or str(metadata.get("voice_name", "")).casefold() == voice_name.casefold():
+                voice_folder, clean_voice = candidate, candidate.name
+                break
+
+    root_profile = VOICE_DIR / f"{clean_voice}.s2voice"
+    nested_profile = voice_folder / "profile.s2voice"
+    profile_path = root_profile if root_profile.is_file() else nested_profile
+    ref_wav = voice_folder / "reference.wav"
+    try:
+        metadata = json.loads((voice_folder / "metadata.json").read_text(encoding="utf-8"))
+    except Exception:
+        metadata = {}
+    ref_text = str(metadata.get("ref_text") or "")
+    if not ref_wav.is_file():
+        legacy_ref = VOICE_DIR / f"{clean_voice}.wav"
+        if legacy_ref.is_file():
+            ref_wav = legacy_ref
+    if not profile_path.is_file() and not ref_wav.is_file():
+        raise FileNotFoundError(f"Voice '{voice_name}' has neither a saved profile nor reference audio.")
+
+    credentials = data.get("r2_credentials") or data.get("credentials") or {}
+    account_id = credentials.get("account_id") or credentials.get("CLOUDFLARE_R2_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_R2_ACCOUNT_ID")
+    access_key = credentials.get("access_key_id") or credentials.get("CLOUDFLARE_R2_ACCESS_KEY_ID") or os.environ.get("CLOUDFLARE_R2_ACCESS_KEY_ID")
+    secret_key = credentials.get("secret_access_key") or credentials.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY") or os.environ.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+    if not (account_id and access_key and secret_key):
+        raise ValueError("Cloudflare R2 credentials missing or incomplete")
+    r2 = boto3.client(
+        "s3",
+        endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        region_name="auto",
+        config=Config(signature_version="s3v4", retries={"max_attempts": 4}),
+    )
+    bucket = credentials.get("bucket_name") or credentials.get("CLOUDFLARE_R2_BUCKET_NAME") or os.environ.get("CLOUDFLARE_R2_BUCKET_NAME", "faceless-media")
+    public_base = (credentials.get("public_url") or credentials.get("CLOUDFLARE_R2_PUBLIC_URL") or os.environ.get("CLOUDFLARE_R2_PUBLIC_URL", "")).rstrip("/")
+    channel_slug = str(data.get("channel_slug") or "").strip()
+    topic_slug = str(data.get("topic_slug") or "").strip()
+    with psycopg.connect(database_url, connect_timeout=20) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM channels WHERE slug = %s LIMIT 1", (channel_slug,))
+            channel_row = cur.fetchone()
+            cur.execute(
+                "SELECT id FROM topics WHERE slug = %s AND channel_id = %s LIMIT 1",
+                (topic_slug, channel_row[0] if channel_row else None),
+            )
+            topic_row = cur.fetchone()
+            if not channel_row or not topic_row:
+                raise ValueError(f"Could not resolve channel/topic IDs for {channel_slug}/{topic_slug}.")
+            channel_id, topic_id = channel_row[0], topic_row[0]
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audio_generation_jobs (
+                    generation_id TEXT PRIMARY KEY,
+                    channel_id INT REFERENCES channels(id) ON DELETE CASCADE,
+                    topic_id INT REFERENCES topics(id) ON DELETE CASCADE,
+                    total_scenes INT NOT NULL DEFAULT 0,
+                    processed_scenes INT NOT NULL DEFAULT 0,
+                    succeeded_scenes INT NOT NULL DEFAULT 0,
+                    failed_scenes INT NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    results JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    error TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute(
+                """
+                INSERT INTO audio_generation_jobs (
+                    generation_id, channel_id, topic_id, total_scenes, status, updated_at
+                ) VALUES (%s, %s, %s, %s, 'running', NOW())
+                ON CONFLICT (generation_id) DO UPDATE SET
+                    status = 'running', error = NULL, updated_at = NOW()
+                """,
+                (generation_id, channel_id, topic_id, len(scenes)),
+            )
+    database_context = {
+        "database_url": database_url,
+        "channel_id": channel_id,
+        "topic_id": topic_id,
+        "generation_id": generation_id,
+    }
+    effects = data.get("audio_effects") or {}
+    binary = "/opt/s2.cpp/build/s2"
+    results = []
+
+    for scene in scenes:
+        scene_index = scene.get("scene_index", scene.get("scene_number", 1))
+        text = str(scene.get("text") or scene.get("audio_text") or scene.get("narration") or "").strip()
+        if not text:
+            result_item = {"scene_index": scene_index, "success": False, "error": "Scene narration text is empty."}
+            results.append(result_item)
+            _record_bulk_audio_job_scene(database_context, result_item)
+            continue
+        temporary_files = []
+        uploaded_key = None
+        try:
+            fd, output_name = tempfile.mkstemp(suffix=".wav")
+            os.close(fd)
+            output_path = Path(output_name)
+            temporary_files.append(output_path)
+            command = [binary, "--model", str(MODEL_PATH), "--tokenizer", str(TOKENIZER_PATH), "--cuda", "0"]
+            if profile_path.is_file():
+                voice_arg = clean_voice if profile_path == root_profile else str(profile_path)
+                command.extend(["--voice", voice_arg, "--voice-dir", str(VOICE_DIR)])
+            else:
+                fd, ref_name = tempfile.mkstemp(suffix=".wav")
+                os.close(fd)
+                prepared_ref = Path(ref_name)
+                temporary_files.append(prepared_ref)
+                subprocess.run(
+                    ["ffmpeg", "-y", "-v", "error", "-i", str(ref_wav), "-t", "20", "-ac", "1", "-ar", "44100", "-af", "afade=t=out:st=19.5:d=0.5", str(prepared_ref)],
+                    check=True,
+                    timeout=30,
+                )
+                words = ref_text.split()
+                prompt_text = " ".join(words[:60]) if len(words) > 60 else ref_text
+                command.extend(["--prompt-audio", str(prepared_ref), "--prompt-text", prompt_text])
+            command.extend(["--text", text, "--output", str(output_path)])
+            generated = subprocess.run(command, capture_output=True, text=True, timeout=600)
+            if generated.returncode != 0 or not output_path.exists() or output_path.stat().st_size < 1000:
+                raise RuntimeError((generated.stderr or generated.stdout or "s2.cpp synthesis failed")[-3000:])
+
+            wav_bytes = output_path.read_bytes()
+            wav_bytes, applied_filter = apply_audio_effects_to_wav(wav_bytes, effects)
+            timestamp = int(time.time() * 1000)
+            suffix = hashlib.md5(f"{scene_index}-{timestamp}".encode()).hexdigest()[:6]
+            if channel_slug and topic_slug:
+                key = f"channels/{channel_slug}/topics/{topic_slug}/audio/scene-{scene_index}-{timestamp}-{suffix}.wav"
+            else:
+                key = f"voice-clones/{clean_voice}/scene-{scene_index}-{timestamp}-{suffix}.wav"
+            r2.put_object(Bucket=bucket, Key=key, Body=wav_bytes, ContentType="audio/wav")
+            uploaded_key = key
+            try:
+                duration = round(sf.info(io.BytesIO(wav_bytes)).duration, 2)
+            except Exception:
+                duration = 0.0
+            result_item = {
+                "scene_index": scene_index,
+                "success": True,
+                "public_url": f"{public_base}/{key}" if public_base else f"/{key}",
+                "r2_key": key,
+                "duration": duration,
+                "size_bytes": len(wav_bytes),
+                "audio_filter": applied_filter,
+            }
+            old_keys = _save_bulk_audio_asset(database_context, result_item)
+            uploaded_key = None
+            for old_key in old_keys:
+                if old_key and old_key != key:
+                    try:
+                        r2.delete_object(Bucket=bucket, Key=old_key)
+                    except Exception as delete_exc:
+                        print(f"[Fish-S2 Bulk Job] Could not delete replaced R2 object {old_key}: {delete_exc}")
+            results.append(result_item)
+            print(f"[Fish-S2 Bulk Job] Scene {scene_index} generated and uploaded.")
+        except Exception as exc:
+            if uploaded_key:
+                try:
+                    r2.delete_object(Bucket=bucket, Key=uploaded_key)
+                except Exception:
+                    pass
+            print(f"[Fish-S2 Bulk Job] Scene {scene_index} failed: {exc}")
+            result_item = {"scene_index": scene_index, "success": False, "error": str(exc)}
+            results.append(result_item)
+            _record_bulk_audio_job_scene(database_context, result_item)
+        finally:
+            for temporary_file in temporary_files:
+                temporary_file.unlink(missing_ok=True)
+
+    return {"success": any(item.get("success") for item in results), "count": len(results), "audios": results, "engine": "fish-s2-pro"}
+
+
+def _save_bulk_audio_asset(context: dict, audio: dict) -> list[str]:
+    """Register a completed R2 upload in topic_assets and return replaced keys."""
+    import psycopg
+
+    with psycopg.connect(context["database_url"], connect_timeout=20) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT file_key FROM topic_assets
+                WHERE topic_id = %s AND channel_id = %s AND asset_type = 'audio' AND scene_index = %s
+                """,
+                (context["topic_id"], context["channel_id"], audio["scene_index"]),
+            )
+            old_keys = [row[0] for row in cur.fetchall() if row[0]]
+            cur.execute(
+                """
+                DELETE FROM topic_assets
+                WHERE topic_id = %s AND channel_id = %s AND asset_type = 'audio' AND scene_index = %s
+                """,
+                (context["topic_id"], context["channel_id"], audio["scene_index"]),
+            )
+            cur.execute(
+                """
+                INSERT INTO topic_assets (
+                    topic_id, channel_id, asset_type, scene_index, file_url,
+                    file_key, file_name, mime_type, size_bytes, created_at
+                ) VALUES (%s, %s, 'audio', %s, %s, %s, %s, 'audio/wav', %s, NOW())
+                """,
+                (
+                    context["topic_id"], context["channel_id"], audio["scene_index"],
+                    audio["public_url"], audio["r2_key"],
+                    f"Scene {audio['scene_index']} Audio.wav", audio.get("size_bytes"),
+                ),
+            )
+            _append_bulk_audio_job_result(cur, context, audio)
+    return old_keys
+
+
+def _record_bulk_audio_job_scene(context: dict, result: dict):
+    """Persist per-scene progress for the app without polling the Modal route."""
+    import psycopg
+    with psycopg.connect(context["database_url"], connect_timeout=20) as conn:
+        with conn.cursor() as cur:
+            _append_bulk_audio_job_result(cur, context, result)
+
+
+def _append_bulk_audio_job_result(cursor, context: dict, result: dict):
+    import json
+
+    succeeded = bool(result.get("success"))
+    success_increment = 1 if succeeded else 0
+    failure_increment = 0 if succeeded else 1
+    cursor.execute(
+        """
+        UPDATE audio_generation_jobs
+        SET processed_scenes = processed_scenes + 1,
+            succeeded_scenes = succeeded_scenes + %s,
+            failed_scenes = failed_scenes + %s,
+            results = results || %s::jsonb,
+            status = CASE
+                WHEN processed_scenes + 1 < total_scenes THEN 'running'
+                WHEN failed_scenes + %s = total_scenes THEN 'failed'
+                WHEN failed_scenes + %s > 0 THEN 'completed_with_errors'
+                ELSE 'completed'
+            END,
+            updated_at = NOW()
+        WHERE generation_id = %s
+        """,
+        (
+            success_increment,
+            failure_increment,
+            json.dumps([result]),
+            failure_increment,
+            failure_increment,
+            context["generation_id"],
+        ),
+    )
+
+
+@app.function(
+    image=image,
+    gpu="T4",
+    volumes={"/models": model_volume, "/voices": voice_volume},
+    timeout=3600,
+    startup_timeout=1800,
+    max_containers=1,
+)
+def process_bulk_audio_job(data: dict):
+    import psycopg
+
+    try:
+        return _process_bulk_audio_job_impl(data)
+    except Exception as exc:
+        generation_id = str(data.get("generation_id") or "").strip()
+        database_url = str(data.get("database_url") or "").strip()
+        if generation_id and database_url:
+            try:
+                with psycopg.connect(database_url, connect_timeout=20) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE audio_generation_jobs SET status = 'failed', error = %s, updated_at = NOW() WHERE generation_id = %s",
+                            (str(exc)[:4000], generation_id),
+                        )
+            except Exception as db_exc:
+                print(f"[Fish-S2 Bulk Job] Could not persist terminal job failure: {db_exc}")
+        raise
+
 
 @app.function(
 
@@ -651,6 +1048,67 @@ def serve():
             temp_wav.unlink(missing_ok=True)
 
             return ref_wav_path, ref_text, None
+
+
+    def create_r2_client(credentials: dict):
+        import boto3
+        from botocore.config import Config
+
+        account_id = (
+            credentials.get("CLOUDFLARE_R2_ACCOUNT_ID")
+            or credentials.get("account_id")
+            or os.environ.get("CLOUDFLARE_R2_ACCOUNT_ID")
+        )
+        access_key = (
+            credentials.get("CLOUDFLARE_R2_ACCESS_KEY_ID")
+            or credentials.get("access_key_id")
+            or os.environ.get("CLOUDFLARE_R2_ACCESS_KEY_ID")
+        )
+        secret_key = (
+            credentials.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+            or credentials.get("secret_access_key")
+            or os.environ.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+        )
+
+        if not (account_id and access_key and secret_key):
+            return None
+
+        endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
+        return boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name="auto",
+            config=Config(signature_version="s3v4", retries={"max_attempts": 4}),
+        )
+
+
+    def upload_wav_to_r2(wav_bytes: bytes, key: str, credentials: dict) -> str:
+        r2 = create_r2_client(credentials)
+        if not r2:
+            raise ValueError("Cloudflare R2 credentials missing or incomplete")
+
+        bucket = (
+            credentials.get("CLOUDFLARE_R2_BUCKET_NAME")
+            or credentials.get("bucket_name")
+            or os.environ.get("CLOUDFLARE_R2_BUCKET_NAME", "faceless-media")
+        )
+        public_base = (
+            credentials.get("CLOUDFLARE_R2_PUBLIC_URL")
+            or credentials.get("public_url")
+            or os.environ.get("CLOUDFLARE_R2_PUBLIC_URL", "")
+        ).rstrip("/")
+
+        clean_key = key.lstrip("/")
+        r2.put_object(
+            Bucket=bucket,
+            Key=clean_key,
+            Body=wav_bytes,
+            ContentType="audio/wav",
+        )
+        return f"{public_base}/{clean_key}" if public_base else f"/{clean_key}"
+
 
     def locate_voice(target_name: str, reload_volume: bool = True):
 
@@ -1590,162 +2048,157 @@ def serve():
 
             )
 
-        root_profile = VOICE_DIR / f"{canonical_name}.s2voice"
-
-        nested_profile = voice_folder / "profile.s2voice"
-
-        profile_path = root_profile if root_profile.is_file() else nested_profile
-
-        voice_arg = canonical_name if profile_path == root_profile else str(profile_path)
-
-        ref_wav = voice_folder / "reference.wav"
-
-        ref_text = ""
-
-        meta_file = voice_folder / "metadata.json"
-
-        if meta_file.is_file():
-
-            try:
-
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-
-                ref_text = meta.get("ref_text", "")
-
-            except Exception:
-
-                pass
-
-        if not ref_wav.is_file():
-
-            # The saved profile is enough for generation; reference audio is only
-
-            # needed for legacy voices without a .s2voice file.
-
-            flat_ref = VOICE_DIR / f"{canonical_name}.wav"
-
-            if flat_ref.is_file():
-
-                ref_wav = flat_ref
-
-            elif not profile_path.is_file():
-
-                raise HTTPException(
-
-                    status_code=404,
-
-                    detail=f"Voice '{target_voice}' has neither a saved profile nor reference audio. Re-register the voice.",
-
-                )
-
-        wav_bytes = None
-
-        profile_failure = None
-
-        if profile_path.is_file():
-
-            # Prefer the reusable profile, without resending reference audio.
-
-            try:
-
-                wav_bytes = await asyncio.to_thread(
-
-                    _synthesize_via_saved_profile_backend, target_text, voice_arg
-
-                )
-
-            except Exception as profile_server_err:
-
-                print(
-
-                    f"[Fish-S2] Saved-profile server synthesis failed ({profile_server_err}), "
-
-                    "trying the saved-profile CLI..."
-
-                )
-
+        def _synthesize_voice_bytes(canonical_name: str, voice_folder: Path, text: str) -> bytes:
+            root_profile = VOICE_DIR / f"{canonical_name}.s2voice"
+            nested_profile = voice_folder / "profile.s2voice"
+            profile_path = root_profile if root_profile.is_file() else nested_profile
+            voice_arg = canonical_name if profile_path == root_profile else str(profile_path)
+            ref_wav = voice_folder / "reference.wav"
+            ref_text = ""
+            meta_file = voice_folder / "metadata.json"
+            if meta_file.is_file():
                 try:
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                    ref_text = meta.get("ref_text", "")
+                except Exception:
+                    pass
 
-                    wav_bytes = await asyncio.to_thread(
-
-                        _synthesize_via_saved_profile_cli, target_text, voice_arg
-
-                    )
-
-                except Exception as profile_cli_err:
-
-                    profile_failure = profile_cli_err
-
-                    print(
-
-                        f"[Fish-S2] Saved-profile CLI failed ({profile_cli_err}); "
-
-                        "falling back to the clipped reference audio when available..."
-
-                    )
-
-        # Older voices without a saved profile, or a profile that could not be
-
-        # loaded, continue through the existing clipped-reference path.
-
-        if wav_bytes is None and ref_wav.is_file():
-
-            try:
-
-                wav_bytes = await asyncio.to_thread(
-
-                    _synthesize_via_backend, target_text, ref_wav, ref_text
-
-                )
-
-            except Exception as server_err:
-
-                print(f"[Fish-S2] Reference-based server synthesis failed ({server_err}), attempting CLI fallback...")
-
-                try:
-
-                    wav_bytes = await asyncio.to_thread(
-
-                        _synthesize_via_cli, target_text, canonical_name, ref_wav, ref_text
-
-                    )
-
-                except Exception as cli_err:
-
+            if not ref_wav.is_file():
+                flat_ref = VOICE_DIR / f"{canonical_name}.wav"
+                if flat_ref.is_file():
+                    ref_wav = flat_ref
+                elif not profile_path.is_file():
                     raise HTTPException(
+                        status_code=404,
+                        detail=f"Voice '{canonical_name}' has neither a saved profile nor reference audio. Re-register the voice.",
+                    )
 
-                        status_code=500,
+            wav_bytes = None
+            profile_failure = None
+            if profile_path.is_file():
+                try:
+                    wav_bytes = _synthesize_via_saved_profile_backend(text, voice_arg)
+                except Exception as profile_server_err:
+                    try:
+                        wav_bytes = _synthesize_via_saved_profile_cli(text, voice_arg)
+                    except Exception as profile_cli_err:
+                        profile_failure = profile_cli_err
 
-                        detail=f"Speech synthesis failed: {cli_err}",
+            if wav_bytes is None and ref_wav.is_file():
+                try:
+                    wav_bytes = _synthesize_via_backend(text, ref_wav, ref_text)
+                except Exception as server_err:
+                    try:
+                        wav_bytes = _synthesize_via_cli(text, canonical_name, ref_wav, ref_text)
+                    except Exception as cli_err:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Speech synthesis failed: {cli_err}",
+                        ) from cli_err
+            elif wav_bytes is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Saved voice profile synthesis failed: {profile_failure}",
+                ) from profile_failure
 
-                    ) from cli_err
+            return wav_bytes
 
-        elif wav_bytes is None:
-
-            raise HTTPException(
-
-                status_code=500,
-
-                detail=f"Saved voice profile synthesis failed: {profile_failure}",
-
-            ) from profile_failure
+        wav_bytes = await asyncio.to_thread(
+            _synthesize_voice_bytes, canonical_name, voice_folder, target_text
+        )
 
         return Response(
-
             content=wav_bytes,
-
             media_type="audio/wav",
-
             headers={
-
                 "Content-Disposition": f'attachment; filename="{canonical_name}-speech.wav"',
-
                 "X-Audio-Sample-Rate": "24000",
-
                 "X-Audio-Channels": "1",
-
             },
+        )
 
+    @web_app.post("/bulk-generate")
+    async def bulk_generate(data: dict):
+        """Queue a durable bulk job; the HTTP request returns immediately."""
+        voice_name = str(data.get("voice_name") or data.get("voice") or "").strip()
+        scenes = data.get("scenes") or []
+        if not voice_name:
+            raise HTTPException(status_code=400, detail="voice_name is required for bulk generation.")
+        if not isinstance(scenes, list) or not scenes:
+            raise HTTPException(status_code=400, detail="scenes list is required.")
+
+        import psycopg
+
+        database_url = str(data.get("database_url") or "").strip()
+        if not database_url:
+            raise HTTPException(status_code=400, detail="database_url is required for Fish bulk generation.")
+
+        channel_slug = str(data.get("channel_slug") or "").strip()
+        topic_slug = str(data.get("topic_slug") or "").strip()
+        generation_id = str(uuid.uuid4())
+        worker_data = {**data, "generation_id": generation_id}
+        try:
+            with psycopg.connect(database_url, connect_timeout=20) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS audio_generation_jobs (
+                            generation_id TEXT PRIMARY KEY,
+                            channel_id INT REFERENCES channels(id) ON DELETE CASCADE,
+                            topic_id INT REFERENCES topics(id) ON DELETE CASCADE,
+                            total_scenes INT NOT NULL DEFAULT 0,
+                            processed_scenes INT NOT NULL DEFAULT 0,
+                            succeeded_scenes INT NOT NULL DEFAULT 0,
+                            failed_scenes INT NOT NULL DEFAULT 0,
+                            status TEXT NOT NULL DEFAULT 'queued',
+                            results JSONB NOT NULL DEFAULT '[]'::jsonb,
+                            error TEXT,
+                            created_at TIMESTAMPTZ DEFAULT NOW(),
+                            updated_at TIMESTAMPTZ DEFAULT NOW()
+                        )
+                        """
+                    )
+                    cur.execute("SELECT id FROM channels WHERE slug = %s LIMIT 1", (channel_slug,))
+                    channel_row = cur.fetchone()
+                    cur.execute(
+                        "SELECT id FROM topics WHERE slug = %s AND channel_id = %s LIMIT 1",
+                        (topic_slug, channel_row[0] if channel_row else None),
+                    )
+                    topic_row = cur.fetchone()
+                    if not channel_row or not topic_row:
+                        raise HTTPException(status_code=404, detail="Channel or topic was not found in the database.")
+                    cur.execute(
+                        """
+                        INSERT INTO audio_generation_jobs (
+                            generation_id, channel_id, topic_id, total_scenes, status
+                        ) VALUES (%s, %s, %s, %s, 'queued')
+                        """,
+                        (generation_id, channel_row[0], topic_row[0], len(scenes)),
+                    )
+            job = await process_bulk_audio_job.spawn.aio(worker_data)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            try:
+                with psycopg.connect(database_url, connect_timeout=20) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE audio_generation_jobs SET status = 'failed', error = %s, updated_at = NOW() WHERE generation_id = %s",
+                            (str(exc)[:4000], generation_id),
+                        )
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail=f"Could not queue the Modal bulk job: {exc}") from exc
+        return JSONResponse(
+            status_code=202,
+            content={
+                "accepted": True,
+                "status": "queued",
+                "job_id": generation_id,
+                "modal_call_id": job.object_id,
+                "count": len(scenes),
+                "engine": "fish-s2-pro",
+            },
         )
 
     # =========================================================================

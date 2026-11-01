@@ -100,6 +100,7 @@ export async function GET() {
     const modalVideoRenderUrl = generalData.modalVideoRenderUrl || process.env.MODAL_RENDERER_API_URL || "https://me-chimaobi--faceless-video-renderer-api.modal.run";
     const modalSceneMergerUrl = generalData.modalSceneMergerUrl || process.env.MODAL_SCENE_MERGER_URL || "https://chima-geniusdomains--faceless-scene-merger-api.modal.run";
     const modalAudioTranscriptionUrl = generalData.modalAudioTranscriptionUrl || process.env.MODAL_TRANSCRIPTION_URL || "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run";
+    const modalQwenTtsUrl = generalData.modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run";
     let modalQwenVoiceCloneUrl = (generalData.modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run").replace(".us-east.modal.run", ".modal.run");
     let modalFishVoiceCloneUrl = generalData.modalFishVoiceCloneUrl || process.env.MODAL_FISH_S2_URL || "https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run";
 
@@ -371,6 +372,7 @@ export async function POST(request) {
         modal_audio_transcription_url AS "modalAudioTranscriptionUrl",
         modal_qwen_tts_url AS "modalQwenTtsUrl",
         modal_qwen_voice_clone_url AS "modalQwenVoiceCloneUrl",
+        modal_fish_voice_clone_url AS "modalFishVoiceCloneUrl",
         show_shorts_title_overlay AS "showShortsTitleOverlay",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
