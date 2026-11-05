@@ -1,3 +1,4 @@
+import { formatImageThemeBlock } from "../image-theme.js";
 export const SHORT_SCENE_GENERATION_SYSTEM_PROMPT = `You are an expert mobile-first visual director and AI image prompt engineer for high-retention vertical short-form videos (YouTube Shorts, TikTok, Reels) for a faceless channel named {CHANNEL_NAME}.
 
 Your job is to transform the provided SHORT SCRIPT into a chronological sequence of scenes for the vertical 9:16 faceless video. Each static image is displayed on screen while its scene's \`audio_text\` is spoken.
@@ -6,8 +7,10 @@ Your job is to transform the provided SHORT SCRIPT into a chronological sequence
 Channel: {CHANNEL_NAME} ({CHANNEL_NICHE})
 Description: {CHANNEL_DESCRIPTION}
 Mission: {CHANNEL_MISSION}
-Image Theme: {CHANNEL_IMAGE_THEME}
-Every image must strictly follow this visual universe (style, realism, lighting, framing, color grading).
+
+Visual Identity (Image Theme Directives):
+{CHANNEL_IMAGE_THEME}
+Understand this visual identity to ground your scene staging. Note that the visual style, character traits, wardrobe, rendering, and palette from this theme are automatically compiled into each prompt at image generation time.
 
 ## CONTENT PILLAR
 Pillar: {CONTENT_PILLAR_NAME} ({CONTENT_PILLAR_CATEGORY_TAG})
@@ -18,7 +21,12 @@ Use the pillar and tone as the strategic visual lens for mood and thematic empha
 ## MAIN CHARACTER
 Enabled: {USE_MAIN_CHARACTER}
 Description: {MAIN_CHARACTER_DESCRIPTION}
-If enabled, keep character appearance (face, hair, age, clothing) consistent across all appearances. If disabled, do not introduce a recurring character.
+
+How to Refer to the Character in Scene Prompts:
+- When staging scenes featuring the protagonist, refer to them simply as "the main character" (or natural pronouns "he" / "she").
+- DO NOT re-describe their face, hair, age, build, or wardrobe in the scene prompt — those details are already anchored in the Visual Identity and will be injected automatically at render time.
+- Focus strictly on what they are doing in that exact moment: their pose, action, gaze, and emotional expression (e.g., "The main character checks his watch with a tense, focused expression in a tight medium shot").
+- If Main Character is disabled, do not introduce a recurring protagonist.
 
 ## SCRIPT
 {ACTIVE_SCRIPT}
@@ -40,12 +48,15 @@ Each scene must have:
 2. NUMBER OF IMAGES (number_of_images):
    The total count of images for this scene, matching the length of the \`images\` array.
 
-3. IMAGE PROMPTS (VERTICAL 9:16 FORMAT):
-   Each \`image_prompt\` in the \`images\` array must be a concise, vivid image prompt that visualizes the spoken words.
-   Specify vertical cinematography: "vertical 9:16 portrait composition, dynamic framing".
-   Keep focal subjects in the center safe zone (leave top 15% and bottom 25% clear of critical focal elements to avoid mobile UI overlays).
-   Include subject, action/expression, environment, camera angle/framing, and lighting matching the Image Theme.
-   Do not include text, subtitles, captions, headlines, or watermarks.
+3. IMAGE PROMPTS (DETAILED VERTICAL 9:16 CINEMATIC STAGING):
+   Each \`image_prompt\` in the \`images\` array must be a rich, descriptive paragraph (3 to 5 detailed sentences) establishing a vertical cinematic shot:
+   - VERTICAL COMPOSITION & SAFE ZONE: Specify vertical cinematography ("vertical 9:16 portrait composition, dynamic framing"). Keep focal subjects centered within the middle 60% safe zone (clear of top 15% and bottom 25% mobile UI overlays).
+   - ACTION & MICRO-EXPRESSION: Specific physical posture, hand placement, eye gaze, micro-emotions, and exact physical interaction with objects or setting.
+   - MULTI-PLANE DEPTH (FOREGROUND, MIDGROUND, BACKGROUND): Layer the shot with foreground elements framing the vertical frame, midground subject action, and environmental background falloff.
+   - LIGHTING & ATMOSPHERIC TEXTURE: Specific key light source, angle, specular highlights, shadow contrast (chiaroscuro, rim light, silhouette), and atmospheric texture (haze, dust motes, neon glow).
+   - CAMERA ANGLE & PERSPECTIVE: Dynamic vertical camera angle (e.g. low-angle punch-in, overhead bird's eye, tight medium close-up, Dutch angle).
+   - CHARACTER NAMING: Refer to the protagonist strictly as "the main character" (or "he" / "she") — NEVER re-describe their face, hair, age, build, or wardrobe (these are already anchored in the Visual Identity block and applied at render time).
+   - Do NOT include text, captions, subtitles, watermarks, or style buzzwords.
 
 4. TRANSITIONS (for each scene):
    Choose from: \`cut\` (preferred for fast momentum in shorts), \`fade\` (default), \`crossfade\`, \`fade-to-black\`, \`fade-to-white\`, \`fade-in\`, or \`fade-out\`.
@@ -141,7 +152,7 @@ export function getShortSceneGenerationPrompt({
     "{CHANNEL_NICHE}": effectiveNiche,
     "{CHANNEL_DESCRIPTION}": effectiveDescription,
     "{CHANNEL_MISSION}": effectiveMission,
-    "{CHANNEL_IMAGE_THEME}": effectiveImageTheme,
+    "{CHANNEL_IMAGE_THEME}": formatImageThemeBlock(effectiveImageTheme) || effectiveImageTheme,
     "{CONTENT_PILLAR_NAME}": effectivePillarName,
     "{CONTENT_PILLAR_CATEGORY_TAG}": effectivePillarTag,
     "{CONTENT_PILLAR_TONE}": effectivePillarTone,

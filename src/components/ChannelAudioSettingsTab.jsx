@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Sliders,
@@ -52,8 +52,28 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
   const [uploadProgress, setUploadProgress] = useState(null);
   const [deletingMusic, setDeletingMusic] = useState(false);
 
+  // Audio Theme State
+  const [audioTheme, setAudioTheme] = useState("");
+  const [channelData, setChannelData] = useState(null);
+  const [savingAudioTheme, setSavingAudioTheme] = useState(false);
+  const [savedAudioTheme, setSavedAudioTheme] = useState(false);
+
   useEffect(() => {
     loadSettings();
+  }, [channelSlug]);
+
+  // Load full channel record for safe PUT merge
+  useEffect(() => {
+    if (!channelSlug) return;
+    fetch(`/api/channels/${channelSlug}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.channel) {
+          setChannelData(data.channel);
+          setAudioTheme(data.channel.audioTheme || "");
+        }
+      })
+      .catch(() => {});
   }, [channelSlug]);
 
   async function loadSettings() {
@@ -400,8 +420,87 @@ export default function ChannelAudioSettingsTab({ channelSlug, channelName }) {
     );
   }
 
+  async function handleSaveAudioTheme(e) {
+    e.preventDefault();
+    if (!channelData) { toast.error("Channel data not loaded yet."); return; }
+    setSavingAudioTheme(true);
+    try {
+      const payload = { ...channelData, audioTheme: audioTheme.trim() };
+      const res = await fetch(`/api/channels/${channelSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.channel) setChannelData(data.channel);
+        setSavedAudioTheme(true);
+        toast.success("Audio theme saved!");
+        setTimeout(() => setSavedAudioTheme(false), 2000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to save audio theme");
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to save audio theme");
+    } finally {
+      setSavingAudioTheme(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Audio Theme Section */}
+      <section className="p-6 border border-line bg-paper-card space-y-4">
+        <div className="flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+            <span className="p-1.5 bg-signal/10 text-signal">
+              <Volume2 size={16} />
+            </span>
+            <span>Audio Theme</span>
+          </div>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5">
+            Voice & Acoustic Atmosphere
+          </span>
+        </div>
+        <p className="text-xs text-ink-muted leading-relaxed">
+          Describe the vocal tone, pacing, and acoustic mood for this channel. Used as a style instruction for Qwen3-TTS and as a creative directive for audio generation.
+        </p>
+        <form onSubmit={handleSaveAudioTheme} className="space-y-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-audio-theme-tab">
+              <Volume2 size={13} className="text-signal" />
+              <span>Audio_theme</span>
+            </label>
+            <span className="text-[10px] font-mono text-ink-muted uppercase">Voice & Acoustic Directives</span>
+          </div>
+          <textarea
+            id="field-audio-theme-tab"
+            rows={3}
+            value={audioTheme}
+            onChange={(e) => setAudioTheme(e.target.value)}
+            placeholder="e.g. Deep baritone narrator, subtle low-frequency drone (-20dB), acoustic cello swells"
+            className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
+          />
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={savingAudioTheme}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+            >
+              {savingAudioTheme ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : savedAudioTheme ? (
+                <Check size={13} />
+              ) : (
+                <Save size={13} />
+              )}
+              <span>{savingAudioTheme ? "Saving..." : savedAudioTheme ? "Saved!" : "Save Audio Theme"}</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
       {/* Header Banner */}
       <div className="p-6 border border-line bg-paper-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

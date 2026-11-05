@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   ArrowLeft,
@@ -94,9 +94,6 @@ export default function EditChannelPage() {
   const [personality, setPersonality] = useState("");
   const [brandPositioning, setBrandPositioning] = useState("");
   const [brandPromise, setBrandPromise] = useState("");
-  const [imageTheme, setImageTheme] = useState("");
-  const [thumbnailTheme, setThumbnailTheme] = useState("");
-  const [audioTheme, setAudioTheme] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("af_heart");
   const [ttsModel, setTtsModel] = useState("kokoro");
   const [customVoiceClones, setCustomVoiceClones] = useState([]);
@@ -154,9 +151,6 @@ export default function EditChannelPage() {
             setPersonality(c.personality || "");
             setBrandPositioning(c.brandPositioning || "");
             setBrandPromise(c.brandPromise || "");
-            setImageTheme(c.imageTheme || "");
-            setThumbnailTheme(c.thumbnailTheme || "");
-            setAudioTheme(c.audioTheme || "");
             setDefaultVoice(c.defaultVoice || "af_heart");
             setTtsModel(c.ttsModel || c.tts_model || "kokoro");
             setPostershiveApi(c.postershiveApi || "");
@@ -210,9 +204,6 @@ export default function EditChannelPage() {
             setPersonality(found.personality || "");
             setBrandPositioning(found.brandPositioning || "");
             setBrandPromise(found.brandPromise || "");
-            setImageTheme(found.imageTheme || "");
-            setThumbnailTheme(found.thumbnailTheme || "");
-            setAudioTheme(found.audioTheme || "");
             setDefaultVoice(found.defaultVoice || "af_heart");
             setTtsModel(found.ttsModel || found.tts_model || "kokoro");
             setPostershiveApi(found.postershiveApi || "");
@@ -310,9 +301,6 @@ export default function EditChannelPage() {
     setField(setPersonality, "personality", "tone", "voice");
     setField(setBrandPositioning, "brandPositioning", "brand_positioning", "positioning");
     setField(setBrandPromise, "brandPromise", "brand_promise", "promise");
-    setField(setImageTheme, "imageTheme", "image_theme", "imagesTheme", "visualTheme", "visual_theme");
-    setField(setThumbnailTheme, "thumbnailTheme", "thumbnail_theme", "thumbnailsTheme");
-    setField(setAudioTheme, "audioTheme", "audio_theme", "soundTheme", "voiceoverTheme");
     setField(setDefaultVoice, "defaultVoice", "default_voice", "voice_id", "narrator_voice");
     setField(setTtsModel, "ttsModel", "tts_model", "tts_engine", "ttsEngine");
     setField(setPostershiveApi, "postershiveApi", "postershive_api", "postershive", "posters_hive");
@@ -417,9 +405,6 @@ export default function EditChannelPage() {
         brand_promise: brandPromise.trim(),
       },
       creative_themes: {
-        image_theme: imageTheme.trim(),
-        thumbnail_theme: thumbnailTheme.trim(),
-        audio_theme: audioTheme.trim(),
         default_voice: defaultVoice,
         tts_model: ttsModel,
         subtitles_shorts: subtitlesShorts,
@@ -478,9 +463,6 @@ export default function EditChannelPage() {
       personality: personality.trim(),
       brandPositioning: brandPositioning.trim(),
       brandPromise: brandPromise.trim(),
-      imageTheme: imageTheme.trim(),
-      thumbnailTheme: thumbnailTheme.trim(),
-      audioTheme: audioTheme.trim(),
       defaultVoice,
       ttsModel,
       tts_model: ttsModel,
@@ -1105,26 +1087,6 @@ export default function EditChannelPage() {
               </div>
             </div>
 
-            {/* Qwen Style Instruction Link Banner */}
-            {ttsModel === "qwen" && (
-              <div className="mt-2 p-3 bg-amber-500/5 border border-amber-500/20 text-xs text-ink/80 rounded-xs space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-amber-700">
-                  <Sparkles size={13} />
-                  <span>Style Instruction Linked to Channel Audio Theme</span>
-                </div>
-                <p className="text-[11px] text-ink-muted">
-                  {audioTheme.trim() ? (
-                    <>
-                      Current instruction prompt: <em className="font-mono text-ink font-semibold">"{audioTheme.trim()}"</em> (configured in the Brand Strategy section below).
-                    </>
-                  ) : (
-                    <>
-                      No <strong>Audio_theme</strong> defined yet. Fill in the "Audio_theme" field under Brand Strategy below to give Qwen specific instructions on tone, pacing, and acoustic mood.
-                    </>
-                  )}
-                </p>
-              </div>
-            )}
           </div>
         </section>
 
@@ -1341,81 +1303,6 @@ export default function EditChannelPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* SECTION: CHANNEL IMAGE POOL CONFIGURATION */}
-        <section className="p-6 border border-line bg-paper-card space-y-6">
-          <div className="flex items-center justify-between border-b border-line pb-3">
-            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
-              <span className="p-1.5 bg-signal/10 text-signal">
-                <ImageIcon size={16} />
-              </span>
-              <span>Channel Image Pool</span>
-            </div>
-            <Link
-              href={`/dashboard/channels/${channelSlug}/image-pool`}
-              className="text-xs font-semibold text-signal hover:text-signal-hover hover:underline flex items-center gap-1"
-            >
-              <span>Manage Image Pool Assets</span> &rarr;
-            </Link>
-          </div>
-
-          <div className="p-4 border border-line bg-white/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1 max-w-xl">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-signal" />
-                <span className="text-xs font-bold text-ink">Use Image Pool for Scene Visuals</span>
-              </div>
-              <p className="text-[11px] text-ink-muted leading-relaxed">
-                When active, you can upload as many images as you like to this channel's Shorts (9:16) and Longform (16:9) pools. In any topic's studio, you can randomly populate all scene frames with one click.
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
-              <input
-                type="checkbox"
-                checked={useImagePool}
-                onChange={(e) => setUseImagePool(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-line peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-line after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-signal"></div>
-            </label>
-          </div>
-        </section>
-
-        {/* SECTION: AUDIO POST-PROCESSING CONFIGURATION */}
-        <section className="p-6 border border-line bg-paper-card space-y-6">
-          <div className="flex items-center justify-between border-b border-line pb-3">
-            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
-              <span className="p-1.5 bg-signal/10 text-signal">
-                <Sliders size={16} />
-              </span>
-              <span>Audio Post-Processing (FFmpeg Filters)</span>
-            </div>
-            <Link
-              href={`/dashboard/channels/${channelSlug}/audio-settings`}
-              className="text-xs font-semibold text-signal hover:text-signal-hover hover:underline flex items-center gap-1"
-            >
-              <span>Open Audio Settings Studio</span> &rarr;
-            </Link>
-          </div>
-
-          <div className="p-4 border border-line bg-white/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1 max-w-xl">
-              <div className="flex items-center gap-2">
-                <Volume2 size={15} className="text-signal" />
-                <span className="text-xs font-bold text-ink">Deep Voice & Pitch Modulation</span>
-              </div>
-              <p className="text-[11px] text-ink-muted leading-relaxed">
-                Configure voice pitch shift (e.g. 0.75x stoic deep voice), resonance equalizers, and custom FFmpeg filters to be applied automatically to all generated scene audios before cloud upload.
-              </p>
-            </div>
-            <Link
-              href={`/dashboard/channels/${channelSlug}/audio-settings`}
-              className="px-3.5 py-1.5 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shrink-0 cursor-pointer"
-            >
-              Configure Filters
-            </Link>
           </div>
         </section>
 
@@ -1894,70 +1781,6 @@ export default function EditChannelPage() {
                 className="w-full h-10 px-3.5 border border-line-dark bg-white text-xs text-ink outline-none focus:border-signal"
               />
             </div>
-          </div>
-        </section>
-
-        {/* SECTION 4: IMAGE_THEME, THUMBNAIL_THEME & AUDIO_THEME DIRECTIVES */}
-        <section className="p-6 border border-line bg-paper-card space-y-5">
-          <div className="flex items-center gap-2.5 text-ink font-semibold text-sm border-b border-line pb-3">
-            <span className="p-1.5 bg-signal/10 text-signal">
-              <Palette size={16} />
-            </span>
-            <span>4. Creative Themes & Studio Audio-Visual Directives</span>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-image-theme">
-                <Eye size={13} className="text-signal" />
-                <span>Image_Theme</span>
-              </label>
-              <span className="text-[10px] font-mono text-ink-muted uppercase">Scene Visual Aesthetics</span>
-            </div>
-            <textarea
-              id="field-image-theme"
-              rows={3}
-              value={imageTheme}
-              onChange={(e) => setImageTheme(e.target.value)}
-              placeholder="e.g. Clean modern aesthetic, sharp focal point, rich color grading, high quality, well-lit"
-              className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-thumbnail-theme">
-                <ImageIcon size={13} className="text-signal" />
-                <span>Thumbnail_Theme</span>
-              </label>
-              <span className="text-[10px] font-mono text-ink-muted uppercase">High-CTR Cover Directives</span>
-            </div>
-            <textarea
-              id="field-thumbnail-theme"
-              rows={3}
-              value={thumbnailTheme}
-              onChange={(e) => setThumbnailTheme(e.target.value)}
-              placeholder="e.g. Bold golden typography, dramatic high-contrast focal point, dark obsidian background, mysterious vault lighting"
-              className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-audio-theme">
-                <Volume2 size={13} className="text-signal" />
-                <span>Audio_theme</span>
-              </label>
-              <span className="text-[10px] font-mono text-ink-muted uppercase">Voice & Acoustic Atmosphere</span>
-            </div>
-            <textarea
-              id="field-audio-theme"
-              rows={3}
-              value={audioTheme}
-              onChange={(e) => setAudioTheme(e.target.value)}
-              placeholder="e.g. Deep baritone narrator, subtle low-frequency drone (-20dB), acoustic cello swells"
-              className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
-            />
           </div>
         </section>
 

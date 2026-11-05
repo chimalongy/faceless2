@@ -1,3 +1,4 @@
+import { formatImageThemeBlock } from "../image-theme.js";
 export const SCENE_GENERATION_SYSTEM_PROMPT = `You are an expert storyboard director and AI image prompt engineer for a faceless YouTube channel named {CHANNEL_NAME}.
 
 Your job is to transform the provided SCRIPT into a chronological sequence of scenes for the faceless YouTube video. Each static image is displayed on screen while its scene's \`audio_text\` is spoken.
@@ -6,8 +7,10 @@ Your job is to transform the provided SCRIPT into a chronological sequence of sc
 Channel: {CHANNEL_NAME} ({CHANNEL_NICHE})
 Description: {CHANNEL_DESCRIPTION}
 Mission: {CHANNEL_MISSION}
-Image Theme: {CHANNEL_IMAGE_THEME}
-Every image must strictly follow this visual universe (style, realism, lighting, framing, color grading).
+
+Visual Identity (Image Theme Directives):
+{CHANNEL_IMAGE_THEME}
+Understand this visual identity to ground your scene staging. Note that the visual style, character traits, wardrobe, rendering, and palette from this theme are automatically compiled into each prompt at image generation time.
 
 ## CONTENT PILLAR
 Pillar: {CONTENT_PILLAR_NAME} ({CONTENT_PILLAR_CATEGORY_TAG})
@@ -18,7 +21,12 @@ Use the pillar and tone as the strategic visual lens for mood and thematic empha
 ## MAIN CHARACTER
 Enabled: {USE_MAIN_CHARACTER}
 Description: {MAIN_CHARACTER_DESCRIPTION}
-If enabled, keep character appearance (face, hair, age, clothing) consistent across all appearances. If disabled, do not introduce a recurring character.
+
+How to Refer to the Character in Scene Prompts:
+- When staging scenes featuring the protagonist, refer to them simply as "the main character" (or natural pronouns "he" / "she").
+- DO NOT re-describe their face, hair, age, build, or wardrobe in the scene prompt — those details are already anchored in the Visual Identity and will be injected automatically at render time.
+- Focus strictly on what they are doing in that exact moment: their pose, action, gaze, and emotional expression (e.g., "The main character stands at the edge of the platform, checking his pocket watch with a tense expression").
+- If Main Character is disabled, do not introduce a recurring protagonist.
 
 ## SCRIPT
 {ACTIVE_SCRIPT}
@@ -39,10 +47,14 @@ Each scene must have:
 2. NUMBER OF IMAGES (number_of_images):
    The total count of images for this scene, matching the length of the \`images\` array.
 
-3. IMAGE PROMPTS:
-   Each \`image_prompt\` must be a concise, vivid image prompt that visualizes the spoken words.
-   Include subject, action/expression, environment, camera angle/framing, and lighting matching the Image Theme.
-   Do not include text, subtitles, captions, headlines, or watermarks.
+3. IMAGE PROMPTS (DETAILED CINEMATIC STAGING):
+   Each \`image_prompt\` must be a rich, descriptive paragraph (3 to 5 detailed sentences) establishing a complete cinematic visual composition:
+   - ACTION & MICRO-EXPRESSION: Specific physical posture, hand placement, eye gaze, micro-emotions, and exact physical interaction with objects or setting.
+   - MULTI-PLANE DEPTH (FOREGROUND, MIDGROUND, BACKGROUND): Detail what is close in the foreground framing the shot, what the main subject is doing in the midground, and how the environmental background recedes.
+   - LIGHTING & ATMOSPHERIC TEXTURE: Specific key light source and angle (e.g. harsh tungsten lamp, moonlight through blinds, neon spill), specular highlights, shadow contrast (chiaroscuro, deep silhouette), and atmosphere (floating dust motes, haze, smoke, rain).
+   - CAMERA ANGLE & LENS FRAMING: Shot type (wide establishing, low-angle medium shot, dramatic close-up), camera height/perspective, and depth of field.
+   - CHARACTER NAMING: Refer to the protagonist strictly as "the main character" (or "he" / "she") — NEVER re-describe their face, hair, age, build, or wardrobe (these are already anchored in the Visual Identity block and applied at render time).
+   - Do NOT include text, captions, subtitles, watermarks, or style buzzwords.
 
 4. TRANSITIONS (for each scene):
    Choose from: \`fade\` (default), \`crossfade\`, \`fade-to-black\`, \`fade-to-white\`, \`fade-in\`, \`fade-out\`, or \`cut\` (use \`cut\` when the next scene directly continues the current thought).
@@ -138,7 +150,7 @@ export function getSceneGenerationPrompt({
     "{CHANNEL_NICHE}": effectiveNiche,
     "{CHANNEL_DESCRIPTION}": effectiveDescription,
     "{CHANNEL_MISSION}": effectiveMission,
-    "{CHANNEL_IMAGE_THEME}": effectiveImageTheme,
+    "{CHANNEL_IMAGE_THEME}": formatImageThemeBlock(effectiveImageTheme) || effectiveImageTheme,
     "{CONTENT_PILLAR_NAME}": effectivePillarName,
     "{CONTENT_PILLAR_CATEGORY_TAG}": effectivePillarTag,
     "{CONTENT_PILLAR_TONE}": effectivePillarTone,

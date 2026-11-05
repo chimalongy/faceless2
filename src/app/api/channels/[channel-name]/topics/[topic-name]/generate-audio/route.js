@@ -111,12 +111,24 @@ export async function POST(req, context) {
       }
 
       const output = run.output;
+      if (output?.accepted && output.jobId) {
+        return NextResponse.json(
+          {
+            success: true,
+            accepted: true,
+            jobId: output.jobId,
+            totalScenes: output.totalScenes || scenes.length,
+          },
+          { status: 202 }
+        );
+      }
+
       return NextResponse.json({
         success: output.success !== false,
         totalScenes: output.totalScenes,
         completedCount: output.completedAudios,
         failedCount: output.failedAudios,
-        results: output.audios.map((a) => ({
+        results: (output.audios || []).map((a) => ({
           sceneIndex: a.sceneIndex,
           success: a.success,
           audioUrl: a.publicUrl,

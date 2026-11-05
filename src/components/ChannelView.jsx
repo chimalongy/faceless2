@@ -32,7 +32,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import ChannelShortsView from "./ChannelShortsView";
-import ChannelImagePoolView from "./ChannelImagePoolView";
+import ChannelImageSettings from "./ChannelImageSettings";
 import ChannelAudioSettingsTab from "./ChannelAudioSettingsTab";
 import ChannelVideoSettingsTab from "./ChannelVideoSettingsTab";
 import ChannelPromptSettingsTab from "./ChannelPromptSettingsTab";
@@ -783,7 +783,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
             }`}
           >
             <ImageIcon size={14} className="text-signal" />
-            <span>Image Pool</span>
+            <span>Image Settings</span>
           </Link>
 
           <Link
@@ -1223,7 +1223,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
 
           {/* TAB 6: IMAGE POOL */}
           {activeTab === "image-pool" && (
-            <ChannelImagePoolView
+            <ChannelImageSettings
               channelSlug={channelSlug}
               channelTitle={channelTitle}
               useImagePool={Boolean(channelProfile?.useImagePool ?? channelProfile?.use_image_pool)}

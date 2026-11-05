@@ -1,4 +1,4 @@
-import { getDbSql, initDbSchema } from "./db.js";
+import { getDbSql, initDbSchema, getDbUrl } from "./db.js";
 
 /**
  * Get the configured maximum audio generations allowed per URL per month.
@@ -526,7 +526,8 @@ export async function bulkGenerateAudio({
       : explicitModel.includes("fish")
         ? "fish"
         : await getVoiceModel(voice);
-    if (chosenModel === "fish" && !process.env.DATABASE_URL) {
+    const dbUrl = getDbUrl();
+    if (chosenModel === "fish" && !dbUrl) {
       throw new Error("DATABASE_URL is required to register Fish bulk audio in the database.");
     }
     const baseUrl = await resolveModalVoiceCloneUrl(chosenModel);
@@ -540,12 +541,13 @@ export async function bulkGenerateAudio({
       speed: Number(speed) || 1.0,
       audio_effects: audioEffects,
       r2_credentials: r2Credentials,
-      ...(chosenModel === "fish" ? { database_url: process.env.DATABASE_URL } : {}),
+      ...(dbUrl ? { database_url: dbUrl } : {}),
     };
   } else if ((ttsModel && ttsModel.toLowerCase().startsWith("qwen")) || isQwenVoice(voice)) {
     const targetBase = await resolveModalQwenTtsUrl();
     targetUrl = `${cleanBaseUrl(targetBase)}/bulk-generate`;
     const resolvedSpeaker = isQwenVoice(voice) ? voice : "Ryan";
+    const dbUrl = getDbUrl();
     payload = {
       speaker: resolvedSpeaker,
       voice: resolvedSpeaker,
@@ -557,6 +559,7 @@ export async function bulkGenerateAudio({
       speed: Number(speed) || 1.0,
       audio_effects: audioEffects,
       r2_credentials: r2Credentials,
+      ...(dbUrl ? { database_url: dbUrl } : {}),
     };
   } else {
     // Kokoro-82M
@@ -587,10 +590,21 @@ export async function bulkGenerateAudio({
         ...(url === targetUrl ? { body: JSON.stringify(payload) } : {}),
         signal: controller.signal,
       });
-      const responseData = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let responseData = {};
+      try {
+        responseData = JSON.parse(rawText);
+      } catch {
+        responseData = { rawText: rawText.trim() };
+      }
       if (!response.ok && response.status !== 202) {
+        const errorDetail =
+          responseData.detail ||
+          responseData.error ||
+          (responseData.rawText ? responseData.rawText.slice(0, 500) : "") ||
+          JSON.stringify(responseData);
         throw new Error(
-          `Bulk audio generation failed (HTTP ${response.status}): ${responseData.detail || responseData.error || JSON.stringify(responseData)}`
+          `Bulk audio generation failed (HTTP ${response.status}): ${errorDetail}`
         );
       }
       return { response, data: responseData };

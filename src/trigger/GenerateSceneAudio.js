@@ -29,7 +29,7 @@ export const generateSceneAudioTask = task({
     // Resolve channel context: tts_model, default_voice, audio_theme, audio_effects
     let resolvedTtsModel = payload.ttsModel || null;
     let resolvedVoice = payload.voice || payload.voiceId || null;
-    let resolvedInstruct = payload.instruct || payload.audioTheme || null;
+    let resolvedInstruct = (payload.instruct || payload.audioTheme || "").trim() || null;
     let resolvedAudioEffects = payload.audioEffects || null;
 
     try {
@@ -51,27 +51,13 @@ export const generateSceneAudioTask = task({
             resolvedVoice = ch.default_voice || (resolvedTtsModel === "qwen" ? "Ryan" : "af_heart");
           }
           if (!resolvedInstruct) {
-            resolvedInstruct = ch.audio_theme || null;
+            resolvedInstruct = (ch.audio_theme || "").trim() || null;
           }
           if (!resolvedAudioEffects && ch.audio_effects) {
             resolvedAudioEffects = ch.audio_effects;
           }
         }
 
-        // Fallback: If channel audio_theme is empty, inspect content pillar tone
-        if (!resolvedInstruct) {
-          const tRows = await sql`
-            SELECT pillar_id FROM topics WHERE slug = ${topicSlug} LIMIT 1;
-          `;
-          if (tRows?.[0]?.pillar_id) {
-            const pRows = await sql`
-              SELECT tone FROM content_pillars WHERE id = ${tRows[0].pillar_id} LIMIT 1;
-            `;
-            if (pRows?.[0]?.tone) {
-              resolvedInstruct = pRows[0].tone;
-            }
-          }
-        }
       }
     } catch (dbErr) {
       logger.warn("Could not load channel audio strategy from database:", dbErr);

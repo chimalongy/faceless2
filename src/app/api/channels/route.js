@@ -104,7 +104,14 @@ export async function POST(request) {
     const personality = body.personality?.trim() || "";
     const brandPositioning = body.brandPositioning?.trim() || "";
     const brandPromise = body.brandPromise?.trim() || "";
-    const imageTheme = body.imageTheme?.trim() || "";
+    let imageTheme = "";
+    if (body.imageTheme !== undefined && body.imageTheme !== null) {
+      if (typeof body.imageTheme === "object") {
+        imageTheme = JSON.stringify(body.imageTheme);
+      } else {
+        imageTheme = String(body.imageTheme).trim();
+      }
+    }
     const thumbnailTheme = body.thumbnailTheme?.trim() || "";
     const audioTheme = body.audioTheme?.trim() || "";
     const postershiveApi = body.postershiveApi?.trim() || body.postershive_api?.trim() || null;

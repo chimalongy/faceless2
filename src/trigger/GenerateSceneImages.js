@@ -3,6 +3,7 @@ import { generateImage } from "@/lib/image-generator";
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
 import { getImageIndex } from "@/lib/scene-images";
+import { buildFullImagePrompt } from "@/lib/image-theme";
 
 export const generateSceneImagesTask = task({
   id: "generate-scene-images",
@@ -49,6 +50,20 @@ export const generateSceneImagesTask = task({
       ];
     } else {
       throw new Error("Either a valid scenes array or (sceneIndex + prompt) is required for generate-scene-images task.");
+    }
+
+    // Fetch channel image theme to ensure persistent visual identity across frames
+    let channelVisualIdentity = globalThemePrompt || "";
+    try {
+      const sql = getDbSql();
+      if (sql && channelSlug) {
+        const cRows = await sql`SELECT image_theme FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
+        if (cRows?.[0]?.image_theme) {
+          channelVisualIdentity = cRows[0].image_theme;
+        }
+      }
+    } catch (e) {
+      logger.warn("Could not query channel image_theme in generateSceneImagesTask:", e);
     }
 
     // Expand scenes into individual frame generation tasks to support multiple images per scene
@@ -132,7 +147,10 @@ export const generateSceneImagesTask = task({
       }
 
       const scenePromptText = taskItem.prompt || "";
-      const fullPrompt = `${globalThemePrompt} ${scenePromptText}`.trim();
+      const effectiveTheme = channelVisualIdentity || globalThemePrompt;
+      const fullPrompt = effectiveTheme
+        ? buildFullImagePrompt(effectiveTheme, scenePromptText)
+        : scenePromptText.trim();
 
       if (!fullPrompt) {
         logger.warn(`Skipping Scene ${currentSceneIndex} Frame #${currentFrameIndex} due to empty prompt.`);

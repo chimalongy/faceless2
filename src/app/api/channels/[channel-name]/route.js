@@ -115,6 +115,15 @@ export async function PUT(request, { params }) {
       }
     }
 
+    let imageThemeValue = null;
+    if (body.imageTheme !== undefined) {
+      if (typeof body.imageTheme === "object" && body.imageTheme !== null) {
+        imageThemeValue = JSON.stringify(body.imageTheme);
+      } else if (typeof body.imageTheme === "string") {
+        imageThemeValue = body.imageTheme.trim() || null;
+      }
+    }
+
     const updated = await sql`
       UPDATE channels
       SET
@@ -132,7 +141,7 @@ export async function PUT(request, { params }) {
         personality = ${body.personality || null},
         brand_positioning = ${body.brandPositioning || null},
         brand_promise = ${body.brandPromise || null},
-        image_theme = ${body.imageTheme || null},
+        image_theme = ${body.imageTheme !== undefined ? imageThemeValue : sql`image_theme`},
         thumbnail_theme = ${body.thumbnailTheme || null},
         audio_theme = ${body.audioTheme || null},
         banner_url = ${body.bannerUrl !== undefined ? body.bannerUrl : null},
