@@ -28,14 +28,20 @@ export async function POST(req, context) {
         );
       }
 
-      const fullPrompt = `${globalThemePrompt} ${prompt}`.trim();
+      const shotType = body.shotType || body.shot_type || "";
+      const cameraAngle = body.cameraAngle || body.camera_angle || "";
+      const lens = body.lens || "";
 
       console.log(`[GenerateImagesRoute] Triggering Trigger.dev task "generate-scene-images" for ${channelSlug}/${topicSlug} (Scene ${sceneIndex} Frame #${imageIndex})...`);
 
       const handle = await tasks.trigger("generate-scene-images", {
         channelSlug,
         topicSlug,
-        prompt: fullPrompt,
+        prompt: prompt.trim(),
+        shotType,
+        cameraAngle,
+        lens,
+        globalThemePrompt,
         sceneIndex,
         imageIndex,
         ...(body.width ? { width: body.width } : {}),

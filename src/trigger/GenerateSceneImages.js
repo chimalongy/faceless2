@@ -15,6 +15,9 @@ export const generateSceneImagesTask = task({
       sceneIndex = null,
       imageIndex = null,
       prompt = "",
+      shotType = "",
+      cameraAngle = "",
+      lens = "",
       globalThemePrompt = "",
       width = 1376,
       height = 768,
@@ -42,6 +45,9 @@ export const generateSceneImagesTask = task({
           scene_number: sceneIndex,
           imageIndex: imageIndex ? Number(imageIndex) : 1,
           image_prompt: prompt,
+          shot_type: payload.shot_type || shotType,
+          camera_angle: payload.camera_angle || cameraAngle,
+          lens: payload.lens || lens,
           width,
           height,
           numInferenceSteps,
@@ -75,10 +81,17 @@ export const generateSceneImagesTask = task({
 
       if (isSingleScene) {
         const targetFrameIndex = imageIndex ? Number(imageIndex) : (scene.imageIndex ? Number(scene.imageIndex) : 1);
+        const resolvedShotType = payload.shot_type || payload.shotType || scene.shot_type || scene.shotType || shotType || "";
+        const resolvedCameraAngle = payload.camera_angle || payload.cameraAngle || scene.camera_angle || scene.cameraAngle || cameraAngle || "";
+        const resolvedLens = payload.lens || scene.lens || lens || "";
+
         frameTasks.push({
           sceneNumber: sNum,
           imageIndex: targetFrameIndex,
           prompt: scene.image_prompt || prompt,
+          shotType: resolvedShotType,
+          cameraAngle: resolvedCameraAngle,
+          lens: resolvedLens,
           seed: scene.seed !== undefined ? scene.seed : seed,
           width: scene.width || width,
           height: scene.height || height,
@@ -91,10 +104,17 @@ export const generateSceneImagesTask = task({
         const hasMultiple = scene.images.length > 1 || Number(scene.number_of_images) > 1;
         scene.images.forEach((imgDef, i) => {
           const fIndex = imgDef.image_number ? Number(imgDef.image_number) : (i + 1);
+          const resolvedShotType = imgDef.shot_type || imgDef.shotType || scene.shot_type || scene.shotType || "";
+          const resolvedCameraAngle = imgDef.camera_angle || imgDef.cameraAngle || scene.camera_angle || scene.cameraAngle || "";
+          const resolvedLens = imgDef.lens || scene.lens || "";
+
           frameTasks.push({
             sceneNumber: sNum,
             imageIndex: fIndex,
             prompt: imgDef.image_prompt || imgDef.prompt || scene.image_prompt || "",
+            shotType: resolvedShotType,
+            cameraAngle: resolvedCameraAngle,
+            lens: resolvedLens,
             seed: imgDef.seed !== undefined ? imgDef.seed : scene.seed,
             width: scene.width || width,
             height: scene.height || height,
@@ -106,10 +126,17 @@ export const generateSceneImagesTask = task({
         });
       } else {
         const hasMultiple = Number(scene.number_of_images) > 1;
+        const resolvedShotType = scene.shot_type || scene.shotType || "";
+        const resolvedCameraAngle = scene.camera_angle || scene.cameraAngle || "";
+        const resolvedLens = scene.lens || "";
+
         frameTasks.push({
           sceneNumber: sNum,
           imageIndex: scene.imageIndex || 1,
           prompt: scene.image_prompt || scene.prompt || scene.visual_prompt || scene.description || "",
+          shotType: resolvedShotType,
+          cameraAngle: resolvedCameraAngle,
+          lens: resolvedLens,
           seed: scene.seed,
           width: scene.width || width,
           height: scene.height || height,
@@ -148,9 +175,14 @@ export const generateSceneImagesTask = task({
 
       const scenePromptText = taskItem.prompt || "";
       const effectiveTheme = channelVisualIdentity || globalThemePrompt;
+      const cameraOptions = {
+        shotType: taskItem.shotType,
+        cameraAngle: taskItem.cameraAngle,
+        lens: taskItem.lens,
+      };
       const fullPrompt = effectiveTheme
-        ? buildFullImagePrompt(effectiveTheme, scenePromptText)
-        : scenePromptText.trim();
+        ? buildFullImagePrompt(effectiveTheme, scenePromptText, cameraOptions)
+        : buildFullImagePrompt("", scenePromptText, cameraOptions);
 
       if (!fullPrompt) {
         logger.warn(`Skipping Scene ${currentSceneIndex} Frame #${currentFrameIndex} due to empty prompt.`);

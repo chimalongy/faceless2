@@ -14,8 +14,39 @@ import {
   Loader2,
   Move,
   Sliders,
-  Smartphone
+  Smartphone,
+  Camera
 } from "lucide-react";
+
+const SHOT_TYPES = [
+  { value: "", label: "Shot Type (Auto)" },
+  { value: "extreme_wide", label: "Extreme Wide" },
+  { value: "wide_shot", label: "Wide Shot" },
+  { value: "medium_wide", label: "Medium Wide" },
+  { value: "medium_shot", label: "Medium Shot" },
+  { value: "medium_close_up", label: "Medium Close-Up" },
+  { value: "close_up", label: "Close-Up" },
+  { value: "extreme_close_up", label: "Extreme Close-Up" },
+];
+
+const CAMERA_ANGLES = [
+  { value: "", label: "Angle (Auto)" },
+  { value: "eye_level", label: "Eye Level" },
+  { value: "low_angle", label: "Low Angle" },
+  { value: "high_angle", label: "High Angle" },
+  { value: "overhead_birds_eye", label: "Bird's Eye" },
+  { value: "ground_level_worms_eye", label: "Worm's Eye" },
+  { value: "dutch_angle", label: "Dutch Angle" },
+];
+
+const LENS_OPTIONS = [
+  { value: "", label: "Lens (Auto)" },
+  { value: "24mm wide-angle", label: "24mm Wide" },
+  { value: "35mm cinematic", label: "35mm Cinematic" },
+  { value: "50mm standard prime", label: "50mm Prime" },
+  { value: "85mm portrait compression", label: "85mm Bokeh" },
+  { value: "100mm macro", label: "100mm Macro" },
+];
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
@@ -126,6 +157,9 @@ export default function ScenesTab({
           .map((img, imgIdx) => ({
             image_number: Number(img.image_number || img.number || imgIdx + 1),
             image_prompt: String(img.image_prompt || img.prompt || img.visual_prompt || "").trim(),
+            shot_type: String(img.shot_type || img.shotType || item.shot_type || item.shotType || "").trim(),
+            camera_angle: String(img.camera_angle || img.cameraAngle || item.camera_angle || item.cameraAngle || "").trim(),
+            lens: String(img.lens || item.lens || "").trim(),
           }))
           .filter((img) => Boolean(img.image_prompt));
 
@@ -134,6 +168,9 @@ export default function ScenesTab({
           normalizedImages.push({
             image_number: 1,
             image_prompt: topLevelPrompt,
+            shot_type: String(item.shot_type || item.shotType || "").trim(),
+            camera_angle: String(item.camera_angle || item.cameraAngle || "").trim(),
+            lens: String(item.lens || "").trim(),
           });
         }
 
@@ -146,6 +183,9 @@ export default function ScenesTab({
           number_of_images: numberOfImages,
           images: normalizedImages,
           image_prompt: primaryPrompt,
+          shot_type: normalizedImages[0]?.shot_type || String(item.shot_type || item.shotType || "").trim(),
+          camera_angle: normalizedImages[0]?.camera_angle || String(item.camera_angle || item.cameraAngle || "").trim(),
+          lens: normalizedImages[0]?.lens || String(item.lens || "").trim(),
           transition,
           ken_burns: {
             direction,
@@ -324,6 +364,38 @@ export default function ScenesTab({
     }
   }
 
+  // Update framing parameters for an individual frame
+  function handleUpdateSceneImageFraming(sceneIndex, imageIdx, field, value) {
+    try {
+      const current = [...parsedScenes];
+      if (current[sceneIndex]) {
+        const targetScene = current[sceneIndex];
+        const imgs = Array.isArray(targetScene.images) && targetScene.images.length > 0
+          ? [...targetScene.images]
+          : [{ image_number: 1, image_prompt: targetScene.image_prompt || "" }];
+
+        imgs[imageIdx] = {
+          ...imgs[imageIdx],
+          [field]: value,
+        };
+
+        const updatedScene = {
+          ...targetScene,
+          images: imgs,
+        };
+        if (imageIdx === 0) {
+          updatedScene[field] = value;
+        }
+
+        current[sceneIndex] = updatedScene;
+        setScenesJson(JSON.stringify(current, null, 2));
+        setJsonError("");
+      }
+    } catch (err) {
+      setJsonError("Error updating framing: " + err.message);
+    }
+  }
+
   // Add a new scene to the array
   function handleAddNewScene() {
     try {
@@ -333,8 +405,19 @@ export default function ScenesTab({
         scene_number: nextNum,
         audio_text: "",
         number_of_images: 1,
-        images: [{ image_number: 1, image_prompt: "" }],
+        images: [
+          {
+            image_number: 1,
+            image_prompt: "",
+            shot_type: "medium_shot",
+            camera_angle: "eye_level",
+            lens: "50mm standard prime",
+          },
+        ],
         image_prompt: "",
+        shot_type: "medium_shot",
+        camera_angle: "eye_level",
+        lens: "50mm standard prime",
         transition: "fade",
         ken_burns: {
           direction: "zoom-in",
@@ -576,6 +659,11 @@ export default function ScenesTab({
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-purple-700 bg-purple-50 border border-purple-200 rounded-sm">
                       Transition: {scene.transition || "fade"}
                     </span>
+                    {(scene.shot_type || scene.camera_angle || scene.lens) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-sm" title="Camera Framing">
+                        <Camera size={10} /> {[scene.shot_type?.replace(/_/g, " "), scene.camera_angle?.replace(/_/g, " "), scene.lens].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </div>
 
                   <button
@@ -625,10 +713,10 @@ export default function ScenesTab({
                     {Array.isArray(scene.images) && scene.images.length > 1 ? (
                       <div className="space-y-2.5">
                         {scene.images.map((img, imgIdx) => (
-                          <div key={imgIdx} className="space-y-1 bg-paper-dark/30 p-2 border border-line/60 rounded-xs">
+                          <div key={imgIdx} className="space-y-2 bg-paper-dark/30 p-2.5 border border-line/60 rounded-xs">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-mono font-semibold text-signal">
-                                Image #{img.image_number || imgIdx + 1}
+                              <span className="text-[10px] font-mono font-semibold text-signal flex items-center gap-1">
+                                <Camera size={11} /> Image #{img.image_number || imgIdx + 1}
                               </span>
                               {scene.images.length > 1 && (
                                 <button
@@ -641,6 +729,43 @@ export default function ScenesTab({
                                 </button>
                               )}
                             </div>
+
+                            {/* Camera Framing Selectors */}
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <select
+                                value={img.shot_type || ""}
+                                onChange={(e) => handleUpdateSceneImageFraming(idx, imgIdx, "shot_type", e.target.value)}
+                                className="h-6 px-1.5 border border-line bg-white text-[10px] font-mono text-ink outline-none focus:border-signal cursor-pointer truncate"
+                                title="Shot framing distance"
+                              >
+                                {SHOT_TYPES.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+
+                              <select
+                                value={img.camera_angle || ""}
+                                onChange={(e) => handleUpdateSceneImageFraming(idx, imgIdx, "camera_angle", e.target.value)}
+                                className="h-6 px-1.5 border border-line bg-white text-[10px] font-mono text-ink outline-none focus:border-signal cursor-pointer truncate"
+                                title="Camera elevation / perspective"
+                              >
+                                {CAMERA_ANGLES.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+
+                              <select
+                                value={img.lens || ""}
+                                onChange={(e) => handleUpdateSceneImageFraming(idx, imgIdx, "lens", e.target.value)}
+                                className="h-6 px-1.5 border border-line bg-white text-[10px] font-mono text-ink outline-none focus:border-signal cursor-pointer truncate"
+                                title="Optical focal length / compression"
+                              >
+                                {LENS_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+
                             <textarea
                               rows={2}
                               value={img.image_prompt || ""}
@@ -652,23 +777,70 @@ export default function ScenesTab({
                         ))}
                       </div>
                     ) : (
-                      <textarea
-                        rows={4}
-                        value={
-                          scene.images?.[0]?.image_prompt !== undefined
-                            ? scene.images[0].image_prompt
-                            : scene.image_prompt || ""
-                        }
-                        onChange={(e) => {
-                          if (Array.isArray(scene.images) && scene.images.length > 0) {
-                            handleUpdateSceneImagePrompt(idx, 0, e.target.value);
-                          } else {
-                            handleUpdateSceneField(idx, "image_prompt", e.target.value);
+                      <div className="space-y-2">
+                        {/* Single Scene Camera Framing Selectors */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <select
+                            value={scene.images?.[0]?.shot_type || scene.shot_type || ""}
+                            onChange={(e) => {
+                              handleUpdateSceneImageFraming(idx, 0, "shot_type", e.target.value);
+                              handleUpdateSceneField(idx, "shot_type", e.target.value);
+                            }}
+                            className="h-7 px-2 border border-line bg-white text-[11px] font-mono text-ink outline-none focus:border-signal cursor-pointer truncate"
+                            title="Shot framing distance"
+                          >
+                            {SHOT_TYPES.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+
+                          <select
+                            value={scene.images?.[0]?.camera_angle || scene.camera_angle || ""}
+                            onChange={(e) => {
+                              handleUpdateSceneImageFraming(idx, 0, "camera_angle", e.target.value);
+                              handleUpdateSceneField(idx, "camera_angle", e.target.value);
+                            }}
+                            className="h-7 px-2 border border-line bg-white text-[11px] font-mono text-ink outline-none focus:border-signal cursor-pointer truncate"
+                            title="Camera elevation / perspective"
+                          >
+                            {CAMERA_ANGLES.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+
+                          <select
+                            value={scene.images?.[0]?.lens || scene.lens || ""}
+                            onChange={(e) => {
+                              handleUpdateSceneImageFraming(idx, 0, "lens", e.target.value);
+                              handleUpdateSceneField(idx, "lens", e.target.value);
+                            }}
+                            className="h-7 px-2 border border-line bg-white text-[11px] font-mono text-ink outline-none focus:border-signal cursor-pointer truncate"
+                            title="Optical focal length / compression"
+                          >
+                            {LENS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <textarea
+                          rows={3}
+                          value={
+                            scene.images?.[0]?.image_prompt !== undefined
+                              ? scene.images[0].image_prompt
+                              : scene.image_prompt || ""
                           }
-                        }}
-                        placeholder="Enter visual imagery prompt and scenery details..."
-                        className="w-full p-3.5 border border-line bg-white font-sans text-xs text-ink leading-relaxed outline-none focus:border-signal resize-y"
-                      />
+                          onChange={(e) => {
+                            if (Array.isArray(scene.images) && scene.images.length > 0) {
+                              handleUpdateSceneImagePrompt(idx, 0, e.target.value);
+                            } else {
+                              handleUpdateSceneField(idx, "image_prompt", e.target.value);
+                            }
+                          }}
+                          placeholder="Enter visual imagery prompt and scenery details..."
+                          className="w-full p-3 border border-line bg-white font-sans text-xs text-ink leading-relaxed outline-none focus:border-signal resize-y"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>

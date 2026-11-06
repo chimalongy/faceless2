@@ -287,6 +287,9 @@ export default function ImagesTab({
             audio_text: item.audio_text ?? item.narration ?? item.script ?? item.voiceover ?? item.text,
             number_of_images: item.number_of_images,
             images: Array.isArray(item.images) ? item.images : undefined,
+            shot_type: item.shot_type || item.shotType,
+            camera_angle: item.camera_angle || item.cameraAngle,
+            lens: item.lens,
           });
         }
       });
@@ -299,6 +302,9 @@ export default function ImagesTab({
           if (item.audio_text !== undefined) next.audio_text = item.audio_text;
           if (item.number_of_images !== undefined) next.number_of_images = item.number_of_images;
           if (item.images !== undefined) next.images = item.images;
+          if (item.shot_type !== undefined) next.shot_type = item.shot_type;
+          if (item.camera_angle !== undefined) next.camera_angle = item.camera_angle;
+          if (item.lens !== undefined) next.lens = item.lens;
           return next;
         }
         return s;

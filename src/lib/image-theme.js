@@ -201,16 +201,63 @@ export function formatImageThemeBlock(theme) {
 }
 
 /**
- * Builds the complete prompt with Visual Identity, Scene, and Image Generation Instructions,
- * exactly matching the Qwen Image Studio architecture.
+ * Formats camera framing, angle, and lens options into a concise framing tag
+ * to prepend to the scene prompt for AI image generation models.
+ *
+ * @param {object} [cameraOptions={}]
+ * @param {string} [cameraOptions.shotType] - e.g. "extreme_wide", "medium_shot", "close_up"
+ * @param {string} [cameraOptions.cameraAngle] - e.g. "low_angle", "eye_level", "dutch_angle"
+ * @param {string} [cameraOptions.lens] - e.g. "35mm cinematic", "85mm portrait compression"
+ * @returns {string} e.g. "[Framing: Medium Shot, Low Angle, 85mm portrait compression]" or ""
+ */
+export function formatCameraFraming(cameraOptions = {}) {
+  if (!cameraOptions || typeof cameraOptions !== "object") return "";
+
+  const shotType = (cameraOptions.shotType || cameraOptions.shot_type || "").trim();
+  const cameraAngle = (cameraOptions.cameraAngle || cameraOptions.camera_angle || "").trim();
+  const lens = (cameraOptions.lens || "").trim();
+
+  const parts = [];
+
+  if (shotType) {
+    const readable = shotType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    parts.push(readable.toLowerCase().includes("shot") ? readable : `${readable} Shot`);
+  }
+
+  if (cameraAngle) {
+    const readable = cameraAngle.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    parts.push(readable.toLowerCase().includes("angle") ? readable : `${readable} Angle`);
+  }
+
+  if (lens) {
+    parts.push(lens);
+  }
+
+  return parts.length > 0 ? `[Framing: ${parts.join(", ")}]` : "";
+}
+
+/**
+ * Builds the complete prompt with Visual Identity, Scene (including Camera Framing),
+ * and Image Generation Instructions, exactly matching the Qwen Image Studio architecture.
  *
  * @param {string|object} theme - The channel image theme
  * @param {string} scenePrompt - The specific scene description/prompt
+ * @param {object} [cameraOptions={}] - Optional camera framing parameters ({ shotType, cameraAngle, lens })
  * @returns {string}
  */
-export function buildFullImagePrompt(theme, scenePrompt = "") {
+export function buildFullImagePrompt(theme, scenePrompt = "", cameraOptions = {}) {
   const visualIdentityBlock = formatImageThemeBlock(theme);
   const cleanScene = (scenePrompt || "").trim();
+  const framingTag = formatCameraFraming(cameraOptions);
+
+  let sceneBlockContent = "";
+  if (framingTag && cleanScene) {
+    sceneBlockContent = `${framingTag}\n${cleanScene}`;
+  } else if (framingTag) {
+    sceneBlockContent = framingTag;
+  } else if (cleanScene) {
+    sceneBlockContent = cleanScene;
+  }
 
   const instructions = `IMAGE GENERATION INSTRUCTIONS
 
@@ -231,8 +278,8 @@ The image should look like part of the same visual production as other scenes us
     sections.push(visualIdentityBlock);
   }
 
-  if (cleanScene) {
-    sections.push(`SCENE\n\n${cleanScene}`);
+  if (sceneBlockContent) {
+    sections.push(`SCENE\n\n${sceneBlockContent}`);
   }
 
   sections.push(instructions);

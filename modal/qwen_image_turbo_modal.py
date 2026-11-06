@@ -105,10 +105,16 @@ def generate(request: dict):
     if not isinstance(prompt, str) or not prompt.strip():
         raise HTTPException(status_code=400, detail="prompt is required")
 
+    clean_prompt = prompt.strip()
     req_width = request.get("width", 1376)
     req_height = request.get("height", 768)
     req_seed = request.get("seed")
     num_inference_steps = request.get("num_inference_steps", None)
+
+    print("=" * 80)
+    print(f"[QwenImageTurbo] Received generation request (Requested: {req_width}x{req_height}, Seed: {req_seed}, Steps: {num_inference_steps})")
+    print(f"[QwenImageTurbo] Generating Image with Prompt:\n{clean_prompt}")
+    print("=" * 80, flush=True)
 
     import random
     if req_seed is None:
@@ -135,7 +141,7 @@ def generate(request: dict):
 
     pipe = get_pipeline()
     pipe_kwargs = {
-        "prompt": prompt.strip(),
+        "prompt": clean_prompt,
         "width": w,
         "height": h,
         "use_kv_cache": True,

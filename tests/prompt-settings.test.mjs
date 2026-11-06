@@ -171,4 +171,19 @@ test("scriptStructureToText and formatScriptStructureForPrompt support plain tex
   assert.equal(scriptStructureToText("   "), DEFAULT_SCRIPT_STRUCTURE_TEXT);
 });
 
+test("SCENE_GENERATION_SYSTEM_PROMPT includes camera framing, angle, and lens directives", () => {
+  assert.ok(SCENE_GENERATION_SYSTEM_PROMPT.includes("CAMERA FRAMING, ANGLE & LENS"));
+  assert.ok(SCENE_GENERATION_SYSTEM_PROMPT.includes("shot_type"));
+  assert.ok(SCENE_GENERATION_SYSTEM_PROMPT.includes("camera_angle"));
+  assert.ok(SCENE_GENERATION_SYSTEM_PROMPT.includes("lens"));
+  assert.ok(SCENE_GENERATION_SYSTEM_PROMPT.includes("extreme_wide"));
+  assert.ok(SCENE_GENERATION_SYSTEM_PROMPT.includes("85mm portrait compression"));
+});
 
+test("SHORT_SCENE_GENERATION_SYSTEM_PROMPT includes vertical camera framing, angle, and lens directives", () => {
+  assert.ok(SHORT_SCENE_GENERATION_SYSTEM_PROMPT.includes("CAMERA FRAMING, ANGLE & LENS"));
+  assert.ok(SHORT_SCENE_GENERATION_SYSTEM_PROMPT.includes("shot_type"));
+  assert.ok(SHORT_SCENE_GENERATION_SYSTEM_PROMPT.includes("camera_angle"));
+  assert.ok(SHORT_SCENE_GENERATION_SYSTEM_PROMPT.includes("lens"));
+  assert.ok(SHORT_SCENE_GENERATION_SYSTEM_PROMPT.includes("dutch_angle"));
+});

@@ -58,10 +58,34 @@ Each scene must have:
    - CHARACTER NAMING: Refer to the protagonist strictly as "the main character" (or "he" / "she") — NEVER re-describe their face, hair, age, build, or wardrobe (these are already anchored in the Visual Identity block and applied at render time).
    - Do NOT include text, captions, subtitles, watermarks, or style buzzwords.
 
-4. TRANSITIONS (for each scene):
+4. CAMERA FRAMING, ANGLE & LENS (MANDATORY FOR EVERY IMAGE):
+   For every image in the \`images\` array, you MUST assign explicit camera parameters to control framing and ensure rapid visual momentum across vertical scenes. Intentionally alternate tight angles with dynamic wider perspectives:
+   - \`shot_type\`: Framing distance. Choose exactly one of:
+     - \`extreme_wide\` (sweeping high-scale vertical context)
+     - \`wide_shot\` (full vertical body shot in environment)
+     - \`medium_wide\` (waist/knees up vertical composition)
+     - \`medium_shot\` (standard vertical torso/action framing)
+     - \`medium_close_up\` (chest/shoulders up, high-impact face/gesture)
+     - \`close_up\` (tight vertical portrait filling phone screen, intense eyes/expression)
+     - \`extreme_close_up\` (macro punch-in on critical object, phone, hands)
+   - \`camera_angle\`: Camera angle. Choose exactly one of:
+     - \`eye_level\` (grounded eye-level perspective)
+     - \`low_angle\` (heroic, intimidating, punchy vertical low-angle)
+     - \`high_angle\` (dramatic bird's-eye downward tilt)
+     - \`overhead_birds_eye\` (direct 90-degree top-down phone framing)
+     - \`ground_level_worms_eye\` (ground-up vertical perspective)
+     - \`dutch_angle\` (dynamic tilted vertical composition, urgency)
+   - \`lens\`: Optical focal length. Choose exactly one of:
+     - \`24mm wide-angle\` (wide vertical field of view, dynamic edge perspective)
+     - \`35mm cinematic\` (natural mobile documentary perspective)
+     - \`50mm standard prime\` (true-to-life vertical portraiture)
+     - \`85mm portrait compression\` (subject isolation, blurred background bokeh)
+     - \`100mm macro\` (macro focus on small details)
+
+5. TRANSITIONS (for each scene):
    Choose from: \`cut\` (preferred for fast momentum in shorts), \`fade\` (default), \`crossfade\`, \`fade-to-black\`, \`fade-to-white\`, \`fade-in\`, or \`fade-out\`.
 
-5. KEN BURNS:
+6. KEN BURNS:
    Choose one motion direction: \`zoom-in\` (dynamic punch-in), \`zoom-out\`, \`pan-down\`, \`pan-up\`, \`pan-left\`, or \`pan-right\`.
 
 ## OUTPUT FORMAT
@@ -75,11 +99,17 @@ Return ONLY a valid raw JSON array. Start directly with [ and end with ]. No mar
     "images": [
       {
         "image_number": 1,
-        "image_prompt": "Vertical 9:16 portrait composition, visual prompt matching the spoken beat..."
+        "image_prompt": "Vertical 9:16 portrait composition, visual prompt matching the spoken beat...",
+        "shot_type": "medium_shot",
+        "camera_angle": "low_angle",
+        "lens": "35mm cinematic"
       },
       {
         "image_number": 2,
-        "image_prompt": "Vertical 9:16 portrait composition, visual prompt matching the spoken beat..."
+        "image_prompt": "Vertical 9:16 portrait composition, visual prompt matching the spoken beat...",
+        "shot_type": "close_up",
+        "camera_angle": "eye_level",
+        "lens": "85mm portrait compression"
       }
     ],
     "transition": "cut",

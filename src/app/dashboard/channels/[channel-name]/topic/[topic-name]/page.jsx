@@ -1404,6 +1404,14 @@ export default function TopicStudioPage() {
       return;
     }
 
+    const targetImage = (imageIndex !== null && imageIndex !== undefined && Array.isArray(scene?.images) && scene.images[imageIndex - 1])
+      ? scene.images[imageIndex - 1]
+      : (scene?.images?.[0] || scene);
+
+    const shotType = targetImage?.shot_type || targetImage?.shotType || scene?.shot_type || scene?.shotType || "";
+    const cameraAngle = targetImage?.camera_angle || targetImage?.cameraAngle || scene?.camera_angle || scene?.cameraAngle || "";
+    const lens = targetImage?.lens || scene?.lens || "";
+
     const genKey = imageIndex ? `${sceneNum}_${imageIndex}` : sceneNum;
     setGeneratingSceneImages((prev) => ({ ...prev, [genKey]: true, [sceneNum]: true }));
 
@@ -1415,6 +1423,9 @@ export default function TopicStudioPage() {
           sceneIndex: sceneNum,
           imageIndex: imageIndex || 1,
           prompt,
+          shotType,
+          cameraAngle,
+          lens,
           width: isShort ? 768 : 1376,
           height: isShort ? 1376 : 768,
         }),

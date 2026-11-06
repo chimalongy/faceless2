@@ -56,10 +56,34 @@ Each scene must have:
    - CHARACTER NAMING: Refer to the protagonist strictly as "the main character" (or "he" / "she") — NEVER re-describe their face, hair, age, build, or wardrobe (these are already anchored in the Visual Identity block and applied at render time).
    - Do NOT include text, captions, subtitles, watermarks, or style buzzwords.
 
-4. TRANSITIONS (for each scene):
+4. CAMERA FRAMING, ANGLE & LENS (MANDATORY FOR EVERY IMAGE):
+   For every image in the \`images\` array, you MUST assign explicit camera parameters to control framing and ensure cinematic rhythm across scenes. Intentionally vary these values across sequential scenes (e.g. alternate wide shots, medium shots, and intimate close-ups):
+   - \`shot_type\`: Specifies framing distance. Choose exactly one of:
+     - \`extreme_wide\` (expansive environmental establishing shot)
+     - \`wide_shot\` (full subject head-to-toe with surrounding context)
+     - \`medium_wide\` (subject from knees up, balancing subject and setting)
+     - \`medium_shot\` (subject from waist up, standard cinematic storytelling)
+     - \`medium_close_up\` (subject from chest/shoulders up, focus and tension)
+     - \`close_up\` (head and shoulders filling frame, facial micro-expressions)
+     - \`extreme_close_up\` (hyper-focused detail: eyes, hands, key object)
+   - \`camera_angle\`: Specifies camera height and angle. Choose exactly one of:
+     - \`eye_level\` (neutral, relatable eye-height angle)
+     - \`low_angle\` (looking up from below, creates power, tension, or scale)
+     - \`high_angle\` (looking down from above, conveys vulnerability or overview)
+     - \`overhead_birds_eye\` (direct 90-degree top-down perspective)
+     - \`ground_level_worms_eye\` (camera at floor/ground height looking upwards)
+     - \`dutch_angle\` (tilted horizon, conveys disorientation or psychological tension)
+   - \`lens\`: Specifies optical focal length and depth of field. Choose exactly one of:
+     - \`24mm wide-angle\` (deep focus, expansive field of view)
+     - \`35mm cinematic\` (natural documentary street perspective with wide context)
+     - \`50mm standard prime\` (natural human eye perspective, balanced proportion)
+     - \`85mm portrait compression\` (shallow depth of field, sharp subject isolation, creamy bokeh)
+     - \`100mm macro\` (extreme optical magnification for fine textures and minute objects)
+
+5. TRANSITIONS (for each scene):
    Choose from: \`fade\` (default), \`crossfade\`, \`fade-to-black\`, \`fade-to-white\`, \`fade-in\`, \`fade-out\`, or \`cut\` (use \`cut\` when the next scene directly continues the current thought).
 
-5. KEN BURNS:
+6. KEN BURNS:
    Choose one motion direction: \`zoom-in\`, \`zoom-out\`, \`pan-left\`, \`pan-right\`, \`pan-up\`, or \`pan-down\`.
 
 ## OUTPUT FORMAT
@@ -73,11 +97,17 @@ Return ONLY a valid raw JSON array. Start directly with [ and end with ]. No mar
     "images": [
       {
         "image_number": 1,
-        "image_prompt": "Visual prompt matching the scene..."
+        "image_prompt": "Visual prompt matching the scene...",
+        "shot_type": "medium_shot",
+        "camera_angle": "eye_level",
+        "lens": "50mm standard prime"
       },
       {
         "image_number": 2,
-        "image_prompt": "Visual prompt matching the scene..."
+        "image_prompt": "Visual prompt matching the scene...",
+        "shot_type": "close_up",
+        "camera_angle": "low_angle",
+        "lens": "85mm portrait compression"
       }
     ],
     "transition": "fade",

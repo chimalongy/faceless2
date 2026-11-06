@@ -322,13 +322,16 @@ export const generateScenesTask = task({
 
         const parsed = parseScenesJson(textResult);
 
-        // Format and validate scene properties (supporting both single image_prompt and new images array)
+        // Format and validate scene properties (supporting both single image_prompt and new images array, plus camera framing)
         parsedScenes = parsed.map((sc, idx) => {
           const rawImages = Array.isArray(sc.images) ? sc.images : [];
           const normalizedImages = rawImages
             .map((img, imgIdx) => ({
               image_number: Number(img.image_number || img.number || imgIdx + 1),
               image_prompt: String(img.image_prompt || img.prompt || img.visual_prompt || "").trim(),
+              shot_type: String(img.shot_type || img.shotType || sc.shot_type || sc.shotType || "").trim(),
+              camera_angle: String(img.camera_angle || img.cameraAngle || sc.camera_angle || sc.cameraAngle || "").trim(),
+              lens: String(img.lens || sc.lens || "").trim(),
             }))
             .filter((img) => Boolean(img.image_prompt));
 
@@ -338,6 +341,9 @@ export const generateScenesTask = task({
             normalizedImages.push({
               image_number: 1,
               image_prompt: topLevelPrompt,
+              shot_type: String(sc.shot_type || sc.shotType || "").trim(),
+              camera_angle: String(sc.camera_angle || sc.cameraAngle || "").trim(),
+              lens: String(sc.lens || "").trim(),
             });
           }
 
@@ -350,6 +356,9 @@ export const generateScenesTask = task({
             number_of_images: numberOfImages,
             images: normalizedImages,
             image_prompt: primaryImagePrompt,
+            shot_type: normalizedImages[0]?.shot_type || String(sc.shot_type || sc.shotType || "").trim(),
+            camera_angle: normalizedImages[0]?.camera_angle || String(sc.camera_angle || sc.cameraAngle || "").trim(),
+            lens: normalizedImages[0]?.lens || String(sc.lens || "").trim(),
             transition: String(sc.transition || sc.Transition || "fade").toLowerCase().trim(),
             ken_burns: {
               direction: sc.ken_burns?.direction || "zoom-in",
