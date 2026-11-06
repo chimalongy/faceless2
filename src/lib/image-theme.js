@@ -237,8 +237,115 @@ export function formatCameraFraming(cameraOptions = {}) {
 }
 
 /**
- * Builds the complete prompt with Visual Identity, Scene (including Camera Framing),
- * and Image Generation Instructions, exactly matching the Qwen Image Studio architecture.
+ * Determines whether the character's facial and head physical identity should be injected into the prompt.
+ * Prevents prompt pollution (e.g. forcing face, glasses, and hair into a macro shot of feet, pedals, or objects).
+ *
+ * @param {string} scenePrompt
+ * @param {object} [cameraOptions={}]
+ * @returns {boolean}
+ */
+export function shouldIncludeCharacterIdentity(scenePrompt = "", cameraOptions = {}) {
+  const prompt = (scenePrompt || "").toLowerCase();
+  const shotType = (cameraOptions.shotType || cameraOptions.shot_type || "").toLowerCase();
+  const lens = (cameraOptions.lens || "").toLowerCase();
+
+  const isMacroOrExtremeCloseUp =
+    shotType === "extreme_close_up" ||
+    lens.includes("macro") ||
+    prompt.includes("extreme close-up") ||
+    prompt.includes("macro shot");
+
+  // Facial keywords that indicate the face or head is the intended focal subject
+  const faceKeywords = [
+    "face", "eyes", "eye", "glasses", "spectacles", "expression", "gaze",
+    "smile", "frown", "stare", "glance", "brow", "lips", "mouth", "hair",
+    "forehead", "jaw", "chin", "looking at", "smirking", "grinning"
+  ];
+  const mentionsFace = faceKeywords.some((kw) => prompt.includes(kw));
+
+  // If it is a macro or extreme close-up, only include character face if the face is explicitly the subject
+  if (isMacroOrExtremeCloseUp && !mentionsFace) {
+    return false;
+  }
+
+  // If the prompt specifically targets isolated limbs, footwear, or objects and does not mention face
+  const isolatedBodyOrObject = [
+    "feet", "foot", "shoes", "sneakers", "pedal", "pedals", "hands holding",
+    "fingers", "wrist", "watch", "phone", "pocket watch", "coin", "keyboard",
+    "steering wheel", "desk", "workbench", "floor mat", "keys"
+  ];
+  const isTargetingIsolatedPart = isolatedBodyOrObject.some((term) => prompt.includes(term));
+
+  if (isTargetingIsolatedPart && !mentionsFace && (shotType === "close_up" || isMacroOrExtremeCloseUp)) {
+    return false;
+  }
+
+  // Pure environment / landscape establishing shots without human subjects
+  const hasSubjectMention =
+    prompt.includes("main character") ||
+    prompt.includes("observer") ||
+    prompt.includes("protagonist") ||
+    prompt.includes("man ") ||
+    prompt.includes("he ") ||
+    prompt.includes("his ") ||
+    prompt.includes("person");
+
+  if (shotType === "extreme_wide" && !hasSubjectMention) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Determines whether the wardrobe directives should be injected into the prompt.
+ *
+ * @param {string} scenePrompt
+ * @param {object} [cameraOptions={}]
+ * @returns {boolean}
+ */
+export function shouldIncludeWardrobe(scenePrompt = "", cameraOptions = {}) {
+  const prompt = (scenePrompt || "").toLowerCase();
+  const shotType = (cameraOptions.shotType || cameraOptions.shot_type || "").toLowerCase();
+  const lens = (cameraOptions.lens || "").toLowerCase();
+
+  const isMacroOrExtremeCloseUp = shotType === "extreme_close_up" || lens.includes("macro");
+
+  // If extreme macro focusing on an inanimate object (phone, watch, coin, book, key) with no clothing
+  const mentionsClothingOrBody = [
+    "wear", "wearing", "shoe", "shoes", "sneaker", "sneakers", "boots",
+    "jacket", "shirt", "t-shirt", "overshirt", "hoodie", "trouser", "trousers",
+    "pants", "sleeve", "pocket", "coat", "suit", "feet", "foot", "torso"
+  ];
+  const isClothingRelevant = mentionsClothingOrBody.some((kw) => prompt.includes(kw));
+
+  if (isMacroOrExtremeCloseUp && !isClothingRelevant) {
+    return false;
+  }
+
+  // Pure environment shot without human subjects
+  const hasSubjectMention =
+    prompt.includes("main character") ||
+    prompt.includes("observer") ||
+    prompt.includes("protagonist") ||
+    prompt.includes("man ") ||
+    prompt.includes("he ") ||
+    prompt.includes("his ") ||
+    prompt.includes("person");
+
+  if (shotType === "extreme_wide" && !hasSubjectMention) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Builds the focused, high-impact prompt for AI image generation models (Qwen Image Turbo / Modal).
+ * - Puts the Scene & Camera Framing at the very top so diffusion models anchor their attention on the scene action.
+ * - Eliminates redundant boilerplate meta-instructions ("IMAGE GENERATION INSTRUCTIONS...").
+ * - Conditionally filters character facial identity & wardrobe to prevent multi-subject hallucinations
+ *   (e.g. prevents faces from appearing in close-ups of feet, pedals, or inanimate objects).
  *
  * @param {string|object} theme - The channel image theme
  * @param {string} scenePrompt - The specific scene description/prompt
@@ -246,43 +353,76 @@ export function formatCameraFraming(cameraOptions = {}) {
  * @returns {string}
  */
 export function buildFullImagePrompt(theme, scenePrompt = "", cameraOptions = {}) {
-  const visualIdentityBlock = formatImageThemeBlock(theme);
   const cleanScene = (scenePrompt || "").trim();
   const framingTag = formatCameraFraming(cameraOptions);
 
-  let sceneBlockContent = "";
+  // 1. Scene & Framing Section (ALWAYS FIRST FOR DIFFUSION ATTENTION)
+  let sceneBlock = "";
   if (framingTag && cleanScene) {
-    sceneBlockContent = `${framingTag}\n${cleanScene}`;
+    sceneBlock = `${framingTag}\n${cleanScene}`;
   } else if (framingTag) {
-    sceneBlockContent = framingTag;
+    sceneBlock = framingTag;
   } else if (cleanScene) {
-    sceneBlockContent = cleanScene;
+    sceneBlock = cleanScene;
   }
 
-  const instructions = `IMAGE GENERATION INSTRUCTIONS
-
-Create a single coherent cinematic image.
-
-Preserve all visual identity characteristics consistently.
-Do not change the character's physical identity or wardrobe unless explicitly instructed.
-
-Maintain the specified visual style, rendering characteristics, color palette and background treatment.
-
-Follow the scene description exactly, including the environment, characters, actions, objects, composition, camera viewpoint, lighting and mood.
-
-The image should look like part of the same visual production as other scenes using this visual identity.`;
-
+  // 2. Style & Visual Direction Section (AFTER THE SCENE)
   const sections = [];
-
-  if (visualIdentityBlock) {
-    sections.push(visualIdentityBlock);
+  if (sceneBlock) {
+    sections.push(sceneBlock);
   }
 
-  if (sceneBlockContent) {
-    sections.push(`SCENE\n\n${sceneBlockContent}`);
+  if (theme) {
+    let parsed = null;
+    let isLegacyString = false;
+
+    if (typeof theme === "string") {
+      const trimmed = theme.trim();
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+          parsed = parseImageTheme(trimmed);
+        } catch {
+          isLegacyString = true;
+        }
+      } else if (trimmed) {
+        isLegacyString = true;
+      }
+    } else if (typeof theme === "object" && theme !== null && !Array.isArray(theme)) {
+      parsed = parseImageTheme(theme);
+    }
+
+    if (parsed) {
+      const includeChar = shouldIncludeCharacterIdentity(cleanScene, cameraOptions);
+      const includeWardrobe = shouldIncludeWardrobe(cleanScene, cameraOptions);
+
+      const styleLines = [];
+
+      if (parsed.visualStyle) {
+        styleLines.push(`Visual Style: ${parsed.visualStyle}`);
+      }
+      if (includeChar && parsed.characterIdentity) {
+        styleLines.push(`Character Identity: ${parsed.characterIdentity}`);
+      }
+      if (includeWardrobe && parsed.wardrobe) {
+        styleLines.push(`Wardrobe: ${parsed.wardrobe}`);
+      }
+      if (parsed.rendering) {
+        styleLines.push(`Rendering: ${parsed.rendering}`);
+      }
+      if (parsed.colorPalette) {
+        styleLines.push(`Color Palette: ${parsed.colorPalette}`);
+      }
+      if (parsed.backgroundTreatment) {
+        styleLines.push(`Background Treatment: ${parsed.backgroundTreatment}`);
+      }
+
+      if (styleLines.length > 0) {
+        sections.push(`STYLE & VISUAL DIRECTION:\n${styleLines.join("\n\n")}`);
+      }
+    } else if (isLegacyString) {
+      sections.push(`STYLE & VISUAL DIRECTION:\n${theme.trim()}`);
+    }
   }
 
-  sections.push(instructions);
-
-  return sections.join("\n\n\n");
+  return sections.join("\n\n");
 }

@@ -140,7 +140,7 @@ function showThumbnailScreen() {
   const promptVal = (selectedTopicThumbnailPrompt || "").trim();
   thumbnailPromptInput.value = promptVal || `High-converting YouTube thumbnail for "${selectedTopicTitle}". Intense focal point, dramatic lighting, high contrast, clean separation between foreground subject and background environment.`;
 
-  const themeVal = (selectedChannelThumbnailTheme || selectedChannelTheme || "").trim();
+  const themeVal = formatThemeText(selectedChannelThumbnailTheme || selectedChannelTheme);
   thumbnailThemeInput.value = themeVal || "cinematic, high quality, consistent style";
 }
 
@@ -479,7 +479,7 @@ function buildThumbnailInstruction(topicTitle, thumbPrompt, thumbTheme) {
       ? setup.thumbnail_instruction
       : `Hi, I need you to assist me in generating a high-converting YouTube thumbnail for content titled "{topicTitle}".\n\nthumbnail_prompt: "{thumbnail_prompt}"\n\nEnsure only one Image is Generated. Name the image thumbnail.png.\n\nwhen generating images ensure that image follow this theme\n"{channel_thumbnail_generation_theme}"`;
 
-  const themeText = (thumbTheme || selectedChannelThumbnailTheme || selectedChannelTheme || "cinematic, high quality, consistent style").trim();
+  const themeText = formatThemeText(thumbTheme || selectedChannelThumbnailTheme || selectedChannelTheme);
   const promptText = (thumbPrompt || selectedTopicThumbnailPrompt || `High-converting YouTube thumbnail for "${topicTitle}"`).trim();
 
   return template
@@ -542,14 +542,87 @@ generateThumbnailBtn?.addEventListener("click", async () => {
   }
 });
 
+// ── THEME & CAMERA FRAMING UTILITIES ──
+
+function formatThemeText(theme) {
+  if (!theme) return "cinematic, high quality, consistent style";
+
+  let obj = theme;
+  if (typeof theme === "string") {
+    const trimmed = theme.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        obj = JSON.parse(trimmed);
+      } catch {
+        return trimmed;
+      }
+    } else {
+      return trimmed || "cinematic, high quality, consistent style";
+    }
+  }
+
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+    const lines = ["VISUAL IDENTITY", ""];
+    const style = obj.visualStyle || obj.visual_style || obj.style;
+    const char = obj.characterIdentity || obj.character_identity || obj.character;
+    const wardrobe = obj.wardrobe || obj.clothing || obj.outfit;
+    const palette = obj.colorPalette || obj.color_palette || obj.colors;
+    const render = obj.rendering || obj.render || obj.lighting;
+    const bg = obj.backgroundTreatment || obj.background_treatment || obj.background;
+
+    if (style) lines.push(`Visual Style:\n${style}\n`);
+    if (char) lines.push(`Character Identity:\n${char}\n`);
+    if (wardrobe) lines.push(`Wardrobe:\n${wardrobe}\n`);
+    if (palette) lines.push(`Color Palette:\n${palette}\n`);
+    if (render) lines.push(`Rendering:\n${render}\n`);
+    if (bg) lines.push(`Background Treatment:\n${bg}\n`);
+
+    if (lines.length > 2) {
+      return lines.join("\n").trim();
+    }
+  }
+
+  return typeof theme === "string" ? theme.trim() : "cinematic, high quality, consistent style";
+}
+
+function formatCameraFraming(shotType, cameraAngle, lens) {
+  const parts = [];
+  const cleanShot = (shotType || "").trim();
+  const cleanAngle = (cameraAngle || "").trim();
+  const cleanLens = (lens || "").trim();
+
+  if (cleanShot) {
+    const readable = cleanShot.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    parts.push(readable.toLowerCase().includes("shot") ? readable : `${readable} Shot`);
+  }
+  if (cleanAngle) {
+    const readable = cleanAngle.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    parts.push(readable.toLowerCase().includes("angle") ? readable : `${readable} Angle`);
+  }
+  if (cleanLens) {
+    parts.push(cleanLens);
+  }
+
+  return parts.length > 0 ? parts.join(", ") : "";
+}
+
 // ── SCENES RENDERING ──
 
-// Helper: normalize scene prompt items for both new multi-image structure and legacy single-image structure
+// Helper: normalize scene prompt items for both multi-image structure and legacy single-image structure, with camera framing
 function getScenePromptItems(scene) {
+  const sceneShot = scene.shot_type || scene.shotType || "";
+  const sceneAngle = scene.camera_angle || scene.cameraAngle || "";
+  const sceneLens = scene.lens || "";
+
   if (Array.isArray(scene.images) && scene.images.length > 0) {
     if (scene.images.length === 1) {
       const img = scene.images[0];
       const prompt = (img?.image_prompt || scene.image_prompt || "").trim();
+      const shotType = (img?.shot_type || img?.shotType || sceneShot).trim();
+      const cameraAngle = (img?.camera_angle || img?.cameraAngle || sceneAngle).trim();
+      const lens = (img?.lens || sceneLens).trim();
+      const framing = formatCameraFraming(shotType, cameraAngle, lens);
+
       return [
         {
           id: `${scene.scene_number}`,
@@ -558,12 +631,21 @@ function getScenePromptItems(scene) {
           imageNumber: 1,
           audioText: scene.audio_text,
           prompt,
+          shotType,
+          cameraAngle,
+          lens,
+          framing,
           isMulti: false,
         },
       ];
     }
     return scene.images.map((img, idx) => {
       const imgNum = img?.image_number || idx + 1;
+      const shotType = (img?.shot_type || img?.shotType || sceneShot).trim();
+      const cameraAngle = (img?.camera_angle || img?.cameraAngle || sceneAngle).trim();
+      const lens = (img?.lens || sceneLens).trim();
+      const framing = formatCameraFraming(shotType, cameraAngle, lens);
+
       return {
         id: `${scene.scene_number}_${imgNum}`,
         tag: `scene_${scene.scene_number}_${imgNum}`,
@@ -571,12 +653,17 @@ function getScenePromptItems(scene) {
         imageNumber: imgNum,
         audioText: scene.audio_text,
         prompt: (img?.image_prompt || "").trim(),
+        shotType,
+        cameraAngle,
+        lens,
+        framing,
         isMulti: true,
       };
     });
   }
 
   const prompt = (scene.image_prompt || "").trim();
+  const framing = formatCameraFraming(sceneShot, sceneAngle, sceneLens);
   return [
     {
       id: `${scene.scene_number}`,
@@ -585,6 +672,10 @@ function getScenePromptItems(scene) {
       imageNumber: 1,
       audioText: scene.audio_text,
       prompt,
+      shotType: sceneShot,
+      cameraAngle: sceneAngle,
+      lens: sceneLens,
+      framing,
       isMulti: false,
     },
   ];
@@ -606,9 +697,20 @@ function renderScenes(scenes) {
     const num = scene.scene_number || i + 1;
     const items = getScenePromptItems(scene);
     const promptSummary = items
-      .map((it) => (it.isMulti ? `[img ${it.imageNumber}]: ${it.prompt}` : it.prompt))
+      .map((it) => {
+        const prefix = it.isMulti ? `[img ${it.imageNumber}]: ` : "";
+        return `${prefix}${it.prompt}`;
+      })
       .filter(Boolean)
       .join(" | ");
+
+    const framingBadges = items
+      .map((it) => (it.framing ? (it.isMulti ? `Img ${it.imageNumber}: ${it.framing}` : it.framing) : ""))
+      .filter(Boolean);
+
+    const framingHtml = framingBadges.length > 0
+      ? `<div class="framing-badge" title="Camera Framing directive">${escapeHtml(framingBadges.join(" · "))}</div>`
+      : "";
 
     const div = document.createElement("div");
     div.className = "scene-item";
@@ -622,7 +724,10 @@ function renderScenes(scenes) {
     div.innerHTML = `
       <input type="checkbox" class="scene-checkbox" data-scene-num="${num}" title="Select for generation" />
       <span class="scene-num">${num}${badge}</span>
-      <span class="scene-prompt">${escapeHtml(promptSummary || "(no prompt)")}</span>
+      <span class="scene-prompt">
+        ${escapeHtml(promptSummary || "(no prompt)")}
+        ${framingHtml}
+      </span>
       <button type="button" class="btn-scene-gen" title="Generate this scene image">▶</button>
     `;
 
@@ -696,18 +801,17 @@ function buildBatchPrompt(scenesChunk, channelTheme = "") {
           const audioLine = it.audioText
             ? `audio_text: "${it.audioText.trim()}"\n`
             : "";
-          return `${it.tag}\n${audioLine}image_prompt: "${it.prompt}"`;
+          const framingLine = it.framing
+            ? `camera_framing: "${it.framing}"\n`
+            : "";
+          return `${it.tag}\n${audioLine}${framingLine}image_prompt: "${it.prompt}"`;
         })
         .join("\n\n");
     })
     .filter(Boolean)
     .join("\n\n");
 
-  const themeText = (
-    channelTheme ||
-    selectedChannelTheme ||
-    "cinematic, high quality, consistent style"
-  ).trim();
+  const themeText = formatThemeText(channelTheme || selectedChannelTheme);
   const themeTemplate =
     typeof setup !== "undefined" && setup.theme_instruction
       ? setup.theme_instruction
@@ -734,18 +838,17 @@ function buildMissingScenesPrompt(scenesList, channelTheme = "") {
           const audioLine = it.audioText
             ? `audio_text: "${it.audioText.trim()}"\n`
             : "";
-          return `${it.tag}\n${audioLine}image_prompt: "${it.prompt}"`;
+          const framingLine = it.framing
+            ? `camera_framing: "${it.framing}"\n`
+            : "";
+          return `${it.tag}\n${audioLine}${framingLine}image_prompt: "${it.prompt}"`;
         })
         .join("\n\n");
     })
     .filter(Boolean)
     .join("\n\n");
 
-  const themeText = (
-    channelTheme ||
-    selectedChannelTheme ||
-    "cinematic, high quality, consistent style"
-  ).trim();
+  const themeText = formatThemeText(channelTheme || selectedChannelTheme);
   const themeTemplate =
     typeof setup !== "undefined" && setup.theme_instruction
       ? setup.theme_instruction
@@ -919,7 +1022,7 @@ when generating images ensure that image follow this theme
 make sure the generated images are inline (visual description) of what is being said in the audio-text.
 `;
 
-  const themeText = (channelTheme || selectedChannelTheme || "").trim();
+  const themeText = formatThemeText(channelTheme || selectedChannelTheme);
 
   return template
     .replace(/\{topicTitle\}/g, topicTitle)

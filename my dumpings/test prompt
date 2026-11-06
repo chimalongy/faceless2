@@ -1,0 +1,41 @@
+[QwenImageTurbo] Received generation request (Requested: 1376x768, Seed: 42, Steps: 50)
+[QwenImageTurbo] Generating Image with Prompt:
+VISUAL IDENTITY
+
+Visual Style:
+Modern 2D digital illustration with a high-budget feature-film animation aesthetic. The style uses clean, uniform black outlines (line-art) combined with high-quality cell-shading and subtle gradients. It creates a stylized 3D depth within a 2D framework, bridging the gap between expressive webcomic linework and cinematic environmental depth. Avoid photorealism, CGI-heavy 3D, and flat/simple cartoons.
+
+Character Identity:
+The Observer is a lean young adult White male with fair skin and a subtle warm undertone. He has short, messy, tousled dark-brown/black hair and wears signature round amber-tinted glasses. His expression is consistently stoic, calm, and observant. Strictly preserve his facial structure, no beard, messy hairstyle, round glasses, and overall facial appearance consistently in every scene.
+
+Wardrobe:
+The Observer wears a burnt-orange button-down overshirt worn over a charcoal T-shirt, dark trousers, and simple sneakers. Preserve the signature burnt-orange and charcoal wardrobe consistently in every scene unless a wardrobe change is explicitly requested.
+
+Color Palette:
+Favor warm whites, soft creams, light blues, natural greens, and light wood tones for bright, believable everyday environments. Preserve burnt orange and charcoal in The Observer's signature wardrobe. Use other colors naturally in clothing, furniture, buildings, and everyday objects, without assigning symbolic meanings.
+
+Rendering:
+Use clean, uniform black outlines (line-art) combined with high-quality cell-shading and subtle gradients. Create stylized 3D depth within a 2D framework, with dimensional characters, environments, and objects. Maintain clear visual separation between foreground, middle-ground, and background. Use gentle shadows and soft highlights to preserve dimensionality. Avoid photorealism, CGI-heavy 3D, and flat/simple cartoon rendering.
+
+Background Treatment:
+Use clear depth separation between foreground, middle-ground, and background within bright, open, inviting compositions. Favor abundant natural daylight, softly sunlit interiors, and warm, evenly illuminated environments. Keep faces, clothing, and surrounding details clearly visible. Use subtle warm sunlight along the character's edges for separation from the background. Keep backgrounds recognizable, with light depth-of-field blur only when needed to focus attention. Avoid dark, moody environments, heavy shadows, dramatic chiaroscuro, and underexposed scenes. Depict only concrete, recognizable subjects, real locations, and literal actions relevant to the narration. Do not use visual metaphors, symbolism, abstract concepts, surreal structures, or objects standing in for financial ideas.
+
+
+SCENE
+
+[Framing: Extreme Close Up Shot, Ground Level Worms Eye Angle, 100mm macro]
+An extreme close-up highlights the main character's feet resting near the vehicle's floor pedals, showcasing premium, pristine designer sneakers with clean stitching and textured soles. Soft ambient cabin light catches the fine materials of the footwear, casting gentle shadows on the clean floor mat below. The background is softly blurred, emphasizing the sharp focus on the high-end shoes.
+
+
+IMAGE GENERATION INSTRUCTIONS
+
+Create a single coherent cinematic image.
+
+Preserve all visual identity characteristics consistently.
+Do not change the character's physical identity or wardrobe unless explicitly instructed.
+
+Maintain the specified visual style, rendering characteristics, color palette and background treatment.
+
+Follow the scene description exactly, including the environment, characters, actions, objects, composition, camera viewpoint, lighting and mood.
+
+The image should look like part of the same visual production as other scenes using this visual identity.

@@ -7,6 +7,8 @@ import {
   formatImageThemeBlock,
   buildFullImagePrompt,
   formatCameraFraming,
+  shouldIncludeCharacterIdentity,
+  shouldIncludeWardrobe,
   DEFAULT_IMAGE_THEME,
 } from "../src/lib/image-theme.js";
 
@@ -84,7 +86,7 @@ test("formatImageThemeBlock formats VISUAL IDENTITY section properly", () => {
   assert.doesNotMatch(block, /Wardrobe:/);
 });
 
-test("buildFullImagePrompt compiles full prompt with scene and instructions", () => {
+test("buildFullImagePrompt compiles focused prompt starting with scene and style directives", () => {
   const theme = {
     visualStyle: "2D illustration",
     characterIdentity: "Detective",
@@ -92,11 +94,13 @@ test("buildFullImagePrompt compiles full prompt with scene and instructions", ()
   const scene = "Walking down a misty alley at midnight";
   const prompt = buildFullImagePrompt(theme, scene);
 
-  assert.match(prompt, /VISUAL IDENTITY/);
-  assert.match(prompt, /Visual Style:\n2D illustration/);
-  assert.match(prompt, /SCENE\n\nWalking down a misty alley at midnight/);
-  assert.match(prompt, /IMAGE GENERATION INSTRUCTIONS/);
-  assert.match(prompt, /Preserve all visual identity characteristics consistently/);
+  // Starts with the scene
+  assert.ok(prompt.startsWith("Walking down a misty alley at midnight"));
+  assert.match(prompt, /STYLE & VISUAL DIRECTION:/);
+  assert.match(prompt, /Visual Style: 2D illustration/);
+  assert.match(prompt, /Character Identity: Detective/);
+  // No bloated meta-instructions
+  assert.doesNotMatch(prompt, /IMAGE GENERATION INSTRUCTIONS/);
 });
 
 test("formatCameraFraming formats shot_type, camera_angle, and lens correctly", () => {
@@ -115,7 +119,7 @@ test("formatCameraFraming formats shot_type, camera_angle, and lens correctly", 
   );
 });
 
-test("buildFullImagePrompt includes framing tag when cameraOptions provided", () => {
+test("buildFullImagePrompt includes framing tag at the very top", () => {
   const theme = { visualStyle: "Anime cel-shaded" };
   const scene = "The main character looks at the horizon.";
   const camera = {
@@ -125,10 +129,44 @@ test("buildFullImagePrompt includes framing tag when cameraOptions provided", ()
   };
   const prompt = buildFullImagePrompt(theme, scene, camera);
 
-  assert.match(
-    prompt,
-    /SCENE\n\n\[Framing: Medium Close Up Shot, Eye Level Angle, 50mm standard prime\]\nThe main character looks at the horizon\./
+  assert.ok(
+    prompt.startsWith("[Framing: Medium Close Up Shot, Eye Level Angle, 50mm standard prime]\nThe main character looks at the horizon.")
   );
+  assert.match(prompt, /Visual Style: Anime cel-shaded/);
+  assert.doesNotMatch(prompt, /IMAGE GENERATION INSTRUCTIONS/);
 });
 
+test("shouldIncludeCharacterIdentity excludes facial traits on macro feet/object shots", () => {
+  const footScene = "An extreme close-up highlights the main character's feet resting near the vehicle's floor pedals, showcasing premium sneakers.";
+  const camera = { shot_type: "extreme_close_up", lens: "100mm macro" };
 
+  assert.equal(shouldIncludeCharacterIdentity(footScene, camera), false);
+
+  const theme = {
+    visualStyle: "2D animation",
+    characterIdentity: "Young man with amber glasses and messy dark hair",
+    wardrobe: "Orange overshirt and dark pants",
+  };
+
+  const compiled = buildFullImagePrompt(theme, footScene, camera);
+  assert.doesNotMatch(compiled, /amber glasses/);
+  assert.doesNotMatch(compiled, /messy dark hair/);
+  assert.match(compiled, /Visual Style: 2D animation/);
+});
+
+test("shouldIncludeCharacterIdentity includes facial traits on medium / portrait shots", () => {
+  const faceScene = "The main character sits behind the steering wheel, looking thoughtfully out the windshield.";
+  const camera = { shot_type: "medium_shot", camera_angle: "eye_level" };
+
+  assert.equal(shouldIncludeCharacterIdentity(faceScene, camera), true);
+
+  const theme = {
+    visualStyle: "2D animation",
+    characterIdentity: "Young man with amber glasses and messy dark hair",
+    wardrobe: "Orange overshirt and dark pants",
+  };
+
+  const compiled = buildFullImagePrompt(theme, faceScene, camera);
+  assert.match(compiled, /amber glasses/);
+  assert.match(compiled, /Orange overshirt/);
+});

@@ -10,18 +10,22 @@ each scene prompt would be mapped with a scene identifier.
 eg 
 scene_1
 audio_text: "the words that would be spoken"
+camera_framing: "Medium Shot, Eye Level, 50mm Prime"
 image_prompt: "<image prompt text for scene 1>"
 
 scene_2_1
 audio_text: "the words that would be spoken"
+camera_framing: "Close-Up Shot, Low Angle, 85mm Bokeh"
 image_prompt: "<image prompt text for image 1 of scene 2>"
 
 scene_2_2
 audio_text: "the words that would be spoken"
+camera_framing: "Extreme Wide Shot, Overhead Bird's Eye, 24mm Wide"
 image_prompt: "<image prompt text for image 2 of scene 2>"
 
 scene_3
 audio_text: "the words that would be spoken"
+camera_framing: "Medium Close-Up Shot, Eye Level, 50mm Prime"
 image_prompt: "<image prompt text for scene 3>"
 
 
@@ -32,14 +36,14 @@ Ensure only one Image is Generated Per Prompt. Name each image by its scene iden
 when generating images ensure that image follow this theme
 "{channel_image_generation_theme}"
 
-make sure the generated images are inline (visual description) of what is being said in the audio-text.
+make sure the generated images are inline (visual description) of what is being said in the audio-text and strictly respect the camera_framing specifications.
 MAKE SURE YOU FOLLOW THE NAMING CONVENTION DESCRIBED ABOVE!!! DO NOT NAME THE IMAGES ANY OTHER WAY!!!!
 `,
 
   theme_instruction: `when generating images ensure that image follow this theme
 "{channel_image_generation_theme}"
 
-make sure the generated images are inline (visual description) of what is being said in the audio-text.
+make sure the generated images are inline (visual description) of what is being said in the audio-text and strictly respect the camera_framing specifications.
 MAKE SURE YOU FOLLOW THE NAMING CONVENTION DESCRIBED ABOVE!!! DO NOT NAME THE IMAGES ANY OTHER WAY!!!!
 `,
 
