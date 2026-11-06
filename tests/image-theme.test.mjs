@@ -136,23 +136,35 @@ test("buildFullImagePrompt includes framing tag at the very top", () => {
   assert.doesNotMatch(prompt, /IMAGE GENERATION INSTRUCTIONS/);
 });
 
-test("shouldIncludeCharacterIdentity excludes facial traits on macro feet/object shots", () => {
-  const footScene = "An extreme close-up highlights the main character's feet resting near the vehicle's floor pedals, showcasing premium sneakers.";
-  const camera = { shot_type: "extreme_close_up", lens: "100mm macro" };
+test("shouldIncludeCharacterIdentity and shouldIncludeWardrobe handle 'clean stitching' and 'worms eye' without false positives", () => {
+  const footScene = "An extreme close-up highlights the main character's feet resting near the vehicle's floor pedals, showcasing premium, pristine designer sneakers with clean stitching and textured soles. Soft ambient cabin light catches the fine materials of the footwear, casting gentle shadows on the clean floor mat below. The background is softly blurred, emphasizing the sharp focus on the high-end shoes.";
+  const camera = {
+    shot_type: "extreme_close_up",
+    camera_angle: "worms_eye",
+    lens: "100mm macro",
+  };
 
   assert.equal(shouldIncludeCharacterIdentity(footScene, camera), false);
+  assert.equal(shouldIncludeWardrobe(footScene, camera), false);
 
   const theme = {
-    visualStyle: "2D animation",
-    characterIdentity: "Young man with amber glasses and messy dark hair",
-    wardrobe: "Orange overshirt and dark pants",
+    visualStyle: "Modern 2D digital illustration",
+    characterIdentity: "The Observer is a lean young adult White male with round amber-tinted glasses.",
+    wardrobe: "The Observer wears a burnt-orange button-down overshirt worn over a charcoal T-shirt.",
+    rendering: "Clean uniform line-art",
+    colorPalette: "Warm whites",
+    backgroundTreatment: "Clear depth separation",
   };
 
   const compiled = buildFullImagePrompt(theme, footScene, camera);
-  assert.doesNotMatch(compiled, /amber glasses/);
-  assert.doesNotMatch(compiled, /messy dark hair/);
-  assert.match(compiled, /Visual Style: 2D animation/);
+  assert.doesNotMatch(compiled, /Character Identity:/);
+  assert.doesNotMatch(compiled, /Wardrobe:/);
+  assert.doesNotMatch(compiled, /amber-tinted glasses/);
+  assert.doesNotMatch(compiled, /burnt-orange button-down overshirt/);
+  assert.match(compiled, /Visual Style: Modern 2D digital illustration/);
+  assert.match(compiled, /Rendering: Clean uniform line-art/);
 });
+
 
 test("shouldIncludeCharacterIdentity includes facial traits on medium / portrait shots", () => {
   const faceScene = "The main character sits behind the steering wheel, looking thoughtfully out the windshield.";

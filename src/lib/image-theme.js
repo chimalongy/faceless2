@@ -236,6 +236,19 @@ export function formatCameraFraming(cameraOptions = {}) {
   return parts.length > 0 ? `[Framing: ${parts.join(", ")}]` : "";
 }
 
+function isCloseOrMacroShot(shotType = "", lens = "", text = "") {
+  const s = (shotType || "").toLowerCase();
+  const l = (lens || "").toLowerCase();
+  const t = (text || "").toLowerCase();
+  return (
+    s === "extreme_close_up" ||
+    s === "close_up" ||
+    l.includes("macro") ||
+    t.includes("extreme close-up") ||
+    t.includes("macro shot")
+  );
+}
+
 /**
  * Determines whether the character's facial and head physical identity should be injected into the prompt.
  * Prevents prompt pollution (e.g. forcing face, glasses, and hair into a macro shot of feet, pedals, or objects).
@@ -245,52 +258,40 @@ export function formatCameraFraming(cameraOptions = {}) {
  * @returns {boolean}
  */
 export function shouldIncludeCharacterIdentity(scenePrompt = "", cameraOptions = {}) {
-  const prompt = (scenePrompt || "").toLowerCase();
+  // Strip framing tag first so camera angles like "worms eye" or "birds eye" or "eye level" do not trigger facial "eye" match
+  const cleanPrompt = (scenePrompt || "")
+    .replace(/\[framing:[^\]]*\]/gi, "")
+    .toLowerCase();
+
   const shotType = (cameraOptions.shotType || cameraOptions.shot_type || "").toLowerCase();
   const lens = (cameraOptions.lens || "").toLowerCase();
+  const isClose = isCloseOrMacroShot(shotType, lens, cleanPrompt);
 
-  const isMacroOrExtremeCloseUp =
-    shotType === "extreme_close_up" ||
-    lens.includes("macro") ||
-    prompt.includes("extreme close-up") ||
-    prompt.includes("macro shot");
+  if (isClose) {
+    // Isolated non-face targets (limbs, shoes, props, vehicles, objects)
+    const isolatedBodyOrObject = [
+      "feet", "foot", "shoe", "shoes", "sneaker", "sneakers", "pedal", "pedals",
+      "floor mat", "hands holding", "fingers", "wrist", "watch", "phone",
+      "pocket watch", "coin", "keyboard", "desk", "workbench", "keys"
+    ];
+    const isTargetingIsolatedPart = isolatedBodyOrObject.some((term) => cleanPrompt.includes(term));
 
-  // Facial keywords that indicate the face or head is the intended focal subject
-  const faceKeywords = [
-    "face", "eyes", "eye", "glasses", "spectacles", "expression", "gaze",
-    "smile", "frown", "stare", "glance", "brow", "lips", "mouth", "hair",
-    "forehead", "jaw", "chin", "looking at", "smirking", "grinning"
-  ];
-  const mentionsFace = faceKeywords.some((kw) => prompt.includes(kw));
+    // Check if face is explicitly the subject using word boundaries (so "chin" doesn't match "stitching", "eye" doesn't match "conveyed")
+    const faceRegex = /\b(face|facial|eyes|head|glasses|spectacles|expression|gaze|stare|glance|smile|frown|lips|mouth|forehead|jaw|chin|smirking|grinning)\b/i;
+    const mentionsFace = faceRegex.test(cleanPrompt);
 
-  // If it is a macro or extreme close-up, only include character face if the face is explicitly the subject
-  if (isMacroOrExtremeCloseUp && !mentionsFace) {
-    return false;
-  }
+    if (isTargetingIsolatedPart && !mentionsFace) {
+      return false;
+    }
 
-  // If the prompt specifically targets isolated limbs, footwear, or objects and does not mention face
-  const isolatedBodyOrObject = [
-    "feet", "foot", "shoes", "sneakers", "pedal", "pedals", "hands holding",
-    "fingers", "wrist", "watch", "phone", "pocket watch", "coin", "keyboard",
-    "steering wheel", "desk", "workbench", "floor mat", "keys"
-  ];
-  const isTargetingIsolatedPart = isolatedBodyOrObject.some((term) => prompt.includes(term));
-
-  if (isTargetingIsolatedPart && !mentionsFace && (shotType === "close_up" || isMacroOrExtremeCloseUp)) {
-    return false;
+    if ((shotType === "extreme_close_up" || lens.includes("macro")) && !mentionsFace) {
+      return false;
+    }
   }
 
   // Pure environment / landscape establishing shots without human subjects
-  const hasSubjectMention =
-    prompt.includes("main character") ||
-    prompt.includes("observer") ||
-    prompt.includes("protagonist") ||
-    prompt.includes("man ") ||
-    prompt.includes("he ") ||
-    prompt.includes("his ") ||
-    prompt.includes("person");
-
-  if (shotType === "extreme_wide" && !hasSubjectMention) {
+  const subjectRegex = /\b(main character|the observer|protagonist|man|he|his|person|figure)\b/i;
+  if (shotType === "extreme_wide" && !subjectRegex.test(cleanPrompt)) {
     return false;
   }
 
@@ -305,35 +306,30 @@ export function shouldIncludeCharacterIdentity(scenePrompt = "", cameraOptions =
  * @returns {boolean}
  */
 export function shouldIncludeWardrobe(scenePrompt = "", cameraOptions = {}) {
-  const prompt = (scenePrompt || "").toLowerCase();
+  const cleanPrompt = (scenePrompt || "")
+    .replace(/\[framing:[^\]]*\]/gi, "")
+    .toLowerCase();
+
   const shotType = (cameraOptions.shotType || cameraOptions.shot_type || "").toLowerCase();
   const lens = (cameraOptions.lens || "").toLowerCase();
+  const isClose = isCloseOrMacroShot(shotType, lens, cleanPrompt);
 
-  const isMacroOrExtremeCloseUp = shotType === "extreme_close_up" || lens.includes("macro");
+  if (isClose) {
+    const isolatedBodyOrObject = [
+      "feet", "foot", "shoe", "shoes", "sneaker", "sneakers", "pedal", "pedals",
+      "floor mat", "hands holding", "fingers", "wrist", "watch", "phone",
+      "pocket watch", "coin", "keyboard", "desk", "workbench", "keys"
+    ];
+    const isTargetingIsolatedPart = isolatedBodyOrObject.some((term) => cleanPrompt.includes(term));
 
-  // If extreme macro focusing on an inanimate object (phone, watch, coin, book, key) with no clothing
-  const mentionsClothingOrBody = [
-    "wear", "wearing", "shoe", "shoes", "sneaker", "sneakers", "boots",
-    "jacket", "shirt", "t-shirt", "overshirt", "hoodie", "trouser", "trousers",
-    "pants", "sleeve", "pocket", "coat", "suit", "feet", "foot", "torso"
-  ];
-  const isClothingRelevant = mentionsClothingOrBody.some((kw) => prompt.includes(kw));
-
-  if (isMacroOrExtremeCloseUp && !isClothingRelevant) {
-    return false;
+    // In a close-up/macro of isolated feet, hands, or props, suppress upper-body wardrobe
+    if (isTargetingIsolatedPart || shotType === "extreme_close_up" || lens.includes("macro")) {
+      return false;
+    }
   }
 
-  // Pure environment shot without human subjects
-  const hasSubjectMention =
-    prompt.includes("main character") ||
-    prompt.includes("observer") ||
-    prompt.includes("protagonist") ||
-    prompt.includes("man ") ||
-    prompt.includes("he ") ||
-    prompt.includes("his ") ||
-    prompt.includes("person");
-
-  if (shotType === "extreme_wide" && !hasSubjectMention) {
+  const subjectRegex = /\b(main character|the observer|protagonist|man|he|his|person|figure)\b/i;
+  if (shotType === "extreme_wide" && !subjectRegex.test(cleanPrompt)) {
     return false;
   }
 
