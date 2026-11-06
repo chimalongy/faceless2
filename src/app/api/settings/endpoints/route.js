@@ -104,7 +104,7 @@ export async function GET() {
     const modalQwenTtsUrl = generalData.modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run";
     let modalQwenVoiceCloneUrl = (generalData.modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run").replace(".us-east.modal.run", ".modal.run");
     let modalFishVoiceCloneUrl = generalData.modalFishVoiceCloneUrl || process.env.MODAL_FISH_S2_URL || "https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run";
-    const modalPromptEnhancerUrl = generalData.modalPromptEnhancerUrl || process.env.MODAL_PROMPT_ENHANCER_URL || "https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run";
+    const modalPromptEnhancerUrl = generalData.modalPromptEnhancerUrl || process.env.MODAL_PROMPT_ENHANCER_URL || "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run";
 
     // Self-heal: If modalQwenVoiceCloneUrl mistakenly holds the Fish URL (from when there was only 1 field)
     if (modalQwenVoiceCloneUrl.toLowerCase().includes("fish")) {
@@ -191,7 +191,7 @@ export async function POST(request) {
       modalAudioTranscriptionUrl = "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run",
       modalQwenTtsUrl = "https://geniusdomainnames--qwen3-tts-custom-web.modal.run",
       modalQwenVoiceCloneUrl = "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run",
-      modalPromptEnhancerUrl = "https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run",
+      modalPromptEnhancerUrl = "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run",
       showShortsTitleOverlay = false,
     } = body;
 
@@ -218,7 +218,7 @@ export async function POST(request) {
     const modalQwenUrl = (modalQwenTtsUrl || process.env.MODAL_QWEN_TTS_URL || "https://geniusdomainnames--qwen3-tts-custom-web.modal.run").trim();
     const qwenVoiceCloneUrl = (modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run").trim().replace(".us-east.modal.run", ".modal.run");
     const fishVoiceCloneUrl = (modalFishVoiceCloneUrl || process.env.MODAL_FISH_S2_URL || "https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run").trim();
-    const enhancerUrl = (modalPromptEnhancerUrl || process.env.MODAL_PROMPT_ENHANCER_URL || "https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run").trim();
+    const enhancerUrl = (modalPromptEnhancerUrl || process.env.MODAL_PROMPT_ENHANCER_URL || "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {

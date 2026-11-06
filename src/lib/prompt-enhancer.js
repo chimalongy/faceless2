@@ -1,7 +1,7 @@
 import { getDbSql } from "./db.js";
 
 export const DEFAULT_PROMPT_ENHANCER_URL =
-  "https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run";
+  "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run";
 
 /**
  * Resolves the Qwen PE-T2I prompt enhancement endpoint URL.

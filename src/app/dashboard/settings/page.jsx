@@ -64,7 +64,7 @@ export default function SettingsPage() {
   const [modalQwenTtsUrl, setModalQwenTtsUrl] = useState("https://geniusdomainnames--qwen3-tts-custom-web.modal.run");
   const [modalQwenVoiceCloneUrl, setModalQwenVoiceCloneUrl] = useState("https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run");
   const [modalFishVoiceCloneUrl, setModalFishVoiceCloneUrl] = useState("https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run");
-  const [modalPromptEnhancerUrl, setModalPromptEnhancerUrl] = useState("https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run");
+  const [modalPromptEnhancerUrl, setModalPromptEnhancerUrl] = useState("https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run");
   const [showShortsTitleOverlay, setShowShortsTitleOverlay] = useState(false);
   const [editingGeneral, setEditingGeneral] = useState(false);
 
@@ -1143,7 +1143,7 @@ export default function SettingsPage() {
                       disabled={!editingGeneral}
                       value={modalPromptEnhancerUrl}
                       onChange={(e) => setModalPromptEnhancerUrl(e.target.value)}
-                      placeholder="https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run"
+                      placeholder="https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run"
                       className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
                         editingGeneral
                           ? "bg-white border-line-dark focus:border-signal"

@@ -291,7 +291,7 @@ export async function initDbSchema(force = false) {
         modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run',
         modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run',
         modal_fish_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run',
-        modal_prompt_enhancer_url TEXT DEFAULT 'https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run',
+        modal_prompt_enhancer_url TEXT DEFAULT 'https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run',
         show_shorts_title_overlay BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
