@@ -1,4 +1,5 @@
 import { getDbSql, initDbSchema } from "@/lib/db";
+import { enhanceImagePrompt } from "./prompt-enhancer.js";
 
 /**
  * Get the configured maximum image generations allowed per URL per month.
@@ -120,6 +121,12 @@ export async function generateImage({
     throw new Error("Prompt is required for image generation.");
   }
 
+  // Strict requirement: Prompt MUST be enhanced with Qwen PE-T2I first.
+  // Image generation stops immediately if prompt enhancement fails.
+  console.log("[ImageGenerator] Enhancing prompt with Qwen PE-T2I before generation...");
+  const enhancedPrompt = await enhanceImagePrompt(prompt);
+  console.log(`[ImageGenerator] Prompt enhanced successfully! (${prompt.length} -> ${enhancedPrompt.length} chars)`);
+
   const finalSeed =
     seed !== undefined && seed !== null
       ? Number(seed)
@@ -155,7 +162,7 @@ export async function generateImage({
     );
 
     const payload = {
-      prompt,
+      prompt: enhancedPrompt,
       width,
       height,
       num_inference_steps: numInferenceSteps,
@@ -202,6 +209,8 @@ export async function generateImage({
           endpointUsed: endpoint.accountEmail,
           genUrlUsed: endpoint.genUrl,
           remainingUsage,
+          originalPrompt: prompt,
+          enhancedPrompt,
         };
       } else {
         const errMsg = data?.message || JSON.stringify(data);

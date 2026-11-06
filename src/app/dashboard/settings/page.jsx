@@ -25,7 +25,8 @@ import {
   Cpu,
   Calendar,
   Mic,
-  Layers
+  Layers,
+  Sparkles
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
@@ -63,6 +64,7 @@ export default function SettingsPage() {
   const [modalQwenTtsUrl, setModalQwenTtsUrl] = useState("https://geniusdomainnames--qwen3-tts-custom-web.modal.run");
   const [modalQwenVoiceCloneUrl, setModalQwenVoiceCloneUrl] = useState("https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run");
   const [modalFishVoiceCloneUrl, setModalFishVoiceCloneUrl] = useState("https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run");
+  const [modalPromptEnhancerUrl, setModalPromptEnhancerUrl] = useState("https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run");
   const [showShortsTitleOverlay, setShowShortsTitleOverlay] = useState(false);
   const [editingGeneral, setEditingGeneral] = useState(false);
 
@@ -119,6 +121,7 @@ export default function SettingsPage() {
           if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
           if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
           if (data.modalFishVoiceCloneUrl) setModalFishVoiceCloneUrl(data.modalFishVoiceCloneUrl);
+          if (data.modalPromptEnhancerUrl) setModalPromptEnhancerUrl(data.modalPromptEnhancerUrl);
           if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
 
           if (Array.isArray(data.llmAccounts)) {
@@ -373,6 +376,7 @@ export default function SettingsPage() {
       modalQwenTtsUrl,
       modalQwenVoiceCloneUrl,
       modalFishVoiceCloneUrl,
+      modalPromptEnhancerUrl,
       showShortsTitleOverlay,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
@@ -1121,6 +1125,33 @@ export default function SettingsPage() {
                     />
                     <p className="text-[10px] text-ink-muted font-mono">
                       Fish Audio S2 Pro fast voice cloner &amp; generator running strictly on NVIDIA T4.
+                    </p>
+                  </div>
+
+                  {/* 4c. Modal Prompt Enhancer (Qwen PE-T2I) */}
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-2 md:col-span-2">
+                    <label className="block text-xs font-semibold text-ink flex items-center justify-between" htmlFor="modal-prompt-enhancer-url">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-signal" />
+                        <span>Modal Qwen PE-T2I Prompt Enhancer Endpoint</span>
+                      </span>
+                    </label>
+                    <input
+                      id="modal-prompt-enhancer-url"
+                      type="text"
+                      readOnly={!editingGeneral}
+                      disabled={!editingGeneral}
+                      value={modalPromptEnhancerUrl}
+                      onChange={(e) => setModalPromptEnhancerUrl(e.target.value)}
+                      placeholder="https://longychima--qwen-image-2-1-pe-t2i-cpu-qwenpet2i-generate.us-east.modal.run"
+                      className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                        editingGeneral
+                          ? "bg-white border-line-dark focus:border-signal"
+                          : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                      }`}
+                    />
+                    <p className="text-[10px] text-ink-muted font-mono">
+                      Modal FastAPI Qwen-Image-2.1-PE-T2I service. Enriches and optimizes prompts before passing to Qwen Image Turbo. Image generation halts if enhancement fails.
                     </p>
                   </div>
 
