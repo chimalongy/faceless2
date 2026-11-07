@@ -321,6 +321,7 @@ export async function initDbSchema(force = false) {
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_tts_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-custom-web.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_qwen_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_fish_voice_clone_url TEXT DEFAULT 'https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run';`;
+      await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS modal_prompt_enhancer_url TEXT DEFAULT 'https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run';`;
       await sql`ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS show_shorts_title_overlay BOOLEAN DEFAULT false;`;
       // Self-heal: Clean any legacy .us-east. in general_settings
       await sql`
