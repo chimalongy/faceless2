@@ -197,6 +197,7 @@ export async function POST(request) {
       modalAudioTranscriptionUrl = "https://me-chimaobi--whisper-api-optimized-whisperservice-transcribe.modal.run",
       modalQwenTtsUrl = "https://geniusdomainnames--qwen3-tts-custom-web.modal.run",
       modalQwenVoiceCloneUrl = "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run",
+      modalFishVoiceCloneUrl = "https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run",
       modalPromptEnhancerUrl = "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run",
       pexelsApiKey = "",
       pixabayApiKey = "",
