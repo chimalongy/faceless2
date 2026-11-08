@@ -158,6 +158,17 @@ export default function OverviewPage() {
   function handleApplyPreset(presetId) {
     setSelectedPreset(presetId);
     setScriptStructureText(getPresetText(presetId));
+    setStructureError("");
+  }
+
+  function handlePrettifyJson() {
+    try {
+      const parsed = JSON.parse(scriptStructureText.trim());
+      setScriptStructureText(JSON.stringify(parsed, null, 2));
+      setStructureError("");
+    } catch (err) {
+      setStructureError(`Invalid JSON: ${err.message}`);
+    }
   }
 
   async function submitChannel(event) {
