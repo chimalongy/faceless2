@@ -65,6 +65,8 @@ export default function SettingsPage() {
   const [modalQwenVoiceCloneUrl, setModalQwenVoiceCloneUrl] = useState("https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run");
   const [modalFishVoiceCloneUrl, setModalFishVoiceCloneUrl] = useState("https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run");
   const [modalPromptEnhancerUrl, setModalPromptEnhancerUrl] = useState("https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run");
+  const [pexelsApiKey, setPexelsApiKey] = useState("");
+  const [pixabayApiKey, setPixabayApiKey] = useState("");
   const [showShortsTitleOverlay, setShowShortsTitleOverlay] = useState(false);
   const [editingGeneral, setEditingGeneral] = useState(false);
 
@@ -122,6 +124,8 @@ export default function SettingsPage() {
           if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
           if (data.modalFishVoiceCloneUrl) setModalFishVoiceCloneUrl(data.modalFishVoiceCloneUrl);
           if (data.modalPromptEnhancerUrl) setModalPromptEnhancerUrl(data.modalPromptEnhancerUrl);
+          if (data.pexelsApiKey !== undefined) setPexelsApiKey(data.pexelsApiKey || "");
+          if (data.pixabayApiKey !== undefined) setPixabayApiKey(data.pixabayApiKey || "");
           if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
 
           if (Array.isArray(data.llmAccounts)) {
@@ -377,6 +381,8 @@ export default function SettingsPage() {
       modalQwenVoiceCloneUrl,
       modalFishVoiceCloneUrl,
       modalPromptEnhancerUrl,
+      pexelsApiKey,
+      pixabayApiKey,
       showShortsTitleOverlay,
       llmAccounts: formattedLlmAccounts,
       imageEndpoints: formattedImageEndpoints,
@@ -419,6 +425,9 @@ export default function SettingsPage() {
       if (data.modalQwenTtsUrl) setModalQwenTtsUrl(data.modalQwenTtsUrl);
       if (data.modalQwenVoiceCloneUrl) setModalQwenVoiceCloneUrl(data.modalQwenVoiceCloneUrl);
       if (data.modalFishVoiceCloneUrl) setModalFishVoiceCloneUrl(data.modalFishVoiceCloneUrl);
+      if (data.modalPromptEnhancerUrl) setModalPromptEnhancerUrl(data.modalPromptEnhancerUrl);
+      if (data.pexelsApiKey !== undefined) setPexelsApiKey(data.pexelsApiKey || "");
+      if (data.pixabayApiKey !== undefined) setPixabayApiKey(data.pixabayApiKey || "");
       if (data.showShortsTitleOverlay !== undefined) setShowShortsTitleOverlay(Boolean(data.showShortsTitleOverlay));
       if (Array.isArray(data.llmAccounts)) {
         setLlmAccounts(
@@ -1153,6 +1162,87 @@ export default function SettingsPage() {
                     <p className="text-[10px] text-ink-muted font-mono">
                       Modal FastAPI Qwen-Image-2.1-PE-T2I service. Enriches and optimizes prompts before passing to Qwen Image Turbo. Image generation halts if enhancement fails.
                     </p>
+                  </div>
+
+                  {/* 4d. Stock Media API Keys (Pexels & Pixabay) */}
+                  <div className="p-4 border border-line/70 bg-paper/50 rounded-xs space-y-4 md:col-span-2">
+                    <div className="flex items-center justify-between border-b border-line/50 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Globe size={14} className="text-signal" />
+                        <span className="text-xs font-semibold text-ink">Stock Media Search Providers (Free)</span>
+                      </div>
+                      <span className="text-[10px] text-ink-muted">Pexels & Pixabay APIs</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Pexels API Key */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-ink" htmlFor="pexels-api-key">
+                            Pexels API Key
+                          </label>
+                          <a
+                            href="https://www.pexels.com/api/"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-signal hover:underline"
+                          >
+                            Get free key &rarr;
+                          </a>
+                        </div>
+                        <input
+                          id="pexels-api-key"
+                          type="password"
+                          readOnly={!editingGeneral}
+                          disabled={!editingGeneral}
+                          value={pexelsApiKey}
+                          onChange={(e) => setPexelsApiKey(e.target.value)}
+                          placeholder="Pexels API Key..."
+                          className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                            editingGeneral
+                              ? "bg-white border-line-dark focus:border-signal"
+                              : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                          }`}
+                        />
+                        <p className="text-[10px] text-ink-muted">
+                          Searches 3M+ free high-res photos and HD videos. Free tier offers 200 req/hr.
+                        </p>
+                      </div>
+
+                      {/* Pixabay API Key */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-ink" htmlFor="pixabay-api-key">
+                            Pixabay API Key
+                          </label>
+                          <a
+                            href="https://pixabay.com/api/docs/"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-signal hover:underline"
+                          >
+                            Get free key &rarr;
+                          </a>
+                        </div>
+                        <input
+                          id="pixabay-api-key"
+                          type="password"
+                          readOnly={!editingGeneral}
+                          disabled={!editingGeneral}
+                          value={pixabayApiKey}
+                          onChange={(e) => setPixabayApiKey(e.target.value)}
+                          placeholder="Pixabay API Key..."
+                          className={`w-full h-9 px-3 border text-xs font-mono text-ink outline-none transition-all ${
+                            editingGeneral
+                              ? "bg-white border-line-dark focus:border-signal"
+                              : "bg-paper-dark/60 border-line text-ink/70 cursor-not-allowed"
+                          }`}
+                        />
+                        <p className="text-[10px] text-ink-muted">
+                          Searches 4M+ creative photos & vertical/horizontal clips. Free tier offers 100 req/min.
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   {/* 5. Video Rendering & Shorts Defaults */}

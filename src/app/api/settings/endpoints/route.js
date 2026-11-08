@@ -55,6 +55,8 @@ export async function GET() {
         modal_qwen_voice_clone_url AS "modalQwenVoiceCloneUrl",
         modal_fish_voice_clone_url AS "modalFishVoiceCloneUrl",
         modal_prompt_enhancer_url AS "modalPromptEnhancerUrl",
+        pexels_api_key AS "pexelsApiKey",
+        pixabay_api_key AS "pixabayApiKey",
         show_shorts_title_overlay AS "showShortsTitleOverlay",
         created_at AS "createdAt", 
         updated_at AS "updatedAt"
@@ -105,6 +107,8 @@ export async function GET() {
     let modalQwenVoiceCloneUrl = (generalData.modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run").replace(".us-east.modal.run", ".modal.run");
     let modalFishVoiceCloneUrl = generalData.modalFishVoiceCloneUrl || process.env.MODAL_FISH_S2_URL || "https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run";
     const modalPromptEnhancerUrl = generalData.modalPromptEnhancerUrl || process.env.MODAL_PROMPT_ENHANCER_URL || "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run";
+    const pexelsApiKey = generalData.pexelsApiKey || process.env.PEXELS_API_KEY || "";
+    const pixabayApiKey = generalData.pixabayApiKey || process.env.PIXABAY_API_KEY || "";
 
     // Self-heal: If modalQwenVoiceCloneUrl mistakenly holds the Fish URL (from when there was only 1 field)
     if (modalQwenVoiceCloneUrl.toLowerCase().includes("fish")) {
@@ -137,6 +141,8 @@ export async function GET() {
       modalQwenVoiceCloneUrl,
       modalFishVoiceCloneUrl,
       modalPromptEnhancerUrl,
+      pexelsApiKey,
+      pixabayApiKey,
       showShortsTitleOverlay: Boolean(generalData.showShortsTitleOverlay),
       generalSettings: generalData,
       imageEndpoints: imageRows || [],
@@ -192,6 +198,8 @@ export async function POST(request) {
       modalQwenTtsUrl = "https://geniusdomainnames--qwen3-tts-custom-web.modal.run",
       modalQwenVoiceCloneUrl = "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run",
       modalPromptEnhancerUrl = "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run",
+      pexelsApiKey = "",
+      pixabayApiKey = "",
       showShortsTitleOverlay = false,
     } = body;
 
@@ -219,6 +227,8 @@ export async function POST(request) {
     const qwenVoiceCloneUrl = (modalQwenVoiceCloneUrl || process.env.MODAL_QWEN_VOICE_CLONE_URL || "https://geniusdomainnames--qwen3-tts-voice-cloner.modal.run").trim().replace(".us-east.modal.run", ".modal.run");
     const fishVoiceCloneUrl = (modalFishVoiceCloneUrl || process.env.MODAL_FISH_S2_URL || "https://geniusdomainnames--faceless-fish-s2-tts-serve.modal.run").trim();
     const enhancerUrl = (modalPromptEnhancerUrl || process.env.MODAL_PROMPT_ENHANCER_URL || "https://longychima--qwen-image-2-1-pe-t2i-t4-qwenpet2i-web.modal.run").trim();
+    const cleanPexelsKey = (pexelsApiKey || process.env.PEXELS_API_KEY || "").trim();
+    const cleanPixabayKey = (pixabayApiKey || process.env.PIXABAY_API_KEY || "").trim();
 
     const existing = await sql`SELECT id FROM general_settings LIMIT 1;`;
     if (existing && existing.length > 0) {
@@ -245,6 +255,8 @@ export async function POST(request) {
           modal_qwen_voice_clone_url = ${qwenVoiceCloneUrl},
           modal_fish_voice_clone_url = ${fishVoiceCloneUrl},
           modal_prompt_enhancer_url = ${enhancerUrl},
+          pexels_api_key = ${cleanPexelsKey},
+          pixabay_api_key = ${cleanPixabayKey},
           show_shorts_title_overlay = ${Boolean(showShortsTitleOverlay)},
           updated_at = NOW()
         WHERE id = ${existing[0].id};
@@ -272,6 +284,8 @@ export async function POST(request) {
           modal_qwen_voice_clone_url,
           modal_fish_voice_clone_url,
           modal_prompt_enhancer_url,
+          pexels_api_key,
+          pixabay_api_key,
           show_shorts_title_overlay,
           created_at,
           updated_at
@@ -297,6 +311,8 @@ export async function POST(request) {
           ${qwenVoiceCloneUrl},
           ${fishVoiceCloneUrl},
           ${enhancerUrl},
+          ${cleanPexelsKey},
+          ${cleanPixabayKey},
           ${Boolean(showShortsTitleOverlay)},
           NOW(),
           NOW()
@@ -432,6 +448,8 @@ export async function POST(request) {
       modalQwenVoiceCloneUrl: refreshedGen.modalQwenVoiceCloneUrl || qwenVoiceCloneUrl,
       modalFishVoiceCloneUrl: refreshedGen.modalFishVoiceCloneUrl || fishVoiceCloneUrl,
       modalPromptEnhancerUrl: refreshedGen.modalPromptEnhancerUrl || enhancerUrl,
+      pexelsApiKey: refreshedGen.pexelsApiKey || cleanPexelsKey,
+      pixabayApiKey: refreshedGen.pixabayApiKey || cleanPixabayKey,
       showShortsTitleOverlay: Boolean(refreshedGen.showShortsTitleOverlay),
       generalSettings: refreshedGen,
       imageEndpoints: refreshedImageRows || [],

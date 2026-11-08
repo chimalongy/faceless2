@@ -2641,6 +2641,9 @@ export default function TopicStudioPage() {
               handleAssignFromPool={handleAssignFromPool}
               isAssigningFromPool={isAssigningFromPool}
               isShort={isShort}
+              channelSlug={channelSlug}
+              topicSlug={topicSlug}
+              setSceneImages={setSceneImages}
             />
           )}
 

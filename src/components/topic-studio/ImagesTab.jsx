@@ -24,12 +24,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
+  Globe,
   Grid
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
-import { sortSceneImages } from "@/lib/scene-images";
+import { sortSceneImages, getImageIndex } from "@/lib/scene-images";
+import { useParams } from "next/navigation";
+import { extractKeywords } from "@/lib/stock-media";
+import StockSearchModal from "./StockSearchModal";
 
 export default function ImagesTab({
   scenesJson,
@@ -47,6 +51,10 @@ export default function ImagesTab({
   handleAssignFromPool,
   isAssigningFromPool = false,
   isShort = false,
+  channelSlug: propChannelSlug,
+  topicSlug: propTopicSlug,
+  setSceneImages,
+  onReloadAssets,
 }) {
   const [expandedPrompts, setExpandedPrompts] = useState({});
   const [downloadingScenes, setDownloadingScenes] = useState({});
@@ -63,6 +71,101 @@ export default function ImagesTab({
 
   // Fullscreen Lightbox Modal state: { sceneNum, frameIndex, totalFrames, url, name, prompt, sceneImagesList }
   const [lightbox, setLightbox] = useState(null);
+
+  // Stock Media State
+  const routeParams = useParams();
+  const channelSlug = propChannelSlug || routeParams?.["channel-name"] || "";
+  const topicSlug = propTopicSlug || routeParams?.["topic-name"] || "";
+  const [stockModal, setStockModal] = useState({
+    isOpen: false,
+    sceneNumber: null,
+    frameIndex: 1,
+    initialQuery: "",
+  });
+  const [isAutoStocking, setIsAutoStocking] = useState(false);
+
+  function handleOpenStockModal(sceneNum, frameIndex = 1, scene = null) {
+    const promptText = scene?.image_prompt || scene?.visual_prompt || scene?.prompt || "";
+    const audioText = scene?.audio_text || scene?.narration || scene?.script || scene?.text || "";
+    const query = extractKeywords(promptText, audioText, 3);
+    setStockModal({
+      isOpen: true,
+      sceneNumber: sceneNum,
+      frameIndex,
+      initialQuery: query,
+    });
+  }
+
+  function handleStockAssetImported(data) {
+    const { sceneIndex, frameIndex, assignedUrl, assignedKey, fileName } = data;
+    if (setSceneImages && sceneIndex !== null) {
+      setSceneImages((prev) => {
+        const next = { ...prev };
+        const sNum = Number(sceneIndex);
+        const current = next[sNum] || {
+          url: assignedUrl,
+          key: assignedKey,
+          name: fileName || `Scene ${sNum} Image`,
+          images: [],
+        };
+        let frameList = Array.isArray(current.images) ? [...current.images] : [];
+        const newImg = {
+          url: assignedUrl,
+          key: assignedKey,
+          name: fileName || `Scene ${sNum} Image ${frameIndex}`,
+          imageIndex: frameIndex,
+        };
+        const existingIdx = frameList.findIndex(
+          (item, idx) => getImageIndex(item, sNum) === frameIndex || item.imageIndex === frameIndex || (frameIndex === 1 && idx === 0 && frameList.length <= 1)
+        );
+        if (existingIdx >= 0) {
+          frameList[existingIdx] = newImg;
+        } else {
+          frameList.push(newImg);
+        }
+        frameList = sortSceneImages(frameList, sNum);
+        next[sNum] = {
+          ...current,
+          url: frameList[0]?.url || assignedUrl,
+          key: frameList[0]?.key || assignedKey,
+          name: frameList[0]?.name || fileName,
+          images: frameList,
+        };
+        return next;
+      });
+    }
+    if (onReloadAssets) {
+      onReloadAssets();
+    }
+  }
+
+  async function handleAutoStockAll() {
+    if (!channelSlug || !topicSlug) {
+      toast.error("Missing channel or topic slug");
+      return;
+    }
+    setIsAutoStocking(true);
+    toast("Auto-fetching matching royalty-free stock media for all scenes...", { icon: "🌐" });
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}/auto-stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaType: "photos", source: "all" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to auto-fetch stock media");
+      if (data.nextSceneImages && setSceneImages) {
+        setSceneImages(data.nextSceneImages);
+      }
+      if (onReloadAssets) onReloadAssets();
+      toast.success(`Successfully populated ${data.assignedCount} of ${data.totalScenes} scenes with stock media!`);
+    } catch (err) {
+      console.error("Auto stock error:", err);
+      toast.error(err.message || "Failed to auto-fetch stock media");
+    } finally {
+      setIsAutoStocking(false);
+    }
+  }
 
   // Live ZIP upload & extraction progress state
   const [zipProgress, setZipProgress] = useState({
@@ -480,6 +583,27 @@ export default function ImagesTab({
                 )}
               </button>
             )}
+
+            {/* Auto-Stock All Media Button */}
+            <button
+              type="button"
+              disabled={isAutoStocking || parsedScenes.length === 0}
+              onClick={handleAutoStockAll}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-emerald-600/40 bg-emerald-600/10 hover:bg-emerald-600/20 text-xs font-semibold text-emerald-700 transition-all cursor-pointer disabled:opacity-60 shrink-0"
+              title={`Auto-fetch royalty-free stock visuals from Pexels & Pixabay for all ${isShort ? "Shorts" : "Longform"} scenes`}
+            >
+              {isAutoStocking ? (
+                <>
+                  <Loader2 size={13} className="animate-spin text-emerald-600" />
+                  <span>Auto-Fetching Stock...</span>
+                </>
+              ) : (
+                <>
+                  <Globe size={13} className="text-emerald-600" />
+                  <span>Auto-Stock All ({isShort ? "Shorts" : "Longform"})</span>
+                </>
+              )}
+            </button>
 
             {/* Generate All */}
             <button
@@ -1263,6 +1387,23 @@ export default function ImagesTab({
                                     </span>
                                   </>
                                 )}
+                              </button>
+
+                              {/* Stock Search Button */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOpenStockModal(
+                                    sceneNum,
+                                    isMultiImage ? activeFrameIndex : 1,
+                                    scene
+                                  )
+                                }
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-emerald-600/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 text-[10px] font-semibold transition-all cursor-pointer"
+                                title="Search free royalty-free stock photos & videos online (Pexels & Pixabay)"
+                              >
+                                <Globe size={10} className="text-emerald-600" />
+                                <span>Stock Search</span>
                               </button>
 
                               {/* Roll single frame from pool */}
