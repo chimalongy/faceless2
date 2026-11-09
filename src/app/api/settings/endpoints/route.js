@@ -323,9 +323,9 @@ export async function POST(request) {
 
     const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
-    // 2. Sync Image Endpoints: Delete current and re-insert or upsert
-    await sql`DELETE FROM image_endpoints;`;
-    if (Array.isArray(imageEndpoints) && imageEndpoints.length > 0) {
+    // 2. Sync Image Endpoints: Only sync if explicitly provided in request body
+    if (body.imageEndpoints !== undefined && Array.isArray(imageEndpoints)) {
+      await sql`DELETE FROM image_endpoints;`;
       for (const ep of imageEndpoints) {
         const email = (ep.accountEmail || ep["account-email"] || "").trim();
         const url = (ep.genUrl || ep["gen-url"] || "").trim();
@@ -340,9 +340,9 @@ export async function POST(request) {
       }
     }
 
-    // 3. Sync Audio Endpoints: Delete current and re-insert or upsert
-    await sql`DELETE FROM audio_endpoints;`;
-    if (Array.isArray(audioEndpoints) && audioEndpoints.length > 0) {
+    // 3. Sync Audio Endpoints: Only sync if explicitly provided in request body
+    if (body.audioEndpoints !== undefined && Array.isArray(audioEndpoints)) {
+      await sql`DELETE FROM audio_endpoints;`;
       for (const ep of audioEndpoints) {
         const email = (ep.accountEmail || ep["account-email"] || "").trim();
         const url = (ep.genUrl || ep["gen-url"] || "").trim();
@@ -357,9 +357,9 @@ export async function POST(request) {
       }
     }
 
-    // 4. Sync LLM Accounts: Delete current and re-insert
-    await sql`DELETE FROM llm_accounts;`;
-    if (Array.isArray(llmAccounts) && llmAccounts.length > 0) {
+    // 4. Sync LLM Accounts: Only sync if explicitly provided in request body
+    if (body.llmAccounts !== undefined && Array.isArray(llmAccounts)) {
+      await sql`DELETE FROM llm_accounts;`;
       for (const acc of llmAccounts) {
         const email = (acc.accountEmail || acc["account-email"] || acc.account_email || "").trim();
         const source = (acc.source || "gemini").trim();

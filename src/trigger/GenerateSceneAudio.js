@@ -1,5 +1,5 @@
 import { task, logger } from "@trigger.dev/sdk";
-import { generateAudio, bulkGenerateAudio } from "@/lib/audio-generator";
+import { generateAudio, bulkGenerateAudio, KOKORO_VOICES } from "@/lib/audio-generator";
 import { applyAudioEffects, buildAudioFilterString } from "@/lib/audio-effects";
 import { uploadToR2, deleteFromR2 } from "@/lib/storage";
 import { getDbSql, initDbSchema } from "@/lib/db";
@@ -65,6 +65,32 @@ export const generateSceneAudioTask = task({
 
     if (!resolvedTtsModel) resolvedTtsModel = "kokoro";
     if (!resolvedVoice) resolvedVoice = resolvedTtsModel === "qwen" ? "Ryan" : "af_heart";
+
+    // Self-heal: If ttsModel is 'clone' or 'fish', but voice is a preset Kokoro voice (e.g. 'af_heart'),
+    // auto-resolve to the channel's actual registered cloned voice.
+    if (resolvedTtsModel === "clone" || resolvedTtsModel === "fish") {
+      const isKokoroPreset = KOKORO_VOICES.some((v) => v.id.toLowerCase() === (resolvedVoice || "").toLowerCase());
+      if (isKokoroPreset || !resolvedVoice) {
+        try {
+          const sql = getDbSql();
+          if (sql) {
+            const cloneRows = await sql`
+              SELECT name FROM voice_clones
+              ORDER BY created_at DESC;
+            `;
+            if (cloneRows && cloneRows.length > 0) {
+              const match = cloneRows.find((r) => r.name.toLowerCase().includes(channelSlug.toLowerCase())) || cloneRows[0];
+              if (match?.name) {
+                logger.warn(`[GenerateSceneAudio] Overriding preset voice '${resolvedVoice}' with registered clone '${match.name}' because ttsModel is '${resolvedTtsModel}'.`);
+                resolvedVoice = match.name;
+              }
+            }
+          }
+        } catch (e) {
+          logger.warn("Could not auto-resolve clone voice fallback:", e);
+        }
+      }
+    }
 
     // Support both single scene invocation and batch array invocation
     let sceneList = [];

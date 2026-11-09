@@ -92,6 +92,9 @@ export default function AudioTab({
     if (isCustom && activeModel !== "clones") {
       setActiveModel("clones");
       setTtsModel?.("clone");
+    } else if ((activeModel === "clones" || ttsModel === "clone") && !isCustom && customVoiceClones.length > 0) {
+      const firstClone = customVoiceClones[0]?.voice_name;
+      if (firstClone) setSelectedVoice(firstClone);
     } else if (!isCustom && isQwenVoice(selectedVoice) && activeModel !== "qwen") {
       setActiveModel("qwen");
       setTtsModel?.("qwen");
@@ -99,7 +102,7 @@ export default function AudioTab({
       setActiveModel("kokoro");
       setTtsModel?.("kokoro");
     }
-  }, [selectedVoice, customVoiceClones]);
+  }, [selectedVoice, customVoiceClones, activeModel, ttsModel]);
 
   let parsedScenes = [];
   try {
