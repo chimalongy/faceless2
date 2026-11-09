@@ -104,18 +104,18 @@ export async function decrementEndpointUsage(endpointId) {
  * @param {string} options.prompt - The full image prompt
  * @param {number} [options.width=1376] - Image width
  * @param {number} [options.height=768] - Image height
- * @param {number} [options.numInferenceSteps=50] - Inference steps
+ * @param {number} [options.numInferenceSteps=28] - Inference steps (optimal 28 for fast convergence)
  * @param {number} [options.seed=42] - Seed
- * @param {number} [options.timeoutMs=300000] - Timeout in milliseconds (default: 5 min)
+ * @param {number} [options.timeoutMs=120000] - Timeout in milliseconds (default: 2 min)
  * @returns {Promise<{ success: boolean, imageBase64: string, imageBuffer: Buffer, endpointUsed: string, remainingUsage: number }>}
  */
 export async function generateImage({
   prompt,
   width = 1376,
   height = 768,
-  numInferenceSteps = 50,
+  numInferenceSteps = 28,
   seed = null,
-  timeoutMs = 300000,
+  timeoutMs = 120000, // 2 minutes max per endpoint attempt
 }) {
   if (!prompt || typeof prompt !== "string") {
     throw new Error("Prompt is required for image generation.");

@@ -14,7 +14,7 @@ export const generateThumbnailImageTask = task({
       width = null,
       height = null,
       seed = null,
-      numInferenceSteps = 50,
+      numInferenceSteps = 28,
     } = payload;
 
     if (!channelSlug || typeof channelSlug !== "string" || !channelSlug.trim()) {

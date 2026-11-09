@@ -7,6 +7,7 @@ import { parseImageFileName } from "@/lib/scene-images";
 
 export const extractZipImagesTask = task({
   id: "extract-zip-images",
+  maxDuration: 7200, // 2 hours max duration for large zip extractions
   run: async (payload) => {
     const {
       channelSlug,

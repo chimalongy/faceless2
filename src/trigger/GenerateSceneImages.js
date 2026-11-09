@@ -7,6 +7,7 @@ import { buildFullImagePrompt } from "@/lib/image-theme";
 
 export const generateSceneImagesTask = task({
   id: "generate-scene-images",
+  maxDuration: 10800, // 3 hours max duration for bulk image generation
   run: async (payload) => {
     const {
       channelSlug,
@@ -21,7 +22,7 @@ export const generateSceneImagesTask = task({
       globalThemePrompt = "",
       width = 1376,
       height = 768,
-      numInferenceSteps = 50,
+      numInferenceSteps = 28,
       seed = 42,
     } = payload;
 
