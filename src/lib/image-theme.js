@@ -18,18 +18,6 @@ export const IMAGE_THEME_FIELDS = [
     description: "Overall artistic medium, style direction, and line work.",
   },
   {
-    key: "characterIdentity",
-    label: "Character Identity",
-    placeholder: "e.g. 30-year-old Black man, short buzz cut fade, trimmed goatee, athletic slim build, stoic calm expression...",
-    description: "Fixed subject physical traits, facial features, and build.",
-  },
-  {
-    key: "wardrobe",
-    label: "Wardrobe",
-    placeholder: "e.g. Charcoal gray oversized heavyweight hoodie, dark raw denim trousers, black leather boots...",
-    description: "Consistent clothing, materials, and accessories across scenes.",
-  },
-  {
     key: "colorPalette",
     label: "Color Palette",
     placeholder: "e.g. Deep navy obsidian, warm amber streetlamp highlights, deep indigo shadows, muted saturation...",
@@ -48,6 +36,23 @@ export const IMAGE_THEME_FIELDS = [
     description: "Environmental setting rules, depth of field, and atmosphere.",
   },
 ];
+
+export function formatCharacterForPrompt(character) {
+  if (!character) return "";
+  if (typeof character === "string") return character.trim();
+  const parts = [];
+  if (character.name) parts.push(`Name: ${character.name}`);
+  if (character.physicalSpec || character.physical_spec) {
+    parts.push(`Physical Spec: ${character.physicalSpec || character.physical_spec}`);
+  }
+  if (character.signatureFeature || character.signature_feature) {
+    parts.push(`Signature Feature: ${character.signatureFeature || character.signature_feature}`);
+  }
+  if (character.wardrobe) {
+    parts.push(`Wardrobe: ${character.wardrobe}`);
+  }
+  return parts.join("\n");
+}
 
 export const DEFAULT_IMAGE_THEME = Object.freeze({
   visualStyle: "",
@@ -348,7 +353,7 @@ export function shouldIncludeWardrobe(scenePrompt = "", cameraOptions = {}) {
  * @param {object} [cameraOptions={}] - Optional camera framing parameters ({ shotType, cameraAngle, lens })
  * @returns {string}
  */
-export function buildFullImagePrompt(theme, scenePrompt = "", cameraOptions = {}) {
+export function buildFullImagePrompt(theme, scenePrompt = "", cameraOptions = {}, character = null) {
   const cleanScene = (scenePrompt || "").trim();
   const framingTag = formatCameraFraming(cameraOptions);
 
@@ -393,14 +398,22 @@ export function buildFullImagePrompt(theme, scenePrompt = "", cameraOptions = {}
 
       const styleLines = [];
 
+      const charSpec = character ? (typeof character === "object" ? character : null) : null;
+      const charIdentity = charSpec?.physicalSpec || charSpec?.physical_spec || parsed.characterIdentity;
+      const charSignature = charSpec?.signatureFeature || charSpec?.signature_feature;
+      const charWardrobe = charSpec?.wardrobe || parsed.wardrobe;
+
       if (parsed.visualStyle) {
         styleLines.push(`Visual Style: ${parsed.visualStyle}`);
       }
-      if (includeChar && parsed.characterIdentity) {
-        styleLines.push(`Character Identity: ${parsed.characterIdentity}`);
+      if (includeChar && charIdentity) {
+        styleLines.push(`Character Identity: ${charIdentity}`);
       }
-      if (includeWardrobe && parsed.wardrobe) {
-        styleLines.push(`Wardrobe: ${parsed.wardrobe}`);
+      if (includeChar && charSignature) {
+        styleLines.push(`Signature Feature: ${charSignature}`);
+      }
+      if (includeWardrobe && charWardrobe) {
+        styleLines.push(`Wardrobe: ${charWardrobe}`);
       }
       if (parsed.rendering) {
         styleLines.push(`Rendering: ${parsed.rendering}`);

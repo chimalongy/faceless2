@@ -26,7 +26,9 @@ import {
   Smartphone,
   Scissors,
   Volume2,
-  RotateCcw
+  RotateCcw,
+  User,
+  Star
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -211,6 +213,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
   const [channelProfile, setChannelProfile] = useState(null);
   const [pillars, setPillars] = useState([]);
   const [topics, setTopics] = useState([]);
+  const [channelCharacters, setChannelCharacters] = useState([]);
 
   // UI States
   const [copiedJson, setCopiedJson] = useState(false);
@@ -299,6 +302,13 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
       if (topicsRes.ok) {
         const data = await topicsRes.json();
         if (Array.isArray(data.topics)) setTopics(data.topics);
+      }
+
+      // 4. Fetch channel characters
+      const charsRes = await fetch(`/api/channels/${channelSlug}/characters`);
+      if (charsRes.ok) {
+        const data = await charsRes.json();
+        if (Array.isArray(data.characters)) setChannelCharacters(data.characters);
       }
     } catch (err) {
       console.warn("Could not load workspace data from API:", err);
@@ -803,9 +813,9 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
           </Link>
 
           <Link
-            href={`/dashboard/channels/${channelSlug}/image-pool`}
+            href={`/dashboard/channels/${channelSlug}/image-settings`}
             className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-              activeTab === "image-pool"
+              activeTab === "image-settings" || activeTab === "image-pool"
                 ? "border-signal text-signal font-bold bg-signal/5"
                 : "border-transparent text-ink-muted hover:text-ink hover:border-line"
             }`}
@@ -1249,8 +1259,8 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
             />
           )}
 
-          {/* TAB 6: IMAGE POOL */}
-          {activeTab === "image-pool" && (
+          {/* TAB 6: IMAGE SETTINGS */}
+          {(activeTab === "image-settings" || activeTab === "image-pool") && (
             <ChannelImageSettings
               channelSlug={channelSlug}
               channelTitle={channelTitle}
@@ -1431,24 +1441,120 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
                   </span>
                 </div>
 
-                {pillarUseMainChar && (
-                  <div className="pt-2 border-t border-line/60 space-y-1 animate-fade-in">
-                    <label className="block font-semibold text-ink/80 text-[11px]" htmlFor="p-main-char-desc">
-                      Main Character Persona / Description *
-                    </label>
-                    <textarea
-                      id="p-main-char-desc"
-                      rows={2}
-                      value={pillarMainCharDesc}
-                      onChange={(e) => setPillarMainCharDesc(e.target.value)}
-                      placeholder="e.g. Archeologist in his late 40s who travels to forgotten ruins, analytical, wears a worn leather jacket..."
-                      className="w-full p-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal leading-relaxed text-xs"
-                    />
-                    <span className="text-[10px] text-ink-muted block">
-                      Injected into script prompts and character continuity directives.
-                    </span>
-                  </div>
-                )}
+                {pillarUseMainChar && (() => {
+                  const mainChar = channelCharacters.find((c) => Boolean(c.is_main ?? c.isMain));
+                  return (
+                    <div className="pt-2 border-t border-line/60 space-y-2 animate-fade-in">
+                      {mainChar ? (
+                        <div className="p-2.5 bg-signal/[0.04] border border-signal/30 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-ink font-semibold">
+                              <span className="p-1 rounded-full bg-signal/15 text-signal">
+                                <User size={12} />
+                              </span>
+                              <span>Channel Main Character:</span>
+                              <span className="font-bold text-signal">{mainChar.name}</span>
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[9px] font-bold uppercase">
+                                <Star size={9} className="fill-amber-500 text-amber-500" />
+                                Main
+                              </span>
+                            </div>
+                            {channelCharacters.length > 1 && (
+                              <div className="text-[10px] text-ink-muted">
+                                {channelCharacters.length} characters in pool
+                              </div>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-ink-muted leading-tight">
+                            When this pillar generates scene and script prompts, the system automatically uses <strong>{mainChar.name}</strong>'s physical specs, signature feature, and wardrobe unless overridden below.
+                          </p>
+
+                          {channelCharacters.length > 1 && (
+                            <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                              <span className="text-[10px] font-mono text-ink-muted">Quick select:</span>
+                              {channelCharacters.map((char) => (
+                                <button
+                                  key={char.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const desc = [
+                                      char.name ? `Name: ${char.name}` : null,
+                                      (char.physical_spec || char.physicalSpec) ? `Physical Spec: ${char.physical_spec || char.physicalSpec}` : null,
+                                      (char.signature_feature || char.signatureFeature) ? `Signature Feature: ${char.signature_feature || char.signatureFeature}` : null,
+                                      char.wardrobe ? `Wardrobe: ${char.wardrobe}` : null,
+                                    ].filter(Boolean).join("\n");
+                                    setPillarMainCharDesc(desc);
+                                  }}
+                                  className={`text-[10px] px-2 py-0.5 border cursor-pointer transition-all ${
+                                    char.is_main
+                                      ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 font-semibold"
+                                      : "border-line bg-paper text-ink-muted hover:text-ink"
+                                  }`}
+                                >
+                                  {char.name} {char.is_main && "★"}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-2.5 bg-paper/60 border border-line text-xs space-y-1">
+                          <p className="text-ink text-[11px]">
+                            No Main Character currently designated in{" "}
+                            <Link
+                              href={`/dashboard/channels/${channelSlug}/image-settings`}
+                              className="text-signal underline font-semibold hover:text-signal-hover"
+                              target="_blank"
+                            >
+                              Image Settings
+                            </Link>
+                            .
+                          </p>
+                          <p className="text-[10px] text-ink-muted">
+                            You can specify a custom description below, or define channel characters in Image Settings.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="block font-semibold text-ink/80 text-[11px]" htmlFor="p-main-char-desc">
+                            Character Persona / Custom Override (Optional)
+                          </label>
+                          {pillarMainCharDesc && (
+                            <button
+                              type="button"
+                              onClick={() => setPillarMainCharDesc("")}
+                              className="text-[10px] text-signal hover:underline cursor-pointer"
+                            >
+                              Reset to default ({mainChar?.name || "Main Character"})
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          id="p-main-char-desc"
+                          rows={2}
+                          value={pillarMainCharDesc}
+                          onChange={(e) => setPillarMainCharDesc(e.target.value)}
+                          placeholder={
+                            mainChar
+                              ? `Leave empty to dynamically use channel main character "${mainChar.name}" (${mainChar.physical_spec || mainChar.signature_feature || "structured specs"})...`
+                              : "e.g. Archeologist in his late 40s who travels to forgotten ruins, analytical, wears a worn leather jacket..."
+                          }
+                          className="w-full p-2.5 border border-line-dark bg-white text-ink outline-none focus:border-signal leading-relaxed text-xs font-mono"
+                        />
+                        <span className="text-[10px] text-ink-muted block">
+                          {pillarMainCharDesc
+                            ? "Custom character specification applied for this pillar."
+                            : mainChar
+                            ? `✓ Automatically linked to "${mainChar.name}". Injected into script prompts and image style continuity.`
+                            : "Injected into script prompts and character continuity directives."}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Script Structure & Narrative Blueprint */}

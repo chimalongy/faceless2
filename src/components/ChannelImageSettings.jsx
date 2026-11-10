@@ -23,6 +23,12 @@ import {
   FileCode,
   Copy,
   RotateCcw,
+  User,
+  Users,
+  Star,
+  Plus,
+  Edit3,
+  CheckCircle2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -74,6 +80,18 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
   const [savingThumbnailTheme, setSavingThumbnailTheme] = useState(false);
   const [savedThumbnailTheme, setSavedThumbnailTheme] = useState(false);
 
+  // Channel Characters state
+  const [characters, setCharacters] = useState([]);
+  const [loadingCharacters, setLoadingCharacters] = useState(true);
+  const [characterModalOpen, setCharacterModalOpen] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState(null);
+  const [charName, setCharName] = useState("");
+  const [charPhysicalSpec, setCharPhysicalSpec] = useState("");
+  const [charSignatureFeature, setCharSignatureFeature] = useState("");
+  const [charWardrobe, setCharWardrobe] = useState("");
+  const [charIsMain, setCharIsMain] = useState(false);
+  const [isSavingChar, setIsSavingChar] = useState(false);
+
   const fileInputRef = useRef(null);
   const zipInputRef = useRef(null);
 
@@ -98,7 +116,129 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
       .catch((err) => {
         console.error("Failed to load channel for image settings:", err);
       });
+    loadCharacters();
   }, [channelSlug]);
+
+  async function loadCharacters() {
+    setLoadingCharacters(true);
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/characters`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load characters:", err);
+    } finally {
+      setLoadingCharacters(false);
+    }
+  }
+
+  function handleOpenCreateCharacter() {
+    setEditingCharacter(null);
+    setCharName("");
+    setCharPhysicalSpec("");
+    setCharSignatureFeature("");
+    setCharWardrobe("");
+    setCharIsMain(characters.length === 0);
+    setCharacterModalOpen(true);
+  }
+
+  function handleOpenEditCharacter(char) {
+    setEditingCharacter(char);
+    setCharName(char.name || "");
+    setCharPhysicalSpec(char.physical_spec || char.physicalSpec || "");
+    setCharSignatureFeature(char.signature_feature || char.signatureFeature || "");
+    setCharWardrobe(char.wardrobe || "");
+    setCharIsMain(Boolean(char.is_main ?? char.isMain));
+    setCharacterModalOpen(true);
+  }
+
+  async function handleSaveCharacter(e) {
+    if (e) e.preventDefault();
+    if (!charName.trim()) {
+      toast.error("Character name is required");
+      return;
+    }
+
+    setIsSavingChar(true);
+    try {
+      const isEdit = Boolean(editingCharacter);
+      const method = isEdit ? "PUT" : "POST";
+      const body = {
+        id: isEdit ? editingCharacter.id : undefined,
+        name: charName.trim(),
+        physicalSpec: charPhysicalSpec.trim(),
+        signatureFeature: charSignatureFeature.trim(),
+        wardrobe: charWardrobe.trim(),
+        isMain: charIsMain,
+      };
+
+      const res = await fetch(`/api/channels/${channelSlug}/characters`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to save character");
+      }
+
+      toast.success(isEdit ? "Character updated!" : "Character created!");
+      setCharacterModalOpen(false);
+      loadCharacters();
+    } catch (err) {
+      console.error("Save character error:", err);
+      toast.error(err.message || "Failed to save character");
+    } finally {
+      setIsSavingChar(false);
+    }
+  }
+
+  async function handleSetAsMainCharacter(char) {
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/characters`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: char.id,
+          isMain: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to set main character");
+      }
+      toast.success(`"${char.name}" set as Main Character!`);
+      loadCharacters();
+    } catch (err) {
+      console.error("Set main character error:", err);
+      toast.error(err.message || "Failed to set main character");
+    }
+  }
+
+  async function handleDeleteCharacter(char) {
+    if (!confirm(`Delete character "${char.name}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/characters?id=${char.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete character");
+      }
+      toast.success("Character deleted");
+      loadCharacters();
+    } catch (err) {
+      console.error("Delete character error:", err);
+      toast.error(err.message || "Failed to delete character");
+    }
+  }
 
   useEffect(() => {
     loadPoolImages(activePool);
@@ -433,9 +573,9 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
     }
   }
 
-  // Clear all 6 fields
+  // Clear Visual Identity fields
   function handleClearTheme() {
-    if (confirm("Clear all 6 Visual Identity fields?")) {
+    if (confirm("Clear all Visual Identity fields?")) {
       setImageTheme({ ...DEFAULT_IMAGE_THEME });
       toast("Image theme cleared");
     }
@@ -558,7 +698,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
               <span>Consistent Visual Identity (Image Theme)</span>
             </div>
             <p className="text-xs text-ink-muted leading-relaxed">
-              Anchor your channel's visual universe. These 6 characteristics remain persistent across every generated scene image.
+              Anchor your channel's visual universe. These 4 visual style characteristics remain persistent across every generated scene image.
             </p>
           </div>
 
@@ -596,7 +736,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
           </div>
         </div>
 
-        {/* 6 Structured Keep Consistent Fields Grid */}
+        {/* 4 Structured Keep Consistent Fields Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {IMAGE_THEME_FIELDS.map((field) => (
             <div key={field.key} className="space-y-1.5 p-3.5 border border-line/60 bg-white/40">
@@ -627,7 +767,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
         <div className="flex items-center justify-between pt-2 border-t border-line/60">
           <div className="text-[11px] font-mono text-ink-muted">
             {hasImageThemeContent(imageTheme) ? (
-              <span className="text-signal font-semibold">● 6-Field identity active & configured</span>
+              <span className="text-signal font-semibold">● Visual identity active & configured</span>
             ) : (
               <span>○ Identity not configured yet</span>
             )}
@@ -645,7 +785,154 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
         </div>
       </section>
 
-      {/* 2. THUMBNAIL THEME SECTION */}
+      {/* 2. CHANNEL CHARACTERS (RECURRING CAST & MASCOTS) SECTION */}
+      <section className="p-6 border border-line bg-paper-card space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Users size={16} />
+              </span>
+              <span>Channel Characters (Recurring Cast & Mascots)</span>
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Define multiple characters with precise physical specifications and signature wardrobe. Mark one as the <strong>Main Character</strong> to be automatically used when content pillars have "Use Main Character" enabled.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleOpenCreateCharacter}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs transition-all cursor-pointer shrink-0"
+          >
+            <Plus size={14} />
+            <span>Add Character</span>
+          </button>
+        </div>
+
+        {loadingCharacters ? (
+          <div className="flex items-center justify-center py-8 text-ink-muted gap-2 text-xs">
+            <Loader2 size={16} className="animate-spin text-signal" />
+            <span>Loading characters...</span>
+          </div>
+        ) : characters.length === 0 ? (
+          <div className="text-center py-8 border border-dashed border-line bg-paper/50 p-6 space-y-3">
+            <div className="w-10 h-10 rounded-full bg-signal/10 text-signal flex items-center justify-center mx-auto">
+              <User size={20} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-ink">No characters created yet</p>
+              <p className="text-xs text-ink-muted max-w-md mx-auto">
+                Create your channel's protagonist or recurring mascot with consistent physical features, signature details, and wardrobe.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenCreateCharacter}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-signal text-white text-xs font-semibold hover:bg-signal-hover transition-all cursor-pointer"
+            >
+              <Plus size={13} />
+              <span>Create First Character</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {characters.map((char) => {
+              const isMain = Boolean(char.is_main ?? char.isMain);
+              return (
+                <div
+                  key={char.id}
+                  className={`p-4 border transition-all ${
+                    isMain
+                      ? "border-signal bg-signal/[0.03] shadow-xs ring-1 ring-signal/20"
+                      : "border-line/70 bg-white/50 hover:border-line"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3 pb-2.5 border-b border-line/60">
+                    <div className="flex items-center gap-2">
+                      <span className={`p-1.5 rounded-full ${isMain ? "bg-signal text-white" : "bg-ink/5 text-ink-muted"}`}>
+                        <User size={14} />
+                      </span>
+                      <div>
+                        <h4 className="text-sm font-bold text-ink leading-tight">{char.name}</h4>
+                        <span className="text-[10px] font-mono text-ink-muted">ID: {char.id}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isMain ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                          <Star size={11} className="fill-amber-500 text-amber-500" />
+                          <span>Main Character</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetAsMainCharacter(char)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 border border-line bg-paper hover:border-signal hover:text-signal text-[11px] font-medium text-ink-muted transition-all cursor-pointer"
+                          title="Designate as Channel Main Character"
+                        >
+                          <Star size={11} />
+                          <span>Set as Main</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditCharacter(char)}
+                        className="p-1.5 border border-line bg-paper hover:text-signal text-ink-muted transition-all cursor-pointer"
+                        title="Edit Character"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCharacter(char)}
+                        className="p-1.5 border border-line bg-paper hover:text-red-600 text-ink-muted transition-all cursor-pointer"
+                        title="Delete Character"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3 Structured Spec Fields */}
+                  <div className="space-y-2.5 text-xs">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-mono font-semibold text-ink-muted uppercase tracking-wider block">
+                        Physical Spec
+                      </span>
+                      <p className="text-ink font-mono text-[11px] leading-relaxed bg-paper/60 p-2 border border-line/40 rounded-xs">
+                        {char.physical_spec || char.physicalSpec || <span className="text-ink-muted italic">None specified</span>}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-mono font-semibold text-ink-muted uppercase tracking-wider block">
+                        Signature Feature
+                      </span>
+                      <p className="text-ink font-mono text-[11px] leading-relaxed bg-paper/60 p-2 border border-line/40 rounded-xs">
+                        {char.signature_feature || char.signatureFeature || <span className="text-ink-muted italic">None specified</span>}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-mono font-semibold text-ink-muted uppercase tracking-wider block">
+                        Wardrobe
+                      </span>
+                      <p className="text-ink font-mono text-[11px] leading-relaxed bg-paper/60 p-2 border border-line/40 rounded-xs">
+                        {char.wardrobe || <span className="text-ink-muted italic">None specified</span>}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* 3. THUMBNAIL THEME SECTION */}
       <section className="p-6 border border-line bg-paper-card space-y-4">
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
@@ -690,7 +977,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
         </form>
       </section>
 
-      {/* 3. USE IMAGE POOL PREFERENCE TOGGLE */}
+      {/* 4. USE IMAGE POOL PREFERENCE TOGGLE */}
       <section className="p-5 border border-line bg-paper-card">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1 max-w-xl">
@@ -700,7 +987,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
               {savingPoolToggle && <Loader2 size={12} className="animate-spin text-signal" />}
             </div>
             <p className="text-[11px] text-ink-muted leading-relaxed">
-              When enabled, topic studios can randomly assign images from this pool to all scene frames with one click. When disabled, scene visuals will be generated directly using the 6-field AI Visual Identity above.
+              When enabled, topic studios can randomly assign images from this pool to all scene frames with one click. When disabled, scene visuals will be generated directly using the visual identity and character specifications above.
             </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
@@ -1067,6 +1354,139 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
                 Apply JSON
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Create / Edit Character Modal */}
+      {characterModalOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+          onClick={() => setCharacterModalOpen(false)}
+        >
+          <div
+            className="bg-paper border border-line max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-signal/10 text-signal">
+                  <User size={16} />
+                </span>
+                <h3 className="text-sm font-bold text-ink">
+                  {editingCharacter ? `Edit Character: ${editingCharacter.name}` : "Create New Character"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCharacterModalOpen(false)}
+                className="text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCharacter} className="space-y-4">
+              {/* Name */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-ink">
+                  Name <span className="text-signal">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={charName}
+                  onChange={(e) => setCharName(e.target.value)}
+                  placeholder="e.g. The Observer, Marcus, Dr. Evelyn Vance"
+                  className="w-full p-2.5 border border-line-dark bg-white text-xs font-mono text-ink outline-none focus:border-signal"
+                />
+              </div>
+
+              {/* Physical Spec */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-ink">Physical Spec</label>
+                  <span className="text-[10px] font-mono text-ink-muted">Age, build, skin tone, hair, facial features</span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={charPhysicalSpec}
+                  onChange={(e) => setCharPhysicalSpec(e.target.value)}
+                  placeholder="e.g. Lean young adult White male with fair skin, clean-shaven, tousled dark-brown hair, expressive hazel eyes, intense thoughtful demeanor"
+                  className="w-full p-2.5 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal resize-y"
+                />
+              </div>
+
+              {/* Signature Feature */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-ink">Signature Feature</label>
+                  <span className="text-[10px] font-mono text-ink-muted">Instantly recognizable anchor</span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={charSignatureFeature}
+                  onChange={(e) => setCharSignatureFeature(e.target.value)}
+                  placeholder="e.g. Signature round amber-tinted glasses, distinct silver signet ring on right hand"
+                  className="w-full p-2.5 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal resize-y"
+                />
+              </div>
+
+              {/* Wardrobe */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-ink">Wardrobe</label>
+                  <span className="text-[10px] font-mono text-ink-muted">Consistent clothing & outfit</span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={charWardrobe}
+                  onChange={(e) => setCharWardrobe(e.target.value)}
+                  placeholder="e.g. Burnt-orange button-down overshirt over charcoal T-shirt, dark trousers, minimalist sneakers"
+                  className="w-full p-2.5 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal resize-y"
+                />
+              </div>
+
+              {/* Set as Main Character Checkbox */}
+              <div className="p-3 border border-line bg-paper/50 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="char-is-main"
+                  checked={charIsMain}
+                  onChange={(e) => setCharIsMain(e.target.checked)}
+                  className="mt-0.5 accent-signal cursor-pointer"
+                />
+                <label htmlFor="char-is-main" className="cursor-pointer select-none space-y-0.5">
+                  <span className="text-xs font-bold text-ink flex items-center gap-1.5">
+                    <Star size={12} className={charIsMain ? "fill-amber-500 text-amber-500" : "text-ink-muted"} />
+                    <span>Set as Channel Main Character</span>
+                  </span>
+                  <p className="text-[11px] text-ink-muted leading-tight">
+                    When content pillars enable "Use Main Character", this character's structured identity will be automatically injected into generated scene prompts.
+                  </p>
+                </label>
+              </div>
+
+              {/* Modal actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setCharacterModalOpen(false)}
+                  className="px-4 py-2 border border-line bg-paper text-ink-muted hover:text-ink text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingChar || !charName.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-50 text-white text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  {isSavingChar ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  <span>{isSavingChar ? "Saving..." : editingCharacter ? "Update Character" : "Create Character"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

@@ -140,6 +140,28 @@ export async function initDbSchema(force = false) {
       await sql`ALTER TABLE content_pillars ALTER COLUMN script_structure TYPE TEXT USING script_structure::text;`;
     } catch {}
 
+    // 2b. Channel Characters Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS channel_characters (
+        id SERIAL PRIMARY KEY,
+        channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        physical_spec TEXT,
+        signature_feature TEXT,
+        wardrobe TEXT,
+        is_main BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    try {
+      await sql`ALTER TABLE channel_characters ADD COLUMN IF NOT EXISTS physical_spec TEXT;`;
+      await sql`ALTER TABLE channel_characters ADD COLUMN IF NOT EXISTS signature_feature TEXT;`;
+      await sql`ALTER TABLE channel_characters ADD COLUMN IF NOT EXISTS wardrobe TEXT;`;
+      await sql`ALTER TABLE channel_characters ADD COLUMN IF NOT EXISTS is_main BOOLEAN DEFAULT FALSE;`;
+    } catch {}
+
     // 3. Topics Table
     await sql`
       CREATE TABLE IF NOT EXISTS topics (

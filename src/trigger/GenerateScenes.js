@@ -88,7 +88,30 @@ export const generateScenesTask = task({
 
     const visualTheme = (customImageTheme || channel.image_theme || "").trim();
     const pillarUseMainCharacter = Boolean(pillar?.useMainCharacter);
-    const pillarMainCharacterDescription = pillar?.mainCharacterDescription || null;
+    let pillarMainCharacterDescription = pillar?.mainCharacterDescription || null;
+
+    // Resolve channel main character if pillar has useMainCharacter enabled but no custom description
+    if (pillarUseMainCharacter && !pillarMainCharacterDescription?.trim()) {
+      try {
+        const mcRows = await sql`
+          SELECT name, physical_spec, signature_feature, wardrobe
+          FROM channel_characters
+          WHERE channel_id = ${channel.id} AND is_main = TRUE
+          LIMIT 1;
+        `;
+        if (mcRows?.length > 0) {
+          const mc = mcRows[0];
+          pillarMainCharacterDescription = [
+            mc.name ? `Name: ${mc.name}` : null,
+            mc.physical_spec ? `Physical Spec: ${mc.physical_spec}` : null,
+            mc.signature_feature ? `Signature Feature: ${mc.signature_feature}` : null,
+            mc.wardrobe ? `Wardrobe: ${mc.wardrobe}` : null,
+          ].filter(Boolean).join("\n");
+        }
+      } catch (err) {
+        logger.warn("Could not query channel main character in GenerateScenes:", err);
+      }
+    }
 
     // 2. Fetch General Settings for Scene Generation Pipeline
     const generalRows = await sql`

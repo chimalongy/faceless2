@@ -9,6 +9,8 @@ import {
   formatCameraFraming,
   shouldIncludeCharacterIdentity,
   shouldIncludeWardrobe,
+  formatCharacterForPrompt,
+  IMAGE_THEME_FIELDS,
   DEFAULT_IMAGE_THEME,
 } from "../src/lib/image-theme.js";
 
@@ -181,4 +183,50 @@ test("shouldIncludeCharacterIdentity includes facial traits on medium / portrait
   const compiled = buildFullImagePrompt(theme, faceScene, camera);
   assert.match(compiled, /amber glasses/);
   assert.match(compiled, /Orange overshirt/);
+});
+
+test("IMAGE_THEME_FIELDS contains 4 visual style fields without wardrobe or characterIdentity", () => {
+  assert.equal(IMAGE_THEME_FIELDS.length, 4);
+  const keys = IMAGE_THEME_FIELDS.map((f) => f.key);
+  assert.deepEqual(keys, ["visualStyle", "colorPalette", "rendering", "backgroundTreatment"]);
+  assert.equal(keys.includes("characterIdentity"), false);
+  assert.equal(keys.includes("wardrobe"), false);
+});
+
+test("formatCharacterForPrompt produces structured 4-field specification", () => {
+  const character = {
+    name: "The Observer",
+    physicalSpec: "Lean young adult White male with fair skin, tousled dark-brown hair",
+    signatureFeature: "Signature round amber-tinted glasses",
+    wardrobe: "Burnt-orange button-down overshirt over charcoal T-shirt",
+  };
+
+  const formatted = formatCharacterForPrompt(character);
+  assert.match(formatted, /Name: The Observer/);
+  assert.match(formatted, /Physical Spec: Lean young adult White male/);
+  assert.match(formatted, /Signature Feature: Signature round amber-tinted glasses/);
+  assert.match(formatted, /Wardrobe: Burnt-orange button-down overshirt/);
+});
+
+test("buildFullImagePrompt injects structured character into scene prompts", () => {
+  const theme = {
+    visualStyle: "Modern 2D illustration",
+    colorPalette: "Deep navy and amber",
+    rendering: "Clean lines",
+    backgroundTreatment: "Atmospheric depth",
+  };
+  const character = {
+    name: "The Observer",
+    physicalSpec: "Lean young adult male with dark-brown hair",
+    signatureFeature: "Signature round amber-tinted glasses",
+    wardrobe: "Burnt-orange button-down overshirt",
+  };
+  const scene = "The Observer gazes across the cityscape from a high balcony, holding a coffee cup.";
+  const camera = { shot_type: "medium_shot", camera_angle: "eye_level" };
+
+  const compiled = buildFullImagePrompt(theme, scene, camera, character);
+  assert.match(compiled, /Visual Style: Modern 2D illustration/);
+  assert.match(compiled, /Character Identity: Lean young adult male with dark-brown hair/);
+  assert.match(compiled, /Signature Feature: Signature round amber-tinted glasses/);
+  assert.match(compiled, /Wardrobe: Burnt-orange button-down overshirt/);
 });

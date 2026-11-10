@@ -68,6 +68,25 @@ export async function POST(req, context) {
         );
       }
 
+      let resolvedMainCharDesc = pillar.mainCharacterDescription;
+      if (Boolean(pillar.useMainCharacter) && !resolvedMainCharDesc?.trim()) {
+        const mcRows = await sql`
+          SELECT name, physical_spec, signature_feature, wardrobe
+          FROM channel_characters
+          WHERE channel_id = ${channel.id} AND is_main = TRUE
+          LIMIT 1;
+        `;
+        if (mcRows?.length > 0) {
+          const mc = mcRows[0];
+          resolvedMainCharDesc = [
+            mc.name ? `Name: ${mc.name}` : null,
+            mc.physical_spec ? `Physical Spec: ${mc.physical_spec}` : null,
+            mc.signature_feature ? `Signature Feature: ${mc.signature_feature}` : null,
+            mc.wardrobe ? `Wardrobe: ${mc.wardrobe}` : null,
+          ].filter(Boolean).join("\n");
+        }
+      }
+
       try {
         getSceneGenerationPrompt({
           channelName: channel.name,
@@ -81,7 +100,7 @@ export async function POST(req, context) {
           contentPillarTone: pillar.tone,
           contentPillarDescription: pillar.description,
           useMainCharacter: Boolean(pillar.useMainCharacter),
-          mainCharacterDescription: pillar.mainCharacterDescription,
+          mainCharacterDescription: resolvedMainCharDesc,
           activeScript: (customScript || topic.script_content || "").trim(),
         });
       } catch (valErr) {

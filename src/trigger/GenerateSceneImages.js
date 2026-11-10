@@ -59,18 +59,35 @@ export const generateSceneImagesTask = task({
       throw new Error("Either a valid scenes array or (sceneIndex + prompt) is required for generate-scene-images task.");
     }
 
-    // Fetch channel image theme to ensure persistent visual identity across frames
+    // Fetch channel image theme and main character to ensure persistent visual identity across frames
     let channelVisualIdentity = globalThemePrompt || "";
+    let channelMainCharacter = null;
     try {
       const sql = getDbSql();
       if (sql && channelSlug) {
-        const cRows = await sql`SELECT image_theme FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
+        const cRows = await sql`SELECT id, image_theme FROM channels WHERE slug = ${channelSlug} LIMIT 1;`;
         if (cRows?.[0]?.image_theme) {
           channelVisualIdentity = cRows[0].image_theme;
         }
+        if (cRows?.[0]?.id) {
+          const charRows = await sql`
+            SELECT name, physical_spec, signature_feature, wardrobe
+            FROM channel_characters
+            WHERE channel_id = ${cRows[0].id} AND is_main = TRUE
+            LIMIT 1;
+          `;
+          if (charRows?.[0]) {
+            channelMainCharacter = {
+              name: charRows[0].name,
+              physicalSpec: charRows[0].physical_spec,
+              signatureFeature: charRows[0].signature_feature,
+              wardrobe: charRows[0].wardrobe,
+            };
+          }
+        }
       }
     } catch (e) {
-      logger.warn("Could not query channel image_theme in generateSceneImagesTask:", e);
+      logger.warn("Could not query channel image_theme / main character in generateSceneImagesTask:", e);
     }
 
     // Expand scenes into individual frame generation tasks to support multiple images per scene
@@ -181,9 +198,12 @@ export const generateSceneImagesTask = task({
         cameraAngle: taskItem.cameraAngle,
         lens: taskItem.lens,
       };
-      const fullPrompt = effectiveTheme
-        ? buildFullImagePrompt(effectiveTheme, scenePromptText, cameraOptions)
-        : buildFullImagePrompt("", scenePromptText, cameraOptions);
+      const fullPrompt = buildFullImagePrompt(
+        effectiveTheme || "",
+        scenePromptText,
+        cameraOptions,
+        channelMainCharacter
+      );
 
       if (!fullPrompt) {
         logger.warn(`Skipping Scene ${currentSceneIndex} Frame #${currentFrameIndex} due to empty prompt.`);
