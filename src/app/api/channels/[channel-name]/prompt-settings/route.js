@@ -28,7 +28,7 @@ export const PROMPT_VARIABLES = {
     { tag: "{content_pillar_words_count}", label: "Word Count", desc: "Target script word count (e.g. 1400-1800 words)" },
     { tag: "{content_pillar_description}", label: "Pillar Desc", desc: "Strategic directive for this pillar" },
     { tag: "{topic}", label: "Topic Title", desc: "Exact title of the video topic" },
-    { tag: "{channel_script_structure_block}", label: "Script Structure", desc: "Channel hook, retention & delivery blueprint" },
+    { tag: "{pillar_script_structure_block}", label: "Script Structure", desc: "Pillar hook, retention & delivery blueprint" },
   ],
   scenes: [
     { tag: "{CHANNEL_NAME}", label: "Channel Name", desc: "Name of the channel" },

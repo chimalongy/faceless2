@@ -22,12 +22,19 @@ import {
   Youtube,
   Scissors,
   Image as ImageIcon,
-  FileText
+  FileText,
+  RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import {
+  DEFAULT_SCRIPT_STRUCTURE_TEXT,
+  SCRIPT_STRUCTURE_PRESETS,
+  getPresetText,
+  scriptStructureToText
+} from "@/lib/defaultScriptStructure";
 
 function toTopicSlug(title) {
   return title
@@ -53,6 +60,10 @@ export default function ContentPillarDetail() {
   const [mounted, setMounted] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
   const [extractingShortSlug, setExtractingShortSlug] = useState(null);
+  const [blueprintText, setBlueprintText] = useState("");
+  const [blueprintPreset, setBlueprintPreset] = useState("engaging_storytelling");
+  const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
+  const [blueprintNotice, setBlueprintNotice] = useState("");
 
   // Modals / forms
   const [topicModalOpen, setTopicModalOpen] = useState(false);
@@ -71,7 +82,10 @@ export default function ContentPillarDetail() {
       const pRes = await fetch(`/api/channels/${channelSlug}/pillars/${pillarSlug}`);
       if (pRes.ok) {
         const data = await pRes.json();
-        if (data.pillar) setPillar(data.pillar);
+        if (data.pillar) {
+          setPillar(data.pillar);
+          setBlueprintText(scriptStructureToText(data.pillar.scriptStructure || data.pillar.script_structure));
+        }
       }
 
       // 2. Fetch topics under this pillar
@@ -197,6 +211,7 @@ export default function ContentPillarDetail() {
       content_words_count: pillar?.contentWordsCount || pillar?.content_words_count || "2,500 - 3,500 words",
       use_main_character: Boolean(pillar?.useMainCharacter ?? pillar?.use_main_character),
       main_character_description: pillar?.mainCharacterDescription || pillar?.main_character_description || "",
+      script_structure: pillar?.scriptStructure || pillar?.script_structure || null,
     };
 
     try {
@@ -204,6 +219,46 @@ export default function ContentPillarDetail() {
       setCopiedJson(true);
       setTimeout(() => setCopiedJson(false), 2000);
     } catch {}
+  }
+
+  function handleApplyBlueprintPreset(presetId) {
+    setBlueprintPreset(presetId);
+    setBlueprintText(getPresetText(presetId));
+  }
+
+  async function handleSaveBlueprint() {
+    if (!pillar) return;
+    setIsSavingBlueprint(true);
+    setBlueprintNotice("");
+    try {
+      const res = await fetch(`/api/channels/${channelSlug}/pillars/${pillarSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: pillar.name,
+          tag: pillar.tag,
+          description: pillar.description,
+          tone: pillar.tone,
+          contentLength: pillar.contentLength,
+          contentWordsCount: pillar.contentWordsCount,
+          useMainCharacter: pillar.useMainCharacter,
+          mainCharacterDescription: pillar.mainCharacterDescription,
+          scriptStructure: blueprintText.trim(),
+        }),
+      });
+      if (res.ok) {
+        setBlueprintNotice("Script blueprint saved successfully.");
+        setTimeout(() => setBlueprintNotice(""), 4000);
+        await loadData();
+      } else {
+        const err = await res.json();
+        setBlueprintNotice(err.error || "Failed to save script blueprint.");
+      }
+    } catch (e) {
+      setBlueprintNotice("Error saving: " + e.message);
+    } finally {
+      setIsSavingBlueprint(false);
+    }
   }
 
   const pillarName = pillar?.name || pillarSlug.split("-").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
@@ -318,6 +373,19 @@ export default function ContentPillarDetail() {
               <span className="text-[11px] font-mono px-1.5 py-0.5 bg-paper border border-line rounded-xs">
                 {completedVideos.length}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("blueprint")}
+              className={`px-3 sm:px-4 py-2.5 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                activeTab === "blueprint"
+                  ? "border-signal text-signal font-bold bg-signal/5"
+                  : "border-transparent text-ink-muted hover:text-ink hover:border-line"
+              }`}
+            >
+              <FileText size={14} className="text-emerald-500" />
+              <span>Script Blueprint</span>
             </button>
           </div>
 
@@ -685,6 +753,83 @@ export default function ContentPillarDetail() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 4: SCRIPT BLUEPRINT */}
+          {activeTab === "blueprint" && (
+            <div className="p-6 border border-line bg-paper-card space-y-5 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-3">
+                <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+                  <span className="p-1.5 bg-signal/10 text-signal">
+                    <FileText size={16} />
+                  </span>
+                  <div>
+                    <span>Content Pillar Script Structure & LLM Blueprint</span>
+                    <p className="text-xs text-ink-muted font-normal mt-0.5">
+                      Defines the hook formula, retention techniques, content flow, act pacing, and banned phrases for all topics under this pillar.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={blueprintPreset}
+                    onChange={(e) => handleApplyBlueprintPreset(e.target.value)}
+                    className="text-xs font-medium border border-line bg-white px-2.5 py-1.5 text-ink outline-none focus:border-signal cursor-pointer"
+                    title="Load a pre-engineered retention structure preset"
+                  >
+                    {SCRIPT_STRUCTURE_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBlueprintPreset(blueprintPreset)}
+                    className="px-2.5 py-1.5 text-xs font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                    title="Reset to preset template"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Reset to Preset</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveBlueprint}
+                    disabled={isSavingBlueprint}
+                    className="px-3.5 py-1.5 text-xs font-semibold bg-signal hover:bg-signal-hover text-white transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                  >
+                    {isSavingBlueprint ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    <span>{isSavingBlueprint ? "Saving..." : "Save Blueprint"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {blueprintNotice && (
+                <div className="p-2.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 animate-fade-in flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                  <span>{blueprintNotice}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <textarea
+                  id="pillar-blueprint-textarea"
+                  rows={18}
+                  value={blueprintText}
+                  onChange={(e) => setBlueprintText(e.target.value)}
+                  placeholder="Enter script structure directives, hook formulas, content flow, pacing rules, and banned words for this pillar..."
+                  spellCheck={false}
+                  className="w-full font-mono text-xs p-3.5 border border-line-dark bg-slate-950 text-emerald-400 leading-relaxed outline-none focus:border-signal transition-colors shadow-inner selection:bg-signal/30"
+                />
+
+                <p className="text-[11px] text-ink-muted leading-relaxed">
+                  This blueprint is exclusively used by the LLM whenever generating scripts for topics under <strong>{pillarName}</strong>.
+                </p>
+              </div>
             </div>
           )}
         </>

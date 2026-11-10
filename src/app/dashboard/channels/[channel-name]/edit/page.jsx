@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   ArrowLeft,
@@ -37,10 +37,8 @@ import {
   Download,
   Share2,
   Code2,
-  RotateCcw,
   Captions,
-  Smartphone,
-  FileText
+  Smartphone
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -49,12 +47,6 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { KOKORO_VOICES, QWEN_VOICES } from "@/lib/audio-generator";
 import { SUBTITLE_STYLES } from "@/lib/subtitle-generator";
-import {
-  DEFAULT_SCRIPT_STRUCTURE_TEXT,
-  SCRIPT_STRUCTURE_PRESETS,
-  getPresetText,
-  scriptStructureToText
-} from "@/lib/defaultScriptStructure";
 
 const STORAGE_KEY = "faceless_channels";
 
@@ -103,8 +95,6 @@ export default function EditChannelPage() {
   const [subtitlesLongform, setSubtitlesLongform] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState("yellow_highlight");
   const [useImagePool, setUseImagePool] = useState(false);
-  const [scriptStructureText, setScriptStructureText] = useState(DEFAULT_SCRIPT_STRUCTURE_TEXT);
-  const [selectedPreset, setSelectedPreset] = useState("engaging_storytelling");
   const [status, setStatus] = useState("Active");
 
   // Artwork & Branding Images
@@ -167,11 +157,6 @@ export default function EditChannelPage() {
             );
             setSubtitleStyle(c.subtitleStyle || "yellow_highlight");
             setUseImagePool(Boolean(c.useImagePool ?? c.use_image_pool));
-            if (c.scriptStructure) {
-              setScriptStructureText(scriptStructureToText(c.scriptStructure));
-            } else {
-              setScriptStructureText(DEFAULT_SCRIPT_STRUCTURE_TEXT);
-            }
             setBannerUrl(c.bannerUrl || "");
             setAvatarUrl(c.avatarUrl || "");
             setStatus(c.status || "Active");
@@ -219,11 +204,6 @@ export default function EditChannelPage() {
                 : false
             );
             setSubtitleStyle(found.subtitleStyle || "yellow_highlight");
-            if (found.scriptStructure) {
-              setScriptStructureText(scriptStructureToText(found.scriptStructure));
-            } else {
-              setScriptStructureText(DEFAULT_SCRIPT_STRUCTURE_TEXT);
-            }
             setBannerUrl(found.bannerUrl || "");
             setAvatarUrl(found.avatarUrl || "");
             setStatus(found.status || "Active");
@@ -331,14 +311,6 @@ export default function EditChannelPage() {
       count++;
     }
 
-    const structureVal = findValue("script_structure", "scriptStructure", "script_structure_json", "scriptStructureJson");
-    if (structureVal !== undefined && structureVal !== null) {
-      setScriptStructureText(
-        typeof structureVal === "object" ? JSON.stringify(structureVal, null, 2) : String(structureVal)
-      );
-      count++;
-    }
-
     if (count === 0) {
       return { success: false, error: "No matching channel fields found in this JSON object." };
     }
@@ -415,13 +387,6 @@ export default function EditChannelPage() {
       integrations: {
         postershive_api: postershiveApi.trim(),
       },
-      script_structure: (() => {
-        try {
-          return JSON.parse(scriptStructureText);
-        } catch {
-          return scriptStructureText;
-        }
-      })(),
     };
 
     try {
@@ -433,18 +398,10 @@ export default function EditChannelPage() {
     }
   }
 
-  function handleApplyPreset(presetId) {
-    setSelectedPreset(presetId);
-    setScriptStructureText(getPresetText(presetId));
-    toast.success("Loaded preset directives");
-  }
-
   async function handleSave(e) {
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) return;
-
-    const finalStructure = scriptStructureText.trim() || DEFAULT_SCRIPT_STRUCTURE_TEXT;
 
     setSaving(true);
     const updatedChannel = {
@@ -477,7 +434,6 @@ export default function EditChannelPage() {
       use_image_pool: useImagePool,
       bannerUrl: bannerUrl.trim(),
       avatarUrl: avatarUrl.trim(),
-      scriptStructure: finalStructure,
       status,
     };
 
@@ -1820,67 +1776,7 @@ export default function EditChannelPage() {
           </div>
         </section>
 
-        {/* SECTION 6: SCRIPT STRUCTURE & LLM DIRECTIVES */}
-        <section className="p-6 border border-line bg-paper-card space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-3">
-            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
-              <span className="p-1.5 bg-signal/10 text-signal">
-                <FileText size={16} />
-              </span>
-              <div>
-                <span>Script Structure & LLM Narrative Blueprint (Text)</span>
-                <p className="text-xs text-ink-muted font-normal mt-0.5">
-                  Guides any LLM on how to pace, structure acts, hook viewers, and avoid boring clichés in plain text.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={selectedPreset}
-                onChange={(e) => handleApplyPreset(e.target.value)}
-                className="text-xs font-medium border border-line bg-white px-2.5 py-1.5 text-ink outline-none focus:border-signal cursor-pointer"
-                title="Load a pre-engineered retention structure preset"
-              >
-                {SCRIPT_STRUCTURE_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={() => handleApplyPreset(selectedPreset)}
-                className="px-2.5 py-1.5 text-xs font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                title="Reset to preset template"
-              >
-                <RotateCcw size={13} />
-                <span>Reset to Preset</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="relative">
-              <textarea
-                id="field-script-structure"
-                rows={16}
-                value={scriptStructureText}
-                onChange={(e) => setScriptStructureText(e.target.value)}
-                placeholder="Enter channel script structure directives, hook formulas, content flow, pacing rules, and banned words in plain text..."
-                spellCheck={false}
-                className="w-full font-mono text-xs p-3.5 border border-line-dark bg-slate-950 text-emerald-400 leading-relaxed outline-none focus:border-signal transition-colors shadow-inner selection:bg-signal/30"
-              />
-            </div>
-
-            <p className="text-[11px] text-ink-muted leading-relaxed">
-              This text blueprint is automatically injected into the script generation prompt whenever a topic script is generated.
-            </p>
-          </div>
-        </section>
-
-        {/* SECTION 7: SAVE BAR & DANGER ZONE */}
+        {/* SECTION 6: SAVE BAR & DANGER ZONE */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-line">
           <button
             type="button"

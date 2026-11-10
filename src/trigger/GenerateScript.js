@@ -41,7 +41,7 @@ export const generateScriptTask = task({
 
     // 1. Fetch Channel & Topic records
     const channelRows = await sql`
-      SELECT id, name, slug, niche, sub_niche, description, mission, personality, script_structure, prompt_settings
+      SELECT id, name, slug, niche, sub_niche, description, mission, personality, prompt_settings
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -70,7 +70,7 @@ export const generateScriptTask = task({
     let pillar = null;
     if (topic.pillar_id) {
       const pillarRows = await sql`
-        SELECT id, name, slug, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount"
+        SELECT id, name, slug, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount", script_structure AS "scriptStructure"
         FROM content_pillars
         WHERE id = ${topic.pillar_id}
         LIMIT 1;
@@ -209,6 +209,9 @@ export const generateScriptTask = task({
 
     // 4. Construct System & User Prompt
     const isShort = topic.videoType === "short";
+    const pillarScriptStructure =
+      pillar?.scriptStructure || pillar?.script_structure || payload.scriptStructure || null;
+
     const fullSystemPrompt = isShort
       ? getShortScriptGenerationSystemPrompt({
           channelName: channel.name,
@@ -221,7 +224,7 @@ export const generateScriptTask = task({
           contentPillarTone: pillarTone,
           contentPillarDescription: pillarDescription,
           topic: topicTitle,
-          scriptStructure: channel.script_structure,
+          scriptStructure: pillarScriptStructure,
           promptTemplate: (channel.prompt_settings?.shortScriptPrompt || channel.prompt_settings?.short_script_prompt || null),
         })
       : getScriptGenerationSystemPrompt({
@@ -237,7 +240,7 @@ export const generateScriptTask = task({
           contentPillarWordsCount: pillarContentWordsCount,
           contentPillarDescription: pillarDescription,
           topic: topicTitle,
-          scriptStructure: channel.script_structure,
+          scriptStructure: pillarScriptStructure,
           promptTemplate: (channel.prompt_settings?.scriptPrompt || channel.prompt_settings?.script_prompt || null),
         });
 

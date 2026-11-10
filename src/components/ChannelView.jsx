@@ -25,12 +25,19 @@ import {
   AlertCircle,
   Smartphone,
   Scissors,
-  Volume2
+  Volume2,
+  RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import {
+  DEFAULT_SCRIPT_STRUCTURE_TEXT,
+  SCRIPT_STRUCTURE_PRESETS,
+  getPresetText,
+  scriptStructureToText
+} from "@/lib/defaultScriptStructure";
 import ChannelShortsView from "./ChannelShortsView";
 import ChannelImageSettings from "./ChannelImageSettings";
 import ChannelAudioSettingsTab from "./ChannelAudioSettingsTab";
@@ -119,6 +126,10 @@ function extractPillarFromJson(item) {
     contentWordsCount: String(contentWordsCount).trim(),
     useMainCharacter,
     mainCharacterDescription: String(mainCharacterDescription).trim(),
+    scriptStructure: (() => {
+      const s = target.script_structure || target.scriptStructure || target.script_blueprint || target.scriptBlueprint || target.narrative_blueprint || target.narrativeBlueprint || null;
+      return s ? (typeof s === "object" ? s : String(s).trim()) : null;
+    })(),
   };
 }
 
@@ -228,6 +239,13 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
   const [pillarContentWordsCount, setPillarContentWordsCount] = useState("");
   const [pillarUseMainChar, setPillarUseMainChar] = useState(false);
   const [pillarMainCharDesc, setPillarMainCharDesc] = useState("");
+  const [pillarScriptStructure, setPillarScriptStructure] = useState(DEFAULT_SCRIPT_STRUCTURE_TEXT);
+  const [pillarPreset, setPillarPreset] = useState("engaging_storytelling");
+
+  function handleApplyPillarPreset(presetId) {
+    setPillarPreset(presetId);
+    setPillarScriptStructure(getPresetText(presetId));
+  }
   const [extractingShortSlug, setExtractingShortSlug] = useState(null);
 
   useEffect(() => {
@@ -391,6 +409,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
       content_words_count: p.contentWordsCount || p.content_words_count || "2,500 - 3,500 words",
       use_main_character: Boolean(p.useMainCharacter ?? p.use_main_character),
       main_character_description: p.mainCharacterDescription || p.main_character_description || "",
+      script_structure: p.scriptStructure || p.script_structure || null,
     }));
 
     try {
@@ -415,6 +434,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
       content_words_count: pillar.contentWordsCount || pillar.content_words_count || "2,500 - 3,500 words",
       use_main_character: Boolean(pillar.useMainCharacter ?? pillar.use_main_character),
       main_character_description: pillar.mainCharacterDescription || pillar.main_character_description || "",
+      script_structure: pillar.scriptStructure || pillar.script_structure || null,
     };
 
     try {
@@ -451,6 +471,8 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
     setPillarContentWordsCount("2,500 - 3,500 words");
     setPillarUseMainChar(false);
     setPillarMainCharDesc("");
+    setPillarScriptStructure(DEFAULT_SCRIPT_STRUCTURE_TEXT);
+    setPillarPreset("engaging_storytelling");
     setCreatePillarModalOpen(true);
   }
 
@@ -465,6 +487,8 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
     setPillarContentWordsCount(pillar.contentWordsCount || pillar.content_words_count || "2,500 - 3,500 words");
     setPillarUseMainChar(Boolean(pillar.useMainCharacter ?? pillar.use_main_character));
     setPillarMainCharDesc(pillar.mainCharacterDescription || pillar.main_character_description || "");
+    setPillarScriptStructure(scriptStructureToText(pillar.scriptStructure || pillar.script_structure));
+    setPillarPreset("engaging_storytelling");
     setCreatePillarModalOpen(true);
   }
 
@@ -501,6 +525,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
       contentWordsCount: pillarContentWordsCount.trim(),
       useMainCharacter: pillarUseMainChar,
       mainCharacterDescription: pillarMainCharDesc.trim(),
+      scriptStructure: pillarScriptStructure.trim(),
     };
 
     try {
@@ -583,6 +608,9 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
         setPillarContentWordsCount(p.contentWordsCount || "2,500 - 3,500 words");
         setPillarUseMainChar(Boolean(p.useMainCharacter));
         setPillarMainCharDesc(p.mainCharacterDescription || "");
+        if (p.scriptStructure) {
+          setPillarScriptStructure(scriptStructureToText(p.scriptStructure));
+        }
       }
     } catch {}
   }
@@ -1262,7 +1290,7 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
           className="fixed inset-0 z-[99999] w-screen h-screen bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
           style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", zIndex: 99999 }}
         >
-          <div className="relative w-full max-w-lg bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-5 animate-scale-in text-ink my-auto max-h-[92vh] flex flex-col">
+          <div className="relative w-full max-w-3xl bg-paper border border-line p-6 sm:p-8 shadow-2xl space-y-5 animate-scale-in text-ink my-auto max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2">
                 <Layers size={18} className="text-signal" />
@@ -1421,6 +1449,63 @@ export default function ChannelView({ activeTab = "content-pillars" }) {
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Script Structure & Narrative Blueprint */}
+              <div className="p-3 bg-paper-card border border-line space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-line pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <FileText size={15} className="text-signal" />
+                    <div>
+                      <span className="font-semibold text-ink text-xs">
+                        Script Structure & LLM Blueprint
+                      </span>
+                      <p className="text-[10px] text-ink-muted">
+                        Pillar-specific hook formula, pacing, act breakdown, and retention rules.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <select
+                      value={pillarPreset}
+                      onChange={(e) => handleApplyPillarPreset(e.target.value)}
+                      className="text-[11px] font-medium border border-line bg-white px-2 py-1 text-ink outline-none focus:border-signal cursor-pointer"
+                      title="Load a pre-engineered retention structure preset"
+                    >
+                      {SCRIPT_STRUCTURE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPillarPreset(pillarPreset)}
+                      className="px-2 py-1 text-[11px] font-medium border border-line bg-white hover:bg-ink/5 text-ink transition-colors cursor-pointer inline-flex items-center gap-1"
+                      title="Reset to selected preset template"
+                    >
+                      <RotateCcw size={11} />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <textarea
+                    id="p-script-structure"
+                    rows={10}
+                    value={pillarScriptStructure}
+                    onChange={(e) => setPillarScriptStructure(e.target.value)}
+                    placeholder="Enter script structure directives, hook formulas, content flow, pacing rules, and banned words for this content pillar..."
+                    spellCheck={false}
+                    className="w-full font-mono text-[11px] p-3 border border-line-dark bg-slate-950 text-emerald-400 leading-relaxed outline-none focus:border-signal shadow-inner"
+                  />
+                  <span className="text-[10px] text-ink-muted block leading-relaxed">
+                    Automatically injected into the script generation prompt whenever a topic under this pillar is generated.
+                  </span>
+                </div>
               </div>
 
               <div className="pt-2 border-t border-line flex items-center justify-end gap-2 mt-auto">

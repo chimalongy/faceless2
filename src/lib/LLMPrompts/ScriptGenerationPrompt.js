@@ -28,10 +28,10 @@ Build the entire script around this specific topic. Do not alter the title or di
 
 ---
 
-## CHANNEL SCRIPT STRUCTURE & CONTENT BLUEPRINT
-You MUST strictly follow this channel's content structure and delivery blueprint below to design and pace the script. It is the authoritative blueprint for your hook formula, content flow, pacing rules, retention techniques, and prohibited words (executed entirely within the Content Pillar Tone):
+## CONTENT PILLAR SCRIPT STRUCTURE & BLUEPRINT
+You MUST strictly follow this content pillar's script structure and delivery blueprint below to design and pace the script. It is the authoritative blueprint for your hook formula, content flow, pacing rules, retention techniques, and prohibited words (executed entirely within the Content Pillar Tone):
 
-{channel_script_structure_block}
+{pillar_script_structure_block}
 
 Also, remember that the content_pillar_tone superceeds the channel script structure tone. You should only use the channel script structure tone if and only if the content pillar tone is not available.
 
@@ -151,6 +151,7 @@ export function getScriptGenerationSystemPrompt({
     .replaceAll("{content_pillar_words_count}", resolvedWordsCount)
     .replaceAll("{content_pillar_description}", effectivePillarDesc)
     .replaceAll("{topic}", effectiveTopic)
+    .replaceAll("{pillar_script_structure_block}", formattedStructureBlock)
     .replaceAll("{channel_script_structure_block}", formattedStructureBlock);
 }
 

@@ -44,6 +44,8 @@ export async function GET(request, { params }) {
         cp.content_words_count AS "pillarContentWordsCount",
         cp.use_main_character AS "pillarUseMainCharacter",
         cp.main_character_description AS "pillarMainCharacterDescription",
+        cp.script_structure AS "pillarScriptStructure",
+        cp.script_structure AS "scriptStructure",
         t.title,
         t.slug,
         COALESCE(t.video_type, 'longform') AS "videoType",

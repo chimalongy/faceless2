@@ -29,6 +29,7 @@ export async function GET(request, { params }) {
         cp.content_words_count AS "contentWordsCount",
         cp.use_main_character AS "useMainCharacter",
         cp.main_character_description AS "mainCharacterDescription",
+        cp.script_structure AS "scriptStructure",
         cp.created_at AS "createdAt",
         cp.updated_at AS "updatedAt"
       FROM content_pillars cp
@@ -83,6 +84,16 @@ export async function PUT(request, { params }) {
       );
     }
 
+    let scriptStructure = null;
+    const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
+    if (rawStructure !== undefined && rawStructure !== null) {
+      if (typeof rawStructure === "string") {
+        scriptStructure = JSON.stringify({ text: rawStructure.trim() });
+      } else if (typeof rawStructure === "object") {
+        scriptStructure = JSON.stringify(rawStructure);
+      }
+    }
+
     const updated = await sql`
       UPDATE content_pillars
       SET
@@ -94,6 +105,7 @@ export async function PUT(request, { params }) {
         content_words_count = ${body.contentWordsCount || body.content_words_count || body.wordsCount || body.wordCount || null},
         use_main_character = ${Boolean(body.useMainCharacter ?? body.use_main_character)},
         main_character_description = ${body.mainCharacterDescription || body.main_character_description || null},
+        script_structure = ${rawStructure !== undefined ? (scriptStructure ? sql`${scriptStructure}::jsonb` : null) : sql`script_structure`},
         updated_at = NOW()
       WHERE channel_id = ${channelId} AND slug = ${pillarSlug}
       RETURNING *;

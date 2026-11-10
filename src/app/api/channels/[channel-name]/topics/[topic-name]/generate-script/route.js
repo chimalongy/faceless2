@@ -23,7 +23,7 @@ export async function POST(req, context) {
     const sql = getDbSql();
     if (sql) {
       const channelRows = await sql`
-        SELECT id, name, niche, sub_niche, description, mission, script_structure
+        SELECT id, name, niche, sub_niche, description, mission
         FROM channels
         WHERE slug = ${channelSlug}
         LIMIT 1;
@@ -53,7 +53,7 @@ export async function POST(req, context) {
       let pillar = null;
       if (topic.pillar_id) {
         const pillarRows = await sql`
-          SELECT id, name, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount"
+          SELECT id, name, tag, description, tone, content_length AS "contentLength", content_words_count AS "contentWordsCount", script_structure AS "scriptStructure"
           FROM content_pillars
           WHERE id = ${topic.pillar_id}
           LIMIT 1;
@@ -82,7 +82,7 @@ export async function POST(req, context) {
           contentPillarWordsCount: pillar.contentWordsCount,
           contentPillarDescription: pillar.description,
           topic: (topic.title || "").trim(),
-          scriptStructure: channel.script_structure,
+          scriptStructure: pillar.scriptStructure,
         });
       } catch (valErr) {
         return NextResponse.json({ error: valErr.message }, { status: 400 });

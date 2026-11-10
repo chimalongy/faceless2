@@ -28,6 +28,7 @@ export async function GET(request, { params }) {
         cp.content_words_count AS "contentWordsCount",
         cp.use_main_character AS "useMainCharacter",
         cp.main_character_description AS "mainCharacterDescription",
+        cp.script_structure AS "scriptStructure",
         cp.created_at AS "createdAt",
         cp.updated_at AS "updatedAt"
       FROM content_pillars cp
@@ -94,6 +95,16 @@ export async function POST(request, { params }) {
     const useMainCharacter = Boolean(body.useMainCharacter ?? body.use_main_character);
     const mainCharacterDescription = body.mainCharacterDescription?.trim() || body.main_character_description?.trim() || "";
 
+    let scriptStructure = null;
+    const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
+    if (rawStructure !== undefined && rawStructure !== null) {
+      if (typeof rawStructure === "string") {
+        scriptStructure = JSON.stringify({ text: rawStructure.trim() });
+      } else if (typeof rawStructure === "object") {
+        scriptStructure = JSON.stringify(rawStructure);
+      }
+    }
+
     const inserted = await sql`
       INSERT INTO content_pillars (
         channel_id,
@@ -105,7 +116,8 @@ export async function POST(request, { params }) {
         content_length,
         content_words_count,
         use_main_character,
-        main_character_description
+        main_character_description,
+        script_structure
       ) VALUES (
         ${channelId},
         ${name},
@@ -116,7 +128,8 @@ export async function POST(request, { params }) {
         ${contentLength},
         ${contentWordsCount},
         ${useMainCharacter},
-        ${mainCharacterDescription}
+        ${mainCharacterDescription},
+        ${scriptStructure ? sql`${scriptStructure}::jsonb` : null}
       )
       ON CONFLICT (channel_id, slug) DO UPDATE SET
         name = EXCLUDED.name,
@@ -127,6 +140,7 @@ export async function POST(request, { params }) {
         content_words_count = EXCLUDED.content_words_count,
         use_main_character = EXCLUDED.use_main_character,
         main_character_description = EXCLUDED.main_character_description,
+        script_structure = COALESCE(EXCLUDED.script_structure, content_pillars.script_structure),
         updated_at = NOW()
       RETURNING *;
     `;
