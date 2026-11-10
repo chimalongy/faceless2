@@ -88,9 +88,9 @@ export async function PUT(request, { params }) {
     const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
     if (rawStructure !== undefined && rawStructure !== null) {
       if (typeof rawStructure === "string") {
-        scriptStructure = JSON.stringify({ text: rawStructure.trim() });
+        scriptStructure = rawStructure.trim();
       } else if (typeof rawStructure === "object") {
-        scriptStructure = JSON.stringify(rawStructure);
+        scriptStructure = rawStructure.text || rawStructure.raw || JSON.stringify(rawStructure, null, 2);
       }
     }
 
@@ -105,7 +105,7 @@ export async function PUT(request, { params }) {
         content_words_count = ${body.contentWordsCount || body.content_words_count || body.wordsCount || body.wordCount || null},
         use_main_character = ${Boolean(body.useMainCharacter ?? body.use_main_character)},
         main_character_description = ${body.mainCharacterDescription || body.main_character_description || null},
-        script_structure = ${rawStructure !== undefined ? (scriptStructure ? sql`${scriptStructure}::jsonb` : null) : sql`script_structure`},
+        script_structure = ${rawStructure !== undefined ? (scriptStructure || null) : sql`script_structure`},
         updated_at = NOW()
       WHERE channel_id = ${channelId} AND slug = ${pillarSlug}
       RETURNING *;

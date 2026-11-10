@@ -123,7 +123,7 @@ export async function initDbSchema(force = false) {
         content_words_count TEXT,
         use_main_character BOOLEAN DEFAULT FALSE,
         main_character_description TEXT,
-        script_structure JSONB,
+        script_structure TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(channel_id, slug)
@@ -136,17 +136,8 @@ export async function initDbSchema(force = false) {
       await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS content_words_count TEXT;`;
       await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS use_main_character BOOLEAN DEFAULT FALSE;`;
       await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS main_character_description TEXT;`;
-      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS script_structure JSONB;`;
-
-      // Migrate existing channel-level script structure to content pillars that don't have one
-      await sql`
-        UPDATE content_pillars cp
-        SET script_structure = c.script_structure
-        FROM channels c
-        WHERE cp.channel_id = c.id
-          AND cp.script_structure IS NULL
-          AND c.script_structure IS NOT NULL;
-      `;
+      await sql`ALTER TABLE content_pillars ADD COLUMN IF NOT EXISTS script_structure TEXT;`;
+      await sql`ALTER TABLE content_pillars ALTER COLUMN script_structure TYPE TEXT USING script_structure::text;`;
     } catch {}
 
     // 3. Topics Table

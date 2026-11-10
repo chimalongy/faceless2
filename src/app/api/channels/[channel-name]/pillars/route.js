@@ -99,9 +99,9 @@ export async function POST(request, { params }) {
     const rawStructure = body.scriptStructure !== undefined ? body.scriptStructure : body.script_structure;
     if (rawStructure !== undefined && rawStructure !== null) {
       if (typeof rawStructure === "string") {
-        scriptStructure = JSON.stringify({ text: rawStructure.trim() });
+        scriptStructure = rawStructure.trim();
       } else if (typeof rawStructure === "object") {
-        scriptStructure = JSON.stringify(rawStructure);
+        scriptStructure = rawStructure.text || rawStructure.raw || JSON.stringify(rawStructure, null, 2);
       }
     }
 
@@ -129,7 +129,7 @@ export async function POST(request, { params }) {
         ${contentWordsCount},
         ${useMainCharacter},
         ${mainCharacterDescription},
-        ${scriptStructure ? sql`${scriptStructure}::jsonb` : null}
+        ${scriptStructure || null}
       )
       ON CONFLICT (channel_id, slug) DO UPDATE SET
         name = EXCLUDED.name,
