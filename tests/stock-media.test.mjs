@@ -127,3 +127,61 @@ test("searchStockMedia returns empty array when query is empty", async () => {
   assert.equal(res.total, 0);
 });
 
+test("multi-image scene target builder extracts all frames and individual prompts", () => {
+  const scenes = [
+    {
+      scene_number: 1,
+      audio_text: "Understanding credit debt.",
+      number_of_images: 2,
+      images: [
+        { image_number: 1, image_prompt: "Pile of colorful plastic credit cards" },
+        { image_number: 2, image_prompt: "Red late fee bill stamp close-up" },
+      ],
+    },
+    {
+      scene_number: 2,
+      audio_text: "Compound interest builds wealth.",
+      image_prompt: "Golden coins growing like a plant",
+    },
+  ];
+
+  const targets = [];
+  scenes.forEach((scene, sIdx) => {
+    const sNum = scene.scene_number || (sIdx + 1);
+    const multiCount = Array.isArray(scene.images) && scene.images.length > 0
+      ? scene.images.length
+      : Number(scene.number_of_images) > 1
+        ? Number(scene.number_of_images)
+        : 1;
+
+    for (let fIdx = 1; fIdx <= multiCount; fIdx++) {
+      let framePrompt = "";
+      if (Array.isArray(scene.images) && scene.images[fIdx - 1]) {
+        framePrompt = scene.images[fIdx - 1].image_prompt || scene.images[fIdx - 1].prompt || "";
+      }
+      if (!framePrompt) {
+        framePrompt = scene.image_prompt || "";
+      }
+      targets.push({
+        sceneNumber: sNum,
+        imageIndex: fIdx,
+        prompt: framePrompt,
+        keywords: extractKeywords(framePrompt, scene.audio_text, 3),
+      });
+    }
+  });
+
+  assert.equal(targets.length, 3);
+  assert.equal(targets[0].sceneNumber, 1);
+  assert.equal(targets[0].imageIndex, 1);
+  assert.match(targets[0].prompt, /Pile of colorful plastic credit cards/);
+
+  assert.equal(targets[1].sceneNumber, 1);
+  assert.equal(targets[1].imageIndex, 2);
+  assert.match(targets[1].prompt, /Red late fee bill stamp/);
+
+  assert.equal(targets[2].sceneNumber, 2);
+  assert.equal(targets[2].imageIndex, 1);
+  assert.match(targets[2].prompt, /Golden coins growing/);
+});
+

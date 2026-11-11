@@ -3,6 +3,8 @@ import { getDbSql, initDbSchema } from "@/lib/db";
 import { searchStockMedia, extractKeywords, importStockMediaToScene } from "@/lib/stock-media";
 import { sortSceneImages, getImageIndex } from "@/lib/scene-images";
 
+export const maxDuration = 60; // Extend Vercel function timeout for multi-image stock media importing
+
 // POST /api/channels/[channel-name]/topics/[topic-name]/auto-stock
 export async function POST(request, { params }) {
   try {
@@ -44,7 +46,10 @@ export async function POST(request, { params }) {
     const {
       mediaType = "photos", // "photos" | "videos" | "all"
       source = "all",        // "all" | "pexels" | "pixabay"
-      onlyMissing = false,   // only populate scenes that don't have an image yet
+      onlyMissing = false,   // only populate frames that don't have an image yet
+      sceneNumber = null,    // optional: limit to a single scene
+      sceneIndex = null,
+      imageIndex = null,     // optional: limit to a single frame
     } = body;
 
     // Determine aspect ratio orientation
@@ -68,29 +73,70 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "No scenes found for this topic to populate" }, { status: 400 });
     }
 
-    // Existing assets check if onlyMissing is true
+    // Existing assets check by specific frame "sceneIndex-frameIndex"
     const existingAssetRows = await sql`
       SELECT scene_index AS "sceneIndex", file_name AS "fileName"
       FROM topic_assets
       WHERE topic_id = ${topic.id} AND asset_type = 'image';
     `;
-    const existingScenesSet = new Set((existingAssetRows || []).map((r) => Number(r.sceneIndex)));
+    const existingFramesSet = new Set(
+      (existingAssetRows || []).map((r) => {
+        const sIdx = Number(r.sceneIndex);
+        const fIdx = getImageIndex(r.fileName, sIdx);
+        return `${sIdx}-${fIdx}`;
+      })
+    );
+
+    const targetSceneFilter = sceneNumber || sceneIndex ? Number(sceneNumber || sceneIndex) : null;
+    const targetFrameFilter = imageIndex ? Number(imageIndex) : null;
+
+    // Build assignment targets across all scenes (multi-image & multi-frame aware)
+    const assignmentTargets = [];
+    scenes.forEach((scene, sIdx) => {
+      const sNum = Number(scene.scene_number || scene.sceneIndex || scene.scene || (sIdx + 1));
+      if (!sNum) return;
+      if (targetSceneFilter && sNum !== targetSceneFilter) return;
+
+      const multiCount = Array.isArray(scene.images) && scene.images.length > 0
+        ? scene.images.length
+        : Number(scene.number_of_images) > 1
+          ? Number(scene.number_of_images)
+          : 1;
+
+      for (let fIdx = 1; fIdx <= multiCount; fIdx++) {
+        if (targetFrameFilter && fIdx !== targetFrameFilter) continue;
+
+        if (onlyMissing && existingFramesSet.has(`${sNum}-${fIdx}`)) {
+          continue;
+        }
+
+        // Resolve frame-specific prompt
+        let framePrompt = "";
+        if (Array.isArray(scene.images) && scene.images[fIdx - 1]) {
+          framePrompt = scene.images[fIdx - 1].image_prompt || scene.images[fIdx - 1].prompt || "";
+        }
+        if (!framePrompt) {
+          framePrompt = scene.image_prompt || scene.visual_prompt || scene.prompt || "";
+        }
+
+        const narrativeText = scene.audio_text || scene.narration || scene.script || scene.text || "";
+
+        assignmentTargets.push({
+          sceneNumber: sNum,
+          imageIndex: fIdx,
+          promptText: framePrompt,
+          narrativeText,
+          keywords: extractKeywords(framePrompt, narrativeText, 3),
+        });
+      }
+    });
 
     const assignedResults = [];
     const usedDownloadUrls = new Set();
 
-    // Process each scene sequentially with a slight delay to respect free rate limits
-    for (const scene of scenes) {
-      const sNum = scene.scene_number || scene.sceneIndex || scene.scene;
-      if (!sNum) continue;
-
-      if (onlyMissing && existingScenesSet.has(Number(sNum))) {
-        continue;
-      }
-
-      const promptText = scene.image_prompt || scene.visual_prompt || scene.prompt || "";
-      const narrativeText = scene.audio_text || scene.narration || scene.script || scene.text || "";
-      const searchKeywords = extractKeywords(promptText, narrativeText, 3);
+    // Process each target frame sequentially with unique image selection
+    for (const target of assignmentTargets) {
+      const { sceneNumber: sNum, imageIndex: fIdx, keywords: searchKeywords } = target;
 
       try {
         const searchRes = await searchStockMedia({
@@ -103,7 +149,7 @@ export async function POST(request, { params }) {
         });
 
         const candidates = searchRes.results || [];
-        // Pick top candidate that hasn't been used yet for another scene in this topic
+        // Pick top candidate that hasn't been used yet for another scene/frame in this topic
         const chosen = candidates.find((c) => !usedDownloadUrls.has(c.downloadUrl)) || candidates[0];
 
         if (chosen && chosen.downloadUrl) {
@@ -113,7 +159,7 @@ export async function POST(request, { params }) {
             channelSlug,
             topicSlug,
             sceneIndex: sNum,
-            imageIndex: 1,
+            imageIndex: fIdx,
             downloadUrl: chosen.downloadUrl,
             mediaType: chosen.mediaType,
             title: chosen.title,
@@ -122,6 +168,7 @@ export async function POST(request, { params }) {
 
           assignedResults.push({
             sceneNumber: sNum,
+            imageIndex: fIdx,
             query: searchKeywords,
             source: chosen.source,
             assignedUrl: imported.publicUrl,
@@ -130,7 +177,7 @@ export async function POST(request, { params }) {
           });
         }
       } catch (sceneErr) {
-        console.warn(`Failed to auto-fetch stock media for scene ${sNum}:`, sceneErr);
+        console.warn(`Failed to auto-fetch stock media for scene ${sNum} frame ${fIdx}:`, sceneErr);
       }
     }
 
@@ -189,6 +236,7 @@ export async function POST(request, { params }) {
       ok: true,
       assignedCount: assignedResults.length,
       totalScenes: scenes.length,
+      totalFrames: assignmentTargets.length,
       assignedResults,
       nextSceneImages,
     });

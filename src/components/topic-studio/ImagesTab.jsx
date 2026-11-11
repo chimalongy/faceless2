@@ -158,7 +158,10 @@ export default function ImagesTab({
         setSceneImages(data.nextSceneImages);
       }
       if (onReloadAssets) onReloadAssets();
-      toast.success(`Successfully populated ${data.assignedCount} of ${data.totalScenes} scenes with stock media!`);
+      const countMsg = data.totalFrames && data.totalFrames > data.totalScenes
+        ? `${data.assignedCount} of ${data.totalFrames} frames across ${data.totalScenes} scenes`
+        : `${data.assignedCount} of ${data.totalScenes} scenes`;
+      toast.success(`Successfully populated ${countMsg} with stock media!`);
     } catch (err) {
       console.error("Auto stock error:", err);
       toast.error(err.message || "Failed to auto-fetch stock media");
