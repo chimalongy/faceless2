@@ -183,7 +183,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!res.ok || (!data.success && !data.character)) {
         throw new Error(data.error || "Failed to save character");
       }
 
@@ -209,7 +209,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!res.ok || (!data.success && !data.character)) {
         throw new Error(data.error || "Failed to set main character");
       }
       toast.success(`"${char.name}" set as Main Character!`);

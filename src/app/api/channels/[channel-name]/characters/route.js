@@ -142,7 +142,7 @@ export async function POST(request, { params }) {
         updated_at AS "updatedAt";
     `;
 
-    return NextResponse.json({ character: inserted[0] });
+    return NextResponse.json({ success: true, character: inserted[0] });
   } catch (error) {
     console.error("Error creating character:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -174,15 +174,43 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Character ID is required" }, { status: 400 });
     }
 
-    const name = body.name?.trim();
+    // Check if character exists
+    const existing = await sql`
+      SELECT * FROM channel_characters
+      WHERE channel_id = ${channelId} AND id = ${id}
+      LIMIT 1;
+    `;
+    if (!existing || existing.length === 0) {
+      return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    }
+    const currentChar = existing[0];
+
+    const name = body.name !== undefined ? body.name?.trim() : currentChar.name;
     if (!name) {
       return NextResponse.json({ error: "Character name is required" }, { status: 400 });
     }
 
-    const physicalSpec = body.physicalSpec?.trim() || body.physical_spec?.trim() || "";
-    const signatureFeature = body.signatureFeature?.trim() || body.signature_feature?.trim() || "";
-    const wardrobe = body.wardrobe?.trim() || "";
-    const isMain = Boolean(body.isMain ?? body.is_main);
+    const physicalSpec = body.physicalSpec !== undefined
+      ? body.physicalSpec.trim()
+      : body.physical_spec !== undefined
+        ? body.physical_spec.trim()
+        : (currentChar.physical_spec || "");
+
+    const signatureFeature = body.signatureFeature !== undefined
+      ? body.signatureFeature.trim()
+      : body.signature_feature !== undefined
+        ? body.signature_feature.trim()
+        : (currentChar.signature_feature || "");
+
+    const wardrobe = body.wardrobe !== undefined
+      ? body.wardrobe.trim()
+      : (currentChar.wardrobe || "");
+
+    const isMain = body.isMain !== undefined
+      ? Boolean(body.isMain)
+      : body.is_main !== undefined
+        ? Boolean(body.is_main)
+        : Boolean(currentChar.is_main);
 
     if (isMain) {
       await sql`
@@ -218,7 +246,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Character not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ character: updated[0] });
+    return NextResponse.json({ success: true, character: updated[0] });
   } catch (error) {
     console.error("Error updating character:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
