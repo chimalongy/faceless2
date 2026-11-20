@@ -26,7 +26,27 @@ import {
   THUMBNAIL_PROMPT_SYSTEM_PROMPT,
 } from "../src/lib/LLMPrompts/ThumbnailPromptGeneration.js";
 
-test("getScriptGenerationSystemPrompt uses default prompt when promptTemplate is omitted", () => {
+test("getScriptGenerationSystemPrompt throws when no pillar script structure is defined", () => {
+  assert.throws(
+    () =>
+      getScriptGenerationSystemPrompt({
+        channelName: "Stoic Realm",
+        channelNiche: "Philosophy",
+        channelDescription: "Deep wisdom for modern life",
+        channelMission: "Help people achieve inner tranquility",
+        contentPillarName: "Marcus Aurelius Wisdom",
+        contentPillarCategoryTag: "Stoicism",
+        contentPillarTone: "Somber, reflective, philosophical",
+        contentPillarLength: "8-12 minutes",
+        contentPillarWordsCount: "1500 words",
+        contentPillarDescription: "Analyze the Meditations",
+        topic: "Overcoming Fear of Failure",
+      }),
+    /No script structure has been defined for this content pillar/
+  );
+});
+
+test("getScriptGenerationSystemPrompt uses pillar script structure when defined", () => {
   const result = getScriptGenerationSystemPrompt({
     channelName: "Stoic Realm",
     channelNiche: "Philosophy",
@@ -39,11 +59,20 @@ test("getScriptGenerationSystemPrompt uses default prompt when promptTemplate is
     contentPillarWordsCount: "1500 words",
     contentPillarDescription: "Analyze the Meditations",
     topic: "Overcoming Fear of Failure",
+    scriptStructure: {
+      content_flow: [
+        "1. Hook: Break down the paradox",
+        "2. Core Concept: Stoic indifference",
+        "3. Realization: Action over outcome",
+      ],
+      retention_rules: ["Keep pace high"],
+    },
   });
 
   assert.ok(result.includes("Stoic Realm"));
   assert.ok(result.includes("Overcoming Fear of Failure"));
   assert.ok(result.includes("Marcus Aurelius Wisdom"));
+  assert.ok(result.includes("1. Hook: Break down the paradox"));
   assert.ok(result.includes("You are an elite YouTube scriptwriter"));
 });
 

@@ -13,6 +13,7 @@ import {
   Loader2,
   X,
   AlertCircle,
+  AlertTriangle,
   Smartphone
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -20,6 +21,7 @@ import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { getScriptGenerationPrompt } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
 import { getShortScriptGenerationSystemPrompt } from "@/lib/LLMPrompts/ShortScriptGenerationPrompt";
+import { hasValidScriptStructure } from "@/lib/defaultScriptStructure";
 
 export default function ScriptTab({
   topicTitle = "",
@@ -105,6 +107,9 @@ export default function ScriptTab({
     }
   }
 
+  const pillarStructure = topicData?.pillarScriptStructure || topicData?.scriptStructure;
+  const hasPillarStructure = hasValidScriptStructure(pillarStructure);
+
   return (
     <div className="space-y-6 animate-slide-in">
       {/* Script Action Pills Bar */}
@@ -176,6 +181,14 @@ export default function ScriptTab({
           <button
             type="button"
             onClick={() => {
+              if (!hasPillarStructure) {
+                const errorMsg = "No script structure has been defined for this content pillar.";
+                if (typeof triggerScriptNotice === "function") {
+                  triggerScriptNotice(errorMsg);
+                }
+                toast.error(errorMsg, { duration: 6000 });
+                return;
+              }
               try {
                 const fullPrompt = isShort
                   ? getShortScriptGenerationSystemPrompt({
@@ -189,7 +202,7 @@ export default function ScriptTab({
                       contentPillarTone: topicData?.pillarTone,
                       contentPillarDescription: topicData?.pillarDescription,
                       topic: (topicTitle || topicData?.title || "").trim(),
-                      scriptStructure: topicData?.channelScriptStructure || topicData?.scriptStructure,
+                      scriptStructure: pillarStructure,
                     })
                   : getScriptGenerationPrompt({
                       channelName: topicData?.channelName || channelName,
@@ -204,7 +217,7 @@ export default function ScriptTab({
                       contentPillarWordsCount: topicData?.pillarContentWordsCount,
                       contentPillarDescription: topicData?.pillarDescription,
                       topic: (topicTitle || topicData?.title || "").trim(),
-                      scriptStructure: topicData?.channelScriptStructure || topicData?.scriptStructure,
+                      scriptStructure: pillarStructure,
                     });
                 navigator.clipboard.writeText(fullPrompt);
                 if (typeof triggerScriptNotice === "function") {
@@ -250,7 +263,17 @@ export default function ScriptTab({
           <button
             type="button"
             disabled={isGeneratingScript}
-            onClick={handleGenerateScript}
+            onClick={(e) => {
+              if (!hasPillarStructure) {
+                const errorMsg = "Cannot generate script: No script structure has been defined for this content pillar. Please configure a script structure in the Content Pillar settings first.";
+                if (typeof triggerScriptNotice === "function") {
+                  triggerScriptNotice(errorMsg);
+                }
+                toast.error(errorMsg, { duration: 6000 });
+                return;
+              }
+              handleGenerateScript?.(e);
+            }}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-signal hover:bg-signal-hover text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer disabled:opacity-60"
             title="AI autogenerate full teleprompter script"
           >
@@ -271,6 +294,27 @@ export default function ScriptTab({
 
       {/* Editor & Reader Container */}
       <div className="p-6 border border-line bg-paper-card space-y-4">
+        {!hasPillarStructure && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-xs flex items-center justify-between text-amber-900 rounded-xs">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span>
+                <strong>No script structure defined:</strong> No script structure has been defined for this content pillar. Please define one in Content Pillar settings.
+              </span>
+            </div>
+            {topicData?.pillarSlug && (
+              <a
+                href={`/dashboard/channels/${topicData?.channelSlug || channelName}/content_pillar/${topicData?.pillarSlug}`}
+                className="shrink-0 underline text-amber-800 hover:text-amber-950 font-semibold text-[11px] ml-2"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Configure Pillar &rarr;
+              </a>
+            )}
+          </div>
+        )}
+
         {isShort && (
           <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-xs flex items-center justify-between text-rose-700">
             <div className="flex items-center gap-2 font-semibold">

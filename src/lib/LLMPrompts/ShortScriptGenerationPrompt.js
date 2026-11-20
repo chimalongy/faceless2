@@ -1,4 +1,7 @@
-import { formatScriptStructureForPrompt } from "../defaultScriptStructure.js";
+import {
+  formatScriptStructureForPrompt,
+  hasValidScriptStructure,
+} from "../defaultScriptStructure.js";
 
 export const SHORT_SCRIPT_GENERATION_SYSTEM_PROMPT = `You are an elite YouTube scriptwriter and audience retention director specialized in high-retention vertical short-form videos (YouTube Shorts, TikTok, Reels).
 
@@ -117,10 +120,23 @@ export function getShortScriptGenerationSystemPrompt({
     );
   }
 
-  const effectiveStructure =
-    scriptStructure || script_structure || channelScriptStructure;
+  const basePrompt = typeof promptTemplate === "string" && promptTemplate.trim().length > 0
+    ? promptTemplate
+    : SHORT_SCRIPT_GENERATION_SYSTEM_PROMPT;
+
+  const requiresStructure = basePrompt.includes("{pillar_script_structure_block}") || basePrompt.includes("{channel_script_structure_block}");
+
+  // The script structure MUST be what is defined on the content pillar nothing else.
+  // If the content pillar does not have any defined script structure, do not fallback on anything.
+  const effectiveStructure = scriptStructure || script_structure;
+  if (requiresStructure && !hasValidScriptStructure(effectiveStructure)) {
+    throw new Error(
+      "No script structure has been defined for this content pillar. Please define a script structure in the Content Pillar settings before generating a script."
+    );
+  }
+
   const formattedStructureBlock =
-    formatScriptStructureForPrompt(effectiveStructure, { includeTone: true });
+    formatScriptStructureForPrompt(effectiveStructure, { includeTone: true, allowFallback: false });
 
   const placeholderMap = {
     "{channel_name}": effectiveChannelName,

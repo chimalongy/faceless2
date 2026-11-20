@@ -256,16 +256,63 @@ function renderCustomFields(structure) {
 }
 
 /**
+ * Determines whether a given input represents a valid, non-empty script structure.
+ *
+ * @param {any} structureInput
+ * @returns {boolean}
+ */
+export function hasValidScriptStructure(structureInput) {
+  if (structureInput === null || structureInput === undefined) return false;
+  if (typeof structureInput === "string") {
+    const trimmed = structureInput.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return hasValidScriptStructure(parsed);
+      } catch {
+        return true;
+      }
+    }
+    return true;
+  }
+  if (typeof structureInput === "object") {
+    if (typeof structureInput.text === "string" && structureInput.text.trim()) return true;
+    if (typeof structureInput.raw === "string" && structureInput.raw.trim()) return true;
+    if (Array.isArray(structureInput.content_flow) && structureInput.content_flow.length > 0) return true;
+    if (typeof structureInput.hook_instructions === "string" && structureInput.hook_instructions.trim()) return true;
+    if (Array.isArray(structureInput.retention_rules) && structureInput.retention_rules.length > 0) return true;
+    const entries = Object.entries(structureInput);
+    if (entries.length === 0) return false;
+    return entries.some(([_, v]) => {
+      if (typeof v === "string") return v.trim().length > 0;
+      if (Array.isArray(v)) return v.length > 0;
+      if (typeof v === "object" && v !== null) return Object.keys(v).length > 0;
+      return Boolean(v);
+    });
+  }
+  return false;
+}
+
+/**
  * Formats a scriptStructure (object or JSON string) into a clean, markdown directive section
  * that commands the LLM to follow the channel's custom script style.
  *
  * @param {ScriptStructure|string|null|undefined} structureInput
  * @param {Object} [options]
  * @param {boolean} [options.includeTone=false] - Whether to render tone_and_voice (false by default to let Content Pillar Tone govern)
+ * @param {boolean} [options.allowFallback=false] - Whether to fallback to DEFAULT_SCRIPT_STRUCTURE_TEXT if empty
  * @returns {string}
  */
-export function formatScriptStructureForPrompt(structureInput, { includeTone = false } = {}) {
-  let structure = structureInput ?? DEFAULT_SCRIPT_STRUCTURE_TEXT;
+export function formatScriptStructureForPrompt(structureInput, { includeTone = false, allowFallback = false } = {}) {
+  if (!hasValidScriptStructure(structureInput)) {
+    if (!allowFallback) {
+      return "";
+    }
+    return DEFAULT_SCRIPT_STRUCTURE_TEXT;
+  }
+
+  let structure = structureInput;
 
   if (typeof structure === "string") {
     const trimmed = structure.trim();

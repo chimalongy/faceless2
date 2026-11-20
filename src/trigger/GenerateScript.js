@@ -6,6 +6,7 @@ import {
   SCRIPT_GENERATION_SYSTEM_PROMPT,
 } from "@/lib/LLMPrompts/ScriptGenerationPrompt";
 import { getShortScriptGenerationSystemPrompt } from "@/lib/LLMPrompts/ShortScriptGenerationPrompt";
+import { hasValidScriptStructure } from "@/lib/defaultScriptStructure";
 import { resolveLlmBaseUrl } from "@/lib/llm-provider";
 
 export const generateScriptTask = task({
@@ -209,8 +210,15 @@ export const generateScriptTask = task({
 
     // 4. Construct System & User Prompt
     const isShort = topic.videoType === "short";
+    // Script structure MUST be what is defined on the content pillar nothing else.
     const pillarScriptStructure =
-      pillar?.scriptStructure || pillar?.script_structure || payload.scriptStructure || null;
+      pillar?.scriptStructure || pillar?.script_structure || null;
+
+    if (!hasValidScriptStructure(pillarScriptStructure)) {
+      throw new Error(
+        "No script structure has been defined for this content pillar. Please configure a script structure on the content pillar before generating a script."
+      );
+    }
 
     const fullSystemPrompt = isShort
       ? getShortScriptGenerationSystemPrompt({

@@ -610,6 +610,7 @@ export default function TopicStudioPage() {
     } catch (err) {
       console.error("Script generation error:", err);
       triggerScriptNotice(`Generation failed: ${err.message}`);
+      toast.error(err.message, { duration: 6000 });
     } finally {
       setIsGeneratingScript(false);
     }
