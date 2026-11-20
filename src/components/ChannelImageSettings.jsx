@@ -29,6 +29,10 @@ import {
   Plus,
   Edit3,
   CheckCircle2,
+  Flame,
+  Layers,
+  Zap,
+  Target,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -39,6 +43,10 @@ import {
   parseImageTheme,
   hasImageThemeContent,
 } from "@/lib/image-theme";
+import {
+  THUMBNAIL_ARCHETYPES,
+  THUMBNAIL_ACCENT_COLORS,
+} from "@/lib/thumbnail-archetypes";
 
 export default function ChannelImageSettings({ channelSlug, channelTitle, useImagePool = false }) {
   const [activePool, setActivePool] = useState("shorts"); // 'shorts' | 'longform'
@@ -75,8 +83,13 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
   const [channelUseImagePool, setChannelUseImagePool] = useState(Boolean(useImagePool));
   const [savingPoolToggle, setSavingPoolToggle] = useState(false);
 
-  // Thumbnail Theme state
+  // Thumbnail Theme & Blueprint state
   const [thumbnailTheme, setThumbnailTheme] = useState("");
+  const [thumbnailArchetype, setThumbnailArchetype] = useState("documentary_noir");
+  const [thumbnailAccentColor, setThumbnailAccentColor] = useState("golden_amber");
+  const [thumbnailUseMainCharacter, setThumbnailUseMainCharacter] = useState(true);
+  const [thumbnailIncludeTextHook, setThumbnailIncludeTextHook] = useState(false);
+  const [thumbnailCustomRules, setThumbnailCustomRules] = useState("");
   const [savingThumbnailTheme, setSavingThumbnailTheme] = useState(false);
   const [savedThumbnailTheme, setSavedThumbnailTheme] = useState(false);
 
@@ -110,6 +123,11 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
           // Parse structured imageTheme from database or legacy string
           setImageTheme(parseImageTheme(data.channel.imageTheme));
           setThumbnailTheme(data.channel.thumbnailTheme || "");
+          setThumbnailArchetype(data.channel.thumbnailArchetype || data.channel.thumbnail_archetype || "documentary_noir");
+          setThumbnailAccentColor(data.channel.thumbnailAccentColor || data.channel.thumbnail_accent_color || "golden_amber");
+          setThumbnailUseMainCharacter(data.channel.thumbnailUseMainCharacter ?? data.channel.thumbnail_use_main_character ?? true);
+          setThumbnailIncludeTextHook(data.channel.thumbnailIncludeTextHook ?? data.channel.thumbnail_include_text_hook ?? false);
+          setThumbnailCustomRules(data.channel.thumbnailCustomRules || data.channel.thumbnail_custom_rules || data.channel.thumbnailTheme || "");
           setChannelUseImagePool(Boolean(data.channel.useImagePool ?? data.channel.use_image_pool));
         }
       })
@@ -653,7 +671,7 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
     }
   }
 
-  // Save Thumbnail Theme to DB
+  // Save Thumbnail Blueprint to DB
   async function handleSaveThumbnailTheme(e) {
     if (e) e.preventDefault();
     if (!channelData) {
@@ -662,7 +680,15 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
     }
     setSavingThumbnailTheme(true);
     try {
-      const payload = { ...channelData, thumbnailTheme: thumbnailTheme.trim() };
+      const payload = {
+        ...channelData,
+        thumbnailTheme: (thumbnailCustomRules || thumbnailTheme).trim(),
+        thumbnailArchetype,
+        thumbnailAccentColor,
+        thumbnailUseMainCharacter,
+        thumbnailIncludeTextHook,
+        thumbnailCustomRules: thumbnailCustomRules.trim(),
+      };
       const res = await fetch(`/api/channels/${channelSlug}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -672,18 +698,20 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
         const data = await res.json();
         if (data.channel) setChannelData(data.channel);
         setSavedThumbnailTheme(true);
-        toast.success("Thumbnail theme saved!");
+        toast.success("Thumbnail Blueprint saved!");
         setTimeout(() => setSavedThumbnailTheme(false), 2000);
       } else {
         const data = await res.json().catch(() => ({}));
-        toast.error(data.error || "Failed to save thumbnail theme");
+        toast.error(data.error || "Failed to save thumbnail blueprint");
       }
     } catch (err) {
-      toast.error(err.message || "Failed to save thumbnail theme");
+      toast.error(err.message || "Failed to save thumbnail blueprint");
     } finally {
       setSavingThumbnailTheme(false);
     }
   }
+
+  const mainCharacter = characters.find((c) => c.is_main || c.isMain) || characters[0];
 
   return (
     <div className="space-y-6">
@@ -932,46 +960,221 @@ export default function ChannelImageSettings({ channelSlug, channelTitle, useIma
         )}
       </section>
 
-      {/* 3. THUMBNAIL THEME SECTION */}
-      <section className="p-6 border border-line bg-paper-card space-y-4">
-        <div className="flex items-center justify-between border-b border-line pb-3">
-          <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
-            <span className="p-1.5 bg-signal/10 text-signal">
-              <Palette size={16} />
-            </span>
-            <span>Thumbnail Theme</span>
+      {/* 3. THUMBNAIL STUDIO BLUEPRINT */}
+      <section className="p-6 border border-line bg-paper-card space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5 text-ink font-semibold text-sm">
+              <span className="p-1.5 bg-signal/10 text-signal">
+                <Sparkles size={16} />
+              </span>
+              <span>Thumbnail Studio Blueprint</span>
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Design the signature visual formula for high-CTR YouTube covers. Every video generated on this channel will automatically produce 3 psychological thumbnail angles adhering to this archetype and contrast palette.
+            </p>
           </div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5">
-            High-CTR Cover Directives
+          <span className="text-[10px] font-mono uppercase tracking-wider text-signal bg-signal/10 px-2 py-0.5 shrink-0">
+            High-CTR Architecture
           </span>
         </div>
-        <p className="text-xs text-ink-muted leading-relaxed">
-          Define the visual style and composition directives for AI-generated thumbnails on this channel.
-        </p>
-        <form onSubmit={handleSaveThumbnailTheme} className="space-y-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-thumbnail-theme-pool">
-              <Palette size={13} className="text-signal" />
-              <span>Thumbnail_Theme</span>
-            </label>
-            <span className="text-[10px] font-mono text-ink-muted uppercase">High-CTR Cover Directives</span>
+
+        <form onSubmit={handleSaveThumbnailTheme} className="space-y-6">
+          {/* 3A. Composition Archetype */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-ink/90 flex items-center gap-1.5">
+                <Layers size={13} className="text-signal" />
+                <span>Signature Composition Archetype</span>
+              </label>
+              <span className="text-[10px] font-mono text-ink-muted uppercase">Rule of 3rds &amp; Visual Tension</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Object.values(THUMBNAIL_ARCHETYPES).map((arch) => {
+                const isSelected = thumbnailArchetype === arch.id;
+                return (
+                  <button
+                    key={arch.id}
+                    type="button"
+                    onClick={() => setThumbnailArchetype(arch.id)}
+                    className={`p-3.5 text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? "border-signal bg-signal/5 ring-1 ring-signal"
+                        : "border-line bg-white hover:border-line-dark"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-xs font-bold text-ink">{arch.name}</span>
+                        {isSelected ? (
+                          <CheckCircle2 size={14} className="text-signal shrink-0" />
+                        ) : (
+                          <div className="w-3.5 h-3.5 rounded-full border border-line shrink-0" />
+                        )}
+                      </div>
+                      <span className="inline-block text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 bg-paper border border-line text-ink-muted mb-2">
+                        {arch.badge}
+                      </span>
+                      <p className="text-[11px] text-ink-muted leading-relaxed line-clamp-3">
+                        {arch.description}
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-line/60">
+                      <span className="text-[10px] font-mono text-ink/70">
+                        Best for: <span className="text-ink-muted">{arch.recommendedFor.split(",")[0]}</span>
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <textarea
-            id="field-thumbnail-theme-pool"
-            rows={3}
-            value={thumbnailTheme}
-            onChange={(e) => setThumbnailTheme(e.target.value)}
-            placeholder="e.g. Bold golden typography, dramatic high-contrast focal point, dark obsidian background, mysterious vault lighting"
-            className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
-          />
-          <div className="flex justify-end">
+
+          {/* 3B. High-Contrast Accent Color */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-ink/90 flex items-center gap-1.5">
+                <Zap size={13} className="text-signal" />
+                <span>Contrast Accent Lighting</span>
+              </label>
+              <span className="text-[10px] font-mono text-ink-muted uppercase">Dominant Feed Edge Glow</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+              {Object.values(THUMBNAIL_ACCENT_COLORS).map((color) => {
+                const isSelected = thumbnailAccentColor === color.id;
+                return (
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => setThumbnailAccentColor(color.id)}
+                    className={`p-2.5 text-left border transition-all cursor-pointer flex items-center gap-2.5 ${
+                      isSelected
+                        ? "border-signal bg-signal/5 ring-1 ring-signal"
+                        : "border-line bg-white hover:border-line-dark"
+                    }`}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full shrink-0 border border-black/20 shadow-xs"
+                      style={{ backgroundColor: color.hex }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-ink truncate">{color.name}</p>
+                      <p className="text-[10px] text-ink-muted font-mono truncate">{color.label}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3C. Channel Main Character Anchor Toggle */}
+          <div className="p-4 border border-line bg-paper/60 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <input
+                  id="field-thumb-main-char"
+                  type="checkbox"
+                  checked={thumbnailUseMainCharacter}
+                  onChange={(e) => setThumbnailUseMainCharacter(e.target.checked)}
+                  className="mt-0.5 accent-signal cursor-pointer"
+                />
+                <div>
+                  <label htmlFor="field-thumb-main-char" className="text-xs font-bold text-ink cursor-pointer block">
+                    Anchor Thumbnails to Channel Main Character
+                  </label>
+                  <p className="text-[11px] text-ink-muted leading-relaxed mt-0.5">
+                    Injects your channel's protagonist specs (physical appearance and signature wardrobe) into generated cover prompts, establishing strong feed recognizability.
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 text-right">
+                {mainCharacter ? (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-signal/10 border border-signal/20 text-[10px] font-mono text-signal">
+                    <User size={11} />
+                    <span>{mainCharacter.name}</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-ink-muted italic">
+                    No character created yet
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 3D. Punchy Text Hook Directive Toggle */}
+          <div className="p-4 border border-line bg-paper/60 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <input
+                  id="field-thumb-text-hook"
+                  type="checkbox"
+                  checked={thumbnailIncludeTextHook}
+                  onChange={(e) => setThumbnailIncludeTextHook(e.target.checked)}
+                  className="mt-0.5 accent-signal cursor-pointer"
+                />
+                <div>
+                  <label htmlFor="field-thumb-text-hook" className="text-xs font-bold text-ink cursor-pointer block">
+                    Include 1–3 Word Punchy Text Hook Directive
+                  </label>
+                  <p className="text-[11px] text-ink-muted leading-relaxed mt-0.5">
+                    Instructs the AI prompt generator to create high-impact, bold 1–3 word text hooks (e.g. &ldquo;THE TRAP&rdquo;, &ldquo;0%&rdquo;, &ldquo;EXPOSED&rdquo;) in high-contrast negative space with drop shadows. When disabled, generates pure visual storytelling with zero text overlays.
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 text-right">
+                <span className={`inline-flex items-center gap-1.5 px-2 py-1 border text-[10px] font-mono ${
+                  thumbnailIncludeTextHook
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-700 font-bold"
+                    : "bg-paper border-line text-ink-muted"
+                }`}>
+                  {thumbnailIncludeTextHook ? "Text Hooks Active" : "Pure Visual (No Text)"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 3E. Custom Directives / Fine-Tuning */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-ink/80 flex items-center gap-1.5" htmlFor="field-thumbnail-custom-rules">
+                <Palette size={13} className="text-signal" />
+                <span>Custom Directives &amp; Anti-Hallucination Rules</span>
+              </label>
+              <span className="text-[10px] font-mono text-ink-muted uppercase">Fine-Tuning Prompts</span>
+            </div>
+            <textarea
+              id="field-thumbnail-custom-rules"
+              rows={3}
+              value={thumbnailCustomRules}
+              onChange={(e) => {
+                setThumbnailCustomRules(e.target.value);
+                setThumbnailTheme(e.target.value);
+              }}
+              placeholder="e.g. Extreme chiaroscuro, cinematic 85mm portraiture, hyper-clean background with no messy debris, bold atmospheric rim lights"
+              className="w-full p-3 border border-line-dark bg-white text-xs font-mono text-ink leading-relaxed outline-none focus:border-signal"
+            />
+          </div>
+
+          {/* Save Button */}
+          <div className="flex justify-end pt-2">
             <button
               type="submit"
               disabled={savingThumbnailTheme}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-signal hover:bg-signal-hover disabled:opacity-60 text-white text-xs font-semibold shadow-xs shadow-signal/20 transition-all cursor-pointer"
             >
-              {savingThumbnailTheme ? <Loader2 size={13} className="animate-spin" /> : savedThumbnailTheme ? <Check size={13} /> : <Save size={13} />}
-              <span>{savingThumbnailTheme ? "Saving..." : savedThumbnailTheme ? "Saved!" : "Save Thumbnail Theme"}</span>
+              {savingThumbnailTheme ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : savedThumbnailTheme ? (
+                <Check size={13} />
+              ) : (
+                <Save size={13} />
+              )}
+              <span>{savingThumbnailTheme ? "Saving Blueprint..." : savedThumbnailTheme ? "Saved!" : "Save Thumbnail Blueprint"}</span>
             </button>
           </div>
         </form>

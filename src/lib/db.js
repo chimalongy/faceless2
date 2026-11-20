@@ -107,6 +107,11 @@ export async function initDbSchema(force = false) {
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS background_music JSONB DEFAULT '{"enabled": false, "volume": 0.15}'::jsonb;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS video_settings JSONB DEFAULT '{"use_overlay": false, "longs_overlay_id": null, "shorts_overlay_id": null}'::jsonb;`;
       await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS prompt_settings JSONB DEFAULT '{}'::jsonb;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS thumbnail_archetype TEXT DEFAULT 'documentary_noir';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS thumbnail_accent_color TEXT DEFAULT 'golden_amber';`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS thumbnail_use_main_character BOOLEAN DEFAULT TRUE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS thumbnail_include_text_hook BOOLEAN DEFAULT FALSE;`;
+      await sql`ALTER TABLE channels ADD COLUMN IF NOT EXISTS thumbnail_custom_rules TEXT;`;
     } catch {}
 
     // 2. Content Pillars Table
@@ -217,6 +222,8 @@ export async function initDbSchema(force = false) {
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS tiktok_publish_id TEXT;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS tiktok_published_at TIMESTAMPTZ;`;
       await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS published_platforms JSONB;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS thumbnail_concepts JSONB;`;
+      await sql`ALTER TABLE topics ADD COLUMN IF NOT EXISTS selected_thumbnail_concept INT DEFAULT 1;`;
     } catch {}
 
     // 4. Topic Assets Table (Cloudflare R2 media links)

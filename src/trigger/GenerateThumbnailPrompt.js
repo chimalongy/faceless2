@@ -11,6 +11,8 @@ export const generateThumbnailPromptTask = task({
       channelSlug,
       topicSlug,
       customModel = null,
+      requestedArchetype = null,
+      requestedAccentColor = null,
     } = payload;
 
     if (!channelSlug || typeof channelSlug !== "string" || !channelSlug.trim()) {
@@ -32,7 +34,14 @@ export const generateThumbnailPromptTask = task({
 
     // 1. Fetch Channel & Topic records
     const channelRows = await sql`
-      SELECT id, name, slug, niche, sub_niche, description, thumbnail_theme, image_theme, prompt_settings
+      SELECT 
+        id, name, slug, niche, sub_niche, description, 
+        thumbnail_theme, image_theme, prompt_settings,
+        COALESCE(thumbnail_archetype, 'documentary_noir') AS "thumbnailArchetype",
+        COALESCE(thumbnail_accent_color, 'golden_amber') AS "thumbnailAccentColor",
+        COALESCE(thumbnail_use_main_character, TRUE) AS "thumbnailUseMainCharacter",
+        COALESCE(thumbnail_include_text_hook, FALSE) AS "thumbnailIncludeTextHook",
+        thumbnail_custom_rules AS "thumbnailCustomRules"
       FROM channels
       WHERE slug = ${channelSlug}
       LIMIT 1;
@@ -44,7 +53,10 @@ export const generateThumbnailPromptTask = task({
     const channel = channelRows[0];
 
     const topicRows = await sql`
-      SELECT id, channel_id, pillar_id, title, slug, thumbnail_prompt
+      SELECT 
+        id, channel_id, pillar_id, title, slug, thumbnail_prompt,
+        story_description AS "storyDescription",
+        script_content AS "scriptContent"
       FROM topics
       WHERE slug = ${topicSlug} AND channel_id = ${channel.id}
       LIMIT 1;
@@ -67,10 +79,36 @@ export const generateThumbnailPromptTask = task({
       pillar = pillarRows?.[0] || null;
     }
 
+    // Resolve channel main character if enabled
+    let mainCharacter = null;
+    if (channel.thumbnailUseMainCharacter) {
+      try {
+        const charRows = await sql`
+          SELECT name, physical_spec, signature_feature, wardrobe
+          FROM channel_characters
+          WHERE channel_id = ${channel.id} AND is_main = TRUE
+          LIMIT 1;
+        `;
+        if (charRows && charRows.length > 0) {
+          mainCharacter = {
+            name: charRows[0].name,
+            physicalSpec: charRows[0].physical_spec,
+            signatureFeature: charRows[0].signature_feature,
+            wardrobe: charRows[0].wardrobe,
+          };
+        }
+      } catch (charErr) {
+        logger.warn("Could not query channel main character for thumbnail prompt:", charErr);
+      }
+    }
+
     const topicTitle = (topic.title || "").trim();
     const pillarName = pillar?.name || "";
     const imageTheme = (channel.image_theme || "").trim();
-    const thumbnailTheme = (channel.thumbnail_theme || imageTheme || "").trim();
+    const thumbnailTheme = (channel.thumbnail_theme || "").trim();
+    const archetypeKey = requestedArchetype || channel.thumbnailArchetype || "documentary_noir";
+    const accentColorKey = requestedAccentColor || channel.thumbnailAccentColor || "golden_amber";
+    const customRules = channel.thumbnailCustomRules || thumbnailTheme || "";
 
     // 2. Fetch General Settings
     const generalRows = await sql`
@@ -115,15 +153,22 @@ export const generateThumbnailPromptTask = task({
     );
     const executionAccounts = [...matchingAccounts, ...otherAccounts];
 
-    // 4. Construct Prompt
+    // 4. Construct High-CTR Modular Prompt
     const fullPrompt = getThumbnailPromptGeneration({
       channelImageGenerationTheme: imageTheme,
       channelThumbnailGenerationTheme: thumbnailTheme,
       topic: topicTitle,
+      storyDescription: topic.storyDescription || "",
+      scriptContent: topic.scriptContent || "",
+      archetypeKey,
+      accentColorKey,
+      character: mainCharacter,
+      includeTextHook: payload.includeTextHook ?? channel.thumbnailIncludeTextHook ?? false,
+      customRules,
       promptTemplate: (channel.prompt_settings?.thumbnailPrompt || channel.prompt_settings?.thumbnail_prompt || null),
     });
 
-    // Helper to strip thinking tags
+    // Helper to strip thinking tags and markdown fences
     function stripReasoningBlocks(text) {
       if (!text) return "";
       let str = text;
@@ -132,13 +177,44 @@ export const generateThumbnailPromptTask = task({
       str = str.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
       str = str.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "");
       str = str.replace(/<\/?(?:thought|think|thinking|reasoning|plan)>/gi, "");
-      // Strip outer quotes if any
-      str = str.replace(/^["']|["']$/g, "");
       return str.trim();
     }
 
+    function parseConceptsOutput(rawText, title) {
+      let cleaned = stripReasoningBlocks(rawText);
+      cleaned = cleaned.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+
+      const jsonMatch = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item, idx) => ({
+              id: item.id || idx + 1,
+              angle: item.angle || `Angle ${idx + 1}`,
+              title: item.title || `Concept ${idx + 1}`,
+              text_hook: item.text_hook || item.textHook || null,
+              focal_hook: item.focal_hook || item.hook || "",
+              prompt: item.prompt || (typeof item === "string" ? item : JSON.stringify(item)),
+            }));
+          }
+        } catch {}
+      }
+
+      // Single prompt fallback wrapped into concept array
+      return [
+        {
+          id: 1,
+          angle: "High-CTR Signature Concept",
+          title: title || "Primary Concept",
+          focal_hook: "Core dramatic focal point",
+          prompt: cleaned,
+        },
+      ];
+    }
+
     // 5. Fallback Loop Across LLM Accounts
-    let generatedPrompt = null;
+    let generatedConcepts = null;
     let successfulAccount = null;
     const errors = [];
 
@@ -176,7 +252,7 @@ export const generateThumbnailPromptTask = task({
             },
             {
               role: "user",
-              content: `Generate the YouTube thumbnail image generation prompt for the topic: "${topicTitle}".`,
+              content: `Generate 3 high-CTR YouTube thumbnail concepts in JSON format for the topic: "${topicTitle}".`,
             },
           ],
           temperature: 0.7,
@@ -187,14 +263,14 @@ export const generateThumbnailPromptTask = task({
           throw new Error(`Empty response returned from ${accountSource} for account ${email}`);
         }
 
-        const cleaned = stripReasoningBlocks(rawText);
-        if (!cleaned) {
-          throw new Error(`Model returned only reasoning tags without prompt content for account ${email}`);
+        const concepts = parseConceptsOutput(rawText, topicTitle);
+        if (!concepts || concepts.length === 0) {
+          throw new Error(`Failed to parse valid thumbnail concepts from account ${email}`);
         }
 
-        generatedPrompt = cleaned;
+        generatedConcepts = concepts;
         successfulAccount = `${email} (${accountSource})`;
-        logger.log(`[GenerateThumbnailPrompt] Successfully generated thumbnail prompt with ${successfulAccount}!`);
+        logger.log(`[GenerateThumbnailPrompt] Successfully generated ${concepts.length} thumbnail concepts with ${successfulAccount}!`);
         break;
       } catch (err) {
         logger.error(`[GenerateThumbnailPrompt] Failed with account ${email}:`, {
@@ -206,19 +282,23 @@ export const generateThumbnailPromptTask = task({
       }
     }
 
-    if (!generatedPrompt) {
+    if (!generatedConcepts || generatedConcepts.length === 0) {
       const formattedErrors = errors.map((e) => `• ${e}`).join("\n");
       throw new Error(
         `All ${executionAccounts.length} LLM account(s) failed during thumbnail prompt generation.\n\nErrors encountered:\n${formattedErrors}`
       );
     }
 
-    // 6. Save generated thumbnail prompt to database
-    logger.log(`[GenerateThumbnailPrompt] Saving thumbnail prompt to database for topic "${topicTitle}"...`);
+    const primaryPrompt = generatedConcepts[0]?.prompt || "";
+
+    // 6. Save generated thumbnail concepts and primary prompt to database
+    logger.log(`[GenerateThumbnailPrompt] Saving ${generatedConcepts.length} thumbnail concepts to database for topic "${topicTitle}"...`);
     await sql`
       UPDATE topics
       SET 
-        thumbnail_prompt = ${generatedPrompt},
+        thumbnail_prompt = ${primaryPrompt},
+        thumbnail_concepts = ${JSON.stringify(generatedConcepts)}::jsonb,
+        selected_thumbnail_concept = 1,
         updated_at = NOW()
       WHERE id = ${topic.id};
     `;
@@ -229,7 +309,8 @@ export const generateThumbnailPromptTask = task({
       topicSlug,
       topicId: topic.id,
       topicTitle,
-      thumbnailPrompt: generatedPrompt,
+      thumbnailPrompt: primaryPrompt,
+      thumbnailConcepts: generatedConcepts,
       modelUsed: configuredModel,
       accountUsed: successfulAccount,
     };

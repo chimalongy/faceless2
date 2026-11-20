@@ -84,6 +84,8 @@ export default function TopicStudioPage() {
 
   // 1. Thumbnail State
   const [thumbnailPrompt, setThumbnailPrompt] = useState("");
+  const [thumbnailConcepts, setThumbnailConcepts] = useState([]);
+  const [selectedConceptId, setSelectedConceptId] = useState(1);
   const [isEditingThumbPrompt, setIsEditingThumbPrompt] = useState(false);
   const [thumbPromptNotice, setThumbPromptNotice] = useState("");
   const [isGeneratingThumbPrompt, setIsGeneratingThumbPrompt] = useState(false);
@@ -214,6 +216,13 @@ export default function TopicStudioPage() {
             const t = data.topic;
             setTopicData(t);
             if (t.thumbnailPrompt) setThumbnailPrompt(t.thumbnailPrompt);
+            if (t.thumbnailConcepts) {
+              const concepts = typeof t.thumbnailConcepts === "string" ? JSON.parse(t.thumbnailConcepts) : t.thumbnailConcepts;
+              setThumbnailConcepts(Array.isArray(concepts) ? concepts : []);
+            }
+            if (t.selectedThumbnailConcept) {
+              setSelectedConceptId(Number(t.selectedThumbnailConcept));
+            }
             if (t.thumbnailUrl) {
               setThumbnailImage(t.thumbnailUrl);
             }
@@ -397,10 +406,16 @@ export default function TopicStudioPage() {
       );
 
       const data = await res.json();
-      if (res.ok && data.thumbnailPrompt) {
-        setThumbnailPrompt(data.thumbnailPrompt);
-        toast.success("Thumbnail prompt generated successfully!");
-        triggerThumbPromptNotice("Thumbnail prompt generated.");
+      if (res.ok && (data.thumbnailPrompt || data.thumbnailConcepts)) {
+        if (data.thumbnailPrompt) {
+          setThumbnailPrompt(data.thumbnailPrompt);
+        }
+        if (Array.isArray(data.thumbnailConcepts) && data.thumbnailConcepts.length > 0) {
+          setThumbnailConcepts(data.thumbnailConcepts);
+          setSelectedConceptId(1);
+        }
+        toast.success("Thumbnail concepts generated successfully!");
+        triggerThumbPromptNotice("Thumbnail concepts generated.");
       } else {
         toast.error(data.error || "Failed to generate thumbnail prompt.");
       }
@@ -409,6 +424,26 @@ export default function TopicStudioPage() {
       toast.error("Error generating prompt: " + err.message);
     } finally {
       setIsGeneratingThumbPrompt(false);
+    }
+  }
+
+  async function handleSelectConcept(concept) {
+    if (!concept) return;
+    setSelectedConceptId(concept.id);
+    if (concept.prompt) {
+      setThumbnailPrompt(concept.prompt);
+    }
+    try {
+      await fetch(`/api/channels/${channelSlug}/topics/${topicSlug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thumbnailPrompt: concept.prompt,
+          selectedThumbnailConcept: concept.id,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to persist selected concept:", err);
     }
   }
 
@@ -2536,6 +2571,9 @@ export default function TopicStudioPage() {
               topicTitle={topicTitle}
               thumbnailPrompt={thumbnailPrompt}
               setThumbnailPrompt={setThumbnailPrompt}
+              thumbnailConcepts={thumbnailConcepts}
+              selectedConceptId={selectedConceptId}
+              onSelectConcept={handleSelectConcept}
               isEditingThumbPrompt={isEditingThumbPrompt}
               setIsEditingThumbPrompt={setIsEditingThumbPrompt}
               thumbPromptNotice={thumbPromptNotice}

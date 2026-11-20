@@ -15,7 +15,7 @@ export async function POST(req, context) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { customModel } = body;
+    const { customModel, requestedArchetype, requestedAccentColor } = body;
 
     console.log(`[GenerateThumbnailPromptRoute] Triggering task "generate-thumbnail-prompt" for "${channelSlug}/${topicSlug}"...`);
 
@@ -23,6 +23,8 @@ export async function POST(req, context) {
       channelSlug,
       topicSlug,
       customModel,
+      requestedArchetype,
+      requestedAccentColor,
     });
 
     const run = await runs.poll(handle.id, { pollIntervalMs: 1200 });
@@ -39,6 +41,7 @@ export async function POST(req, context) {
     return NextResponse.json({
       success: true,
       thumbnailPrompt: output.thumbnailPrompt,
+      thumbnailConcepts: output.thumbnailConcepts || [],
       accountUsed: output.accountUsed,
       modelUsed: output.modelUsed,
       topicSlug: output.topicSlug,
