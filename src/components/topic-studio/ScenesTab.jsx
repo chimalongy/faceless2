@@ -14,7 +14,6 @@ import {
   Loader2,
   Move,
   Sliders,
-  Smartphone,
   Camera
 } from "lucide-react";
 
@@ -52,7 +51,6 @@ import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { getSceneGenerationPrompt } from "@/lib/LLMPrompts/SceneGenerationPrompt";
 import { getShortSceneGenerationPrompt } from "@/lib/LLMPrompts/ShortSceneGenerationPrompt";
-import { getShortOutroScene, DEFAULT_SHORT_OUTRO_SCENE } from "@/lib/defaultShortOutroScene";
 
 export default function ScenesTab({
   topicData = null,
@@ -194,31 +192,12 @@ export default function ScenesTab({
         };
       });
 
-      // Always inject the default outro scene as the last scene for shorts
-      if (isShortVideo && normalized.length > 0) {
-        const lastScene = normalized[normalized.length - 1];
-        const isAlreadyOutro = Boolean(
-          lastScene &&
-          lastScene.audio_text?.trim() === DEFAULT_SHORT_OUTRO_SCENE.audio_text.trim()
-        );
-
-        if (!isAlreadyOutro) {
-          const nextSceneNum = normalized.length + 1;
-          const outroScene = getShortOutroScene(nextSceneNum);
-          normalized.push(outroScene);
-        } else if (lastScene) {
-          lastScene.scene_number = normalized.length;
-        }
-      }
-
       setScenesJson(JSON.stringify(normalized, null, 2));
       setJsonError("");
       setPasteModalOpen(false);
       setPastedJsonText("");
       triggerScenesNotice(
-        isShortVideo
-          ? `Successfully applied ${normalized.length} scenes (appended Shorts outro scene #${normalized.length}).`
-          : `Successfully applied ${normalized.length} scenes from JSON.`
+        `Successfully applied ${normalized.length} scenes from JSON.`
       );
     } catch (err) {
       setPasteError(err.message || "Failed to parse scenes JSON. Please check syntax.");
@@ -931,12 +910,6 @@ export default function ScenesTab({
                   <p className="text-xs text-ink-muted">
                     Supports <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">scene_number</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">audio_text</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">number_of_images</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">images</code> / <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">image_prompt</code>, <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">transition</code>, and <code className="font-mono bg-ink/5 px-1 py-0.5 rounded text-[11px]">ken_burns</code>.
                   </p>
-                  {isShortVideo && (
-                    <div className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                      <Smartphone size={11} className="text-amber-600 shrink-0" />
-                      <span>Shorts Outro: Final CTA scene will automatically be appended as the last scene.</span>
-                    </div>
-                  )}
                 </div>
               </div>
               <button
